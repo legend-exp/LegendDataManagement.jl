@@ -1,5 +1,6 @@
-using GERDAMetadata
-using Base.Test
+# This file is a part of GERDAMetadata.jl, licensed under the MIT License (MIT).
 
-# write your own tests here
-@test 1 == 2
+@Base.Test.testset "Package GERDAMetadata" begin
+    include.([
+    ])
+end
