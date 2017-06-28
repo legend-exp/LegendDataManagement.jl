@@ -5,6 +5,7 @@ __precompile__(true)
 module GERDAMetadata
 
 include.([
+    "filekey.jl",
 ])
 
 end # module
