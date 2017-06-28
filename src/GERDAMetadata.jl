@@ -10,6 +10,7 @@ include.([
     "dataconfig.jl",
     "calibcatalog.jl",
     "gerdadata.jl",
+    "calfunc.jl",
 ])
 
 end # module
