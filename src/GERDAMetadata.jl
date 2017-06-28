@@ -9,6 +9,7 @@ include.([
     "dataset.jl",
     "dataconfig.jl",
     "calibcatalog.jl",
+    "gerdadata.jl",
 ])
 
 end # module
