@@ -8,6 +8,7 @@ include.([
     "filekey.jl",
     "dataset.jl",
     "dataconfig.jl",
+    "calibcatalog.jl",
 ])
 
 end # module
