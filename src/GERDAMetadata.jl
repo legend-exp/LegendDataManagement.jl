@@ -6,6 +6,7 @@ module GERDAMetadata
 
 include.([
     "filekey.jl",
+    "dataset.jl",
 ])
 
 end # module
