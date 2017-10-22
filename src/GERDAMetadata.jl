@@ -4,13 +4,11 @@ __precompile__(true)
 
 module GERDAMetadata
 
-include.([
-    "filekey.jl",
-    "dataset.jl",
-    "dataconfig.jl",
-    "calibcatalog.jl",
-    "gerdadata.jl",
-    "calfunc.jl",
-])
+include("filekey.jl")
+include("dataset.jl")
+include("dataconfig.jl")
+include("calibcatalog.jl")
+include("gerdadata.jl")
+include("calfunc.jl")
 
 end # module
