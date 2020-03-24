@@ -3,6 +3,6 @@
 import Test
 Test.@testset "Package GERDAMetadata" begin
 
-# test code goes here
+include("test_filekey.jl")
 
 end # testset
