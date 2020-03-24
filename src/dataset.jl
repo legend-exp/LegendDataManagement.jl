@@ -12,7 +12,7 @@ const ds_ignore_line_expr = r"^(\s*#.*)?$"
 
 function Base.read(::Type{DataSet}, filename::AbstractString)
     keys = open(filename) do input
-        [FileKey(strip(l)) for l in eachline(input) if !ismatch(ds_ignore_line_expr, l)]
+        [FileKey(strip(l)) for l in eachline(input) if !occursin(ds_ignore_line_expr, l)]
     end
     DataSet(keys)
 end

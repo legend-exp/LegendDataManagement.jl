@@ -1,9 +1,5 @@
 # This file is a part of GERDAMetadata.jl, licensed under the MIT License (MIT).
 
-using JSON
-using PropDicts
-
-
 export optional_calibfor
 function optional_calibfor end
 
@@ -19,13 +15,13 @@ struct CalibCatalogEntry
 end
 
 
-function Base.convert(::Type{CalibCatalogEntry}, p::PropDict)
-    d = p.dict
-    key = d[:key]
-    valid = map(e -> e[1] => timestamp2unix(e[2]), d[:valid])
+function CalibCatalogEntry(p::PropDict)
+    key = p.key
+    valid = Dict(k => timestamp2unix(v) for (k, v) in p.valid)
     CalibCatalogEntry(key, valid)
 end
 
+Base.convert(::Type{CalibCatalogEntry}, p::PropDict) = CalibCatalogEntry(p)
 
 
 export CalibCatalog
@@ -58,7 +54,7 @@ end
 
 function Base.read(::Type{CalibCatalog}, filename::AbstractString)
     entries = open(filename) do input
-        [convert(CalibCatalogEntry, PropDict(l)) for l in eachline(input)]
+        [convert(CalibCatalogEntry, convert(PropDict, l)) for l in eachline(input)]
     end
     CalibCatalog(entries)
 end

@@ -5,13 +5,12 @@ export PolCalFunc
 
 struct PolCalFunc{N,T<:Number} <:Function
     params::NTuple{N,T}
+
+    PolCalFunc(params::T...) where T = new{length(params),T}(params)
 end
 
 
-PolCalFunc{T}(params::T...) = PolCalFunc{length(params),T}(params)
-
-
-function (f::PolCalFunc{N,T}){N,T,U}(x::U)
+function (f::PolCalFunc{N,T})(x::U) where {N,T,U}
     R = promote_type(T, U)
     y = zero(R)
     xn = one(U)
@@ -23,23 +22,23 @@ function (f::PolCalFunc{N,T}){N,T,U}(x::U)
 end
 
 
-function Base.convert{N,T}(::Type{PolCalFunc{N,T}}, dict::Dict)
-    funcstr = dict[:func]
+function Base.convert(::Type{PolCalFunc{N,T}}, p::PropDict) where {N,T}
+    funcstr = p.func
     if !(funcstr in ("pol1", "[0]+[1]*x", "pol2"))
         error("Unsupported function \"$funcstr\" for $(PolCalFunc{N,T})")
     end
 
-    p = zeros(T, N)
-    for (i,v) in dict[:params]
-        p[i + 1] = v
+    coeffs = zeros(T, N)
+    for (i,v) in p.params
+        coeffs[i + 1] = v
     end
-    PolCalFunc{N,T}((p...))
+    PolCalFunc(coeffs...)
 end
 
 
-function Base.convert{N,T}(::Type{Dict{Int, PolCalFunc{N,T}}}, dict::Dict)
+function Base.convert(::Type{Dict{Int, PolCalFunc{N,T}}}, p::PropDict) where {N,T}
     calfuncs = Dict{Int, PolCalFunc{N,T}}()
-    for (ch, caldict) in dict
+    for (ch, caldict) in p
         calfuncs[ch] = convert(PolCalFunc{2,Float64}, caldict)
     end
     calfuncs

@@ -1,7 +1,5 @@
 # This file is a part of GERDAMetadata.jl, licensed under the MIT License (MIT).
 
-using PropDicts
-
 
 export DataLocations
 
@@ -12,7 +10,9 @@ mutable struct DataLocations
 end
 
 
-Base.convert(::Type{DataLocations}, dict::Dict) = DataLocations(dict[:raw], dict[:gen], dict[:meta])
+DataLocations(p::PropDict) = DataLocations(p.raw, p.gen, p.meta)
+
+Base.convert(::Type{DataLocations}, p::PropDict) = DataLocations(p)
 
 
 
@@ -23,7 +23,9 @@ mutable struct SetupConfig
 end
 
 
-Base.convert(::Type{SetupConfig}, dict::Dict) = SetupConfig(convert(DataLocations, dict[:data]))
+SetupConfig(p::PropDict) = SetupConfig(convert(DataLocations, p.data))
+
+Base.convert(::Type{SetupConfig}, p::PropDict) = SetupConfig(p)
 
 
 
@@ -34,17 +36,18 @@ mutable struct DataConfig
 end
 
 
-function Base.convert(::Type{DataConfig}, dict::Dict)
+function DataConfig(p::PropDict)
     setups = Dict{Symbol,SetupConfig}()
-    for (k, v) in dict[:setups]
-        setups[k] = convert(SetupConfig, v)
+    for (k, v) in p.setups
+        setups[k] = SetupConfig(v)
     end
     DataConfig(setups)
 end
 
+Base.convert(::Type{DataConfig}, p::PropDict) = DataConfig(p)
 
 
 function Base.read(::Type{DataConfig}, filename::AbstractString)
     p = read(PropDict, filename, subst_pathvar = true, subst_env = true)
-    convert(DataConfig, p.dict)
+    convert(DataConfig, p)
 end

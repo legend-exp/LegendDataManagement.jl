@@ -1,9 +1,5 @@
 # This file is a part of GERDAMetadata.jl, licensed under the MIT License (MIT).
 
-using JSON
-using Glob
-using PropDicts
-
 
 const config_file_name_glob = "*-config.json"
 const config_file_name_expr = r"^(.*)-config.json$"
@@ -152,7 +148,7 @@ function config_filenames(data::GERDAData, key::FileKey)
         bname = basename(filename)
         m = match(config_file_name_expr, bname)
         if m != nothing
-            ismatch(key, m.captures[1])
+            occursin(key, m.captures[1])
         else
             false
         end

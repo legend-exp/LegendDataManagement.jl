@@ -25,9 +25,9 @@ import Base.==
 ==(a::FileKey, b::FileKey) = a.setup == b.setup && a.run == b.run && a.time == b.time && a.category == b.category
 
 
-filekey_run_str(key::FileKey) = "run$(lpad(key.run, 4, 0))"
+filekey_run_str(key::FileKey) = "run$(lpad(string(key.run), 4, string(0)))"
 
-function Base.convert(::Type{FileKey}, s::AbstractString)
+function FileKey(s::AbstractString)
     m = match(filekey_expr, s)
     if (m == nothing)
         throw(ArgumentError("String \"$s\" does not represent a valid file key"))
@@ -42,6 +42,8 @@ function Base.convert(::Type{FileKey}, s::AbstractString)
     end
 end
 
+Base.convert(::Type{FileKey}, s::AbstractString) = FileKey(s)
+
 
 function Base.print(io::IO, key::FileKey)
     print(io, key.setup)
@@ -54,7 +56,7 @@ end
 Base.show(io::IO, key::FileKey) = print(io, "FileKey(\"$(string(key))\")")
 
 
-function Base.ismatch(key::FileKey, pattern::AbstractString)
+function Base.occursin(key::FileKey, pattern::AbstractString)
     mk = match(filekey_wildcard_expr, string(key))
     mp = match(filekey_wildcard_expr, pattern)
     

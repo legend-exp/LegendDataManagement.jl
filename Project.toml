@@ -1,0 +1,18 @@
+name = "GERDAMetadata"
+uuid = "1a4a5172-4099-4981-b001-076bca3e4740"
+version = "0.1.0"
+
+[deps]
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+Glob = "c27321d9-0574-5035-807b-f59d2c89b15c"
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
+PropDicts = "4dc08600-4268-439e-8673-d706fafbb426"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
