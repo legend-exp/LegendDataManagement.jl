@@ -1,4 +1,4 @@
-# This file is a part of GERDAMetadata.jl, licensed under the MIT License (MIT).
+# This file is a part of LegendDataManagement.jl, licensed under the MIT License (MIT).
 
 
 export PolCalFunc

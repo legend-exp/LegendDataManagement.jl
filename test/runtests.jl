@@ -1,8 +1,13 @@
-# This file is a part of GERDAMetadata.jl, licensed under the MIT License (MIT).
+# This file is a part of LegendDataManagement.jl, licensed under the MIT License (MIT).
 
 import Test
-Test.@testset "Package GERDAMetadata" begin
 
-include("test_filekey.jl")
-
+Test.@testset "Package LegendDataManagement" begin
+    # include("test_aqua.jl")
+    include("test_filekey.jl")
+    include("test_data_config.jl")
+    include("test_props_db.jl")
+    include("test_legend_data.jl")
+    include("test_docs.jl")
+    isempty(Test.detect_ambiguities(LegendDataManagement))
 end # testset

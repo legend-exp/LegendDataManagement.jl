@@ -5,14 +5,22 @@
 # for local builds.
 
 using Documenter
-using GERDAMetadata
+using LegendDataManagement
+
+# Doctest setup
+DocMeta.setdocmeta!(
+    LegendDataManagement,
+    :DocTestSetup,
+    :(using LegendDataManagement);
+    recursive=true,
+)
 
 makedocs(
-    sitename = "GERDAMetadata",
-    modules = [GERDAMetadata],
+    sitename = "LegendDataManagement",
+    modules = [LegendDataManagement],
     format = Documenter.HTML(
         prettyurls = !("local" in ARGS),
-        canonical = "https://mppmu.github.io/GERDAMetadata.jl/stable/"
+        canonical = "https://legend-exp.github.io/LegendDataManagement.jl/stable/"
     ),
     pages = [
         "Home" => "index.md",
@@ -20,12 +28,12 @@ makedocs(
         "LICENSE" => "LICENSE.md",
     ],
     doctest = ("fixdoctests" in ARGS) ? :fix : true,
-    linkcheck = ("linkcheck" in ARGS),
+    linkcheck = !("nonstrict" in ARGS),
     strict = !("nonstrict" in ARGS),
 )
 
 deploydocs(
-    repo = "github.com/mppmu/GERDAMetadata.jl.git",
+    repo = "github.com/legend-exp/LegendDataManagement.jl.git",
     forcepush = true,
     push_preview = true,
 )

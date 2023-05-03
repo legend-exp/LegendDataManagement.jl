@@ -1,4 +1,4 @@
-The GERDAMetadata.jl package is licensed under the MIT "Expat" License:
+The LegendDataManagement.jl package is licensed under the MIT "Expat" License:
 
 > Copyright (c) 2017:
 >

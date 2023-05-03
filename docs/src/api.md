@@ -1,15 +1,15 @@
 # API
 
-```@meta
-DocTestSetup  = quote
-    using GERDAMetadata
-end
-```
-
-## Types
+## Modules
 
 ```@index
-Order = [:type]
+Order = [:module]
+```
+
+## Types and constants
+
+```@index
+Order = [:type, :constant]
 ```
 
 ## Functions and macros
@@ -21,6 +21,6 @@ Order = [:macro, :function]
 # Documentation
 
 ```@autodocs
-Modules = [GERDAMetadata]
-Order = [:type, :macro, :function]
+Modules = [LegendDataManagement]
+Order = [:module, :type, :constant, :macro, :function]
 ```

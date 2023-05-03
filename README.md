@@ -1,11 +1,15 @@
-# GERDAMetadata.jl
+# LegendDataManagement.jl
 
-[![Documentation for development version](https://img.shields.io/badge/docs-dev-blue.svg)](https://mppmu.github.io/GERDAMetadata.jl/dev)
+[![Documentation for stable version](https://img.shields.io/badge/docs-stable-blue.svg)](https://legend-exp.github.io/LegendDataManagement.jl/stable)
+[![Documentation for development version](https://img.shields.io/badge/docs-dev-blue.svg)](https://legend-exp.github.io/LegendDataManagement.jl/dev)
 [![License](http://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat)](LICENSE.md)
-[![Travis Build Status](https://travis-ci.com/mppmu/GERDAMetadata.jl.svg?branch=master)](https://travis-ci.com/mppmu/GERDAMetadata.jl)
-[![Codecov](https://codecov.io/gh/mppmu/GERDAMetadata.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/mppmu/GERDAMetadata.jl)
+[![Build Status](https://github.com/legend-exp/LegendDataManagement.jl/workflows/CI/badge.svg?branch=main)](https://github.com/legend-exp/LegendDataManagement.jl/actions?query=workflow%3ACI)
+[![Codecov](https://codecov.io/gh/legend-exp/LegendDataManagement.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/legend-exp/LegendDataManagement.jl)
 
 
 ## Documentation
 
-* [Documentation for development version](https://mppmu.github.io/GERDAMetadata.jl/dev)
+* [Documentation for stable version](https://legend-exp.github.io/LegendDataManagement.jl/stable)
+* [Documentation for development version](https://legend-exp.github.io/LegendDataManagement.jl/dev)
+
+LegendDataManagement.jl provides a Julia implementation of the LEGEND data and metadata management.
