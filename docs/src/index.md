@@ -2,7 +2,7 @@
 
 This package provides a Julia implementation of the LEGEND data and metadata management.
 
-It requires a central configuration file (see the [example "config.json"](https://github.com/legend-exp/legend-testdata/blob/main/data/legend/config.json) in the LEGEND test data repository). While the path to this configuration file can be specified explicitly, we recommend setting the environment variable `$LEGEND_DATA_CONFIG` to the absolute path of your "config.json".
+It requires a central configuration file (see the [example "config.json"](https://github.com/legend-exp/legend-testdata/blob/main/data/legend/config.json) in the LEGEND test data repository). While the path to this configuration file can be specified explicitly, we recommend setting an environment variable named `$LEGEND_DATA_CONFIG` to the absolute path of your "config.json".
 
 Usage examples:
 
