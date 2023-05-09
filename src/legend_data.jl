@@ -43,6 +43,13 @@ Example:
 l200.tier[:raw]
 l200.tier[:raw, FileKey("l200-p02-r006-cal-20221226T200846Z")]
 ```
+
+LegendData comes with an extension for SolidStateDetectors:
+
+```julia
+l200 = LegendData(:l200)
+SolidStateDetector(l200, :V99000A)
+```
 """
 struct LegendData <: AbstractSetupData
     # ToDo: Add setup name
