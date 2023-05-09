@@ -40,8 +40,8 @@ The full path to "tier" data files can be retrieved using
 Example:
 
 ```julia
-l200.tier.dsp[:raw, "l200-p02-r006-cal-20221226T200846Z"]
-l200.tier.dsp("l200-p02-r006-cal-20221226T200846Z"]
+l200.tier[:raw]
+l200.tier[:raw, FileKey("l200-p02-r006-cal-20221226T200846Z")]
 ```
 """
 struct LegendData <: AbstractSetupData
@@ -115,6 +115,7 @@ LegendDataManagement.LegendTierData(data::LegendData)
 The full path of data files can be retrieved using
 
 ```julia
+data[tier::Symbol]
 data[tier::Symbol, filekey::FileKey]
 data[tier::Symbol, filekey::AbstractString]
 ```
@@ -123,17 +124,20 @@ struct LegendTierData
     data::LegendData
 end
 
-function Base.getindex(tier_data::LegendTierData, tier::Symbol, filekey::FileKey)
+function Base.getindex(tier_data::LegendTierData, tier::Symbol)
+    setup_data_path(get_setup_config(tier_data.data), ["tier", string(tier)])
+end
+
+function Base.getindex(tier_data::LegendTierData, tier::Symbol, filekey::Union{FileKey,AbstractString})
+    key = FileKey(filekey)
     setup_data_path(
         get_setup_config(tier_data.data), [
-            "tier", string(tier), string(filekey.category),
-            filekey_period_str(filekey), filekey_run_str(filekey),
+            "tier", string(tier), string(DataCategory(key)),
+            string(DataPeriod(key)), string(DataRun(key)),
             "$filekey-tier_$tier.lh5"
         ]
     )
 end
-
-Base.getindex(tier_data::LegendTierData, tier::Symbol, filekey::AbstractString) = tier_data[tier, FileKey(filekey)]
 
 
 """
