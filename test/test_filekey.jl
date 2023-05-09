@@ -6,6 +6,30 @@ using Test
 using Dates
 
 @testset "filekey" begin
+    setup = ExpSetup(:l200)
+    @test setup.label == :l200
+    @test @inferred(string(setup)) == "l200"
+    @test @inferred(ExpSetup("l200")) == setup
+
+    period = DataPeriod(2)
+    @test period.no == 2
+    @test @inferred(string(period)) == "p02"
+    @test @inferred(DataPeriod("p02")) == period
+
+    r = DataRun(6)
+    @test r.no == 6
+    @test @inferred(string(r)) == "r006"
+    @test @inferred(DataRun("r006")) == r
+
+    category = DataCategory(:cal)
+    @test category.label == :cal
+    @test @inferred(string(category)) == "cal"
+    @test @inferred(DataCategory("cal")) == category
+
+    timestamp = @inferred(Timestamp("20221226T200846Z"))
+    @test timestamp.unixtime == 1672085326
+    @test @inferred(string(timestamp)) == "20221226T200846Z"
+    
     key = @inferred FileKey("l200-p02-r006-cal-20221226T200846Z")
     @test string(key) == "l200-p02-r006-cal-20221226T200846Z"
 
@@ -13,15 +37,16 @@ using Dates
     # @test !occursin(key, "%-r006-%-phy")
 
     @test FileKey("l200-p02-r006-cal-20221226T200846Z") == key
-    @test FileKey("tier/raw/cal/p02/r006/l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5") == key
+    @test @inferred(FileKey("tier/raw/cal/p02/r006/l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5")) == key
+    @test @inferred(FileKey("l200", "p02", "r006", "cal", "20221226T200846Z")) == key
 
-    @test @inferred(LegendDataManagement.is_filekey_string("l200-p02-r006-cal-20221226T200846Z")) == true
-    @test @inferred(LegendDataManagement.is_filekey_string("20221226T200846Z")) == false
+    @test @inferred(LegendDataManagement._is_filekey_string("l200-p02-r006-cal-20221226T200846Z")) == true
+    @test @inferred(LegendDataManagement._is_filekey_string("20221226T200846Z")) == false
 
-    @test @inferred(LegendDataManagement.is_timestamp_string("20221226T200846Z")) == true
-    @test @inferred(LegendDataManagement.is_timestamp_string("20221226200846")) == false
+    @test @inferred(LegendDataManagement._is_timestamp_string("20221226T200846Z")) == true
+    @test @inferred(LegendDataManagement._is_timestamp_string("20221226200846")) == false
 
-    @test @inferred(LegendDataManagement.timestamp_from_string("l200-p02-r006-cal-20221226T200846Z")) == DateTime("2022-12-26T20:08:46")
-    @test @inferred(LegendDataManagement.timestamp_from_string("20221226T200846Z")) == DateTime("2022-12-26T20:08:46")
-    @test_throws ArgumentError LegendDataManagement.timestamp_from_string("20221226200846Z")
+    @test @inferred(LegendDataManagement._timestamp_from_string("l200-p02-r006-cal-20221226T200846Z")) == DateTime("2022-12-26T20:08:46")
+    @test @inferred(LegendDataManagement._timestamp_from_string("20221226T200846Z")) == DateTime("2022-12-26T20:08:46")
+    @test_throws ArgumentError LegendDataManagement._timestamp_from_string("20221226200846Z")
 end

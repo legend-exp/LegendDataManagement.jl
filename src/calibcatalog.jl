@@ -17,7 +17,7 @@ end
 
 function CalibCatalogEntry(p::PropDict)
     key = p.key
-    valid = Dict(k => timestamp2unix(v) for (k, v) in p.valid)
+    valid = Dict(k => _timestamp2unix(v) for (k, v) in p.valid)
     CalibCatalogEntry(key, valid)
 end
 

@@ -2,8 +2,8 @@
 
 const validity_filename = "validity.jsonl"
 
-const _ValidityTimesFiles = NamedTuple{(:valid_from, :filelist), Tuple{Vector{DateTime}, Vector{Vector{String}}}}
-const _ValidityDict = IdDict{Symbol,_ValidityTimesFiles}
+const _ValidityTimesFiles = NamedTuple{(:valid_from, :filelist), Tuple{Vector{Timestamp}, Vector{Vector{String}}}}
+const _ValidityDict = IdDict{DataCategory,_ValidityTimesFiles}
 
 
 
@@ -13,15 +13,14 @@ const _ValidityDict = IdDict{Symbol,_ValidityTimesFiles}
 Representy validiy selection for a `LegendDataManagement.PropsDB`[@ref].
 """
 struct ValiditySelection
-    timestamp::DateTime
-    category::Symbol
+    timestamp::Timestamp
+    category::DataCategory
 end
 
-ValiditySelection(timestamp::AbstractString, category::Symbol) = ValiditySelection(timestamp_from_string(timestamp), category)
-ValiditySelection(filekey::FileKey) = ValiditySelection(DateTime(filekey), filekey.category)
+ValiditySelection(filekey::FileKey) = ValiditySelection(DateTime(filekey), DataCategory(filekey))
 
 
-function _get_validity_sel_filelist(validity::_ValidityDict, category::Symbol, sel_time::DateTime)
+function _get_validity_sel_filelist(validity::_ValidityDict, category::DataCategory, sel_time::Timestamp)
     validity_times, validity_filelists = validity[category]
     idx = searchsortedlast(validity_times, sel_time)
     if idx < firstindex(validity_times)
@@ -34,7 +33,7 @@ function _read_validity_sel_filelist(dir_path::AbstractString, validity::_Validi
     filelist = if haskey(validity, sel.category)
         _get_validity_sel_filelist(validity, sel.category, sel.timestamp)
     elseif haskey(validity, :all)
-        _get_validity_sel_filelist(validity, :all, sel.timestamp)
+        _get_validity_sel_filelist(validity, DataCategory(:all), sel.timestamp)
     else
         throw(ErrorException("No validity entries for category $category or category all"))
     end
@@ -118,10 +117,10 @@ function _load_validity(new_validity_path::AbstractString, prev_validity::_Valid
         entries = PropDict.(_read_jsonl(new_validity_path))
         new_validity = _ValidityDict()
         for props in entries
-            valid_from = timestamp2datetime(props.valid_from)
-            category = Symbol(props.category)
+            valid_from = _timestamp2datetime(props.valid_from)
+            category = DataCategory(props.category)
             filelist = props.apply
-            dict_entry = get!(new_validity, category, (valid_from = DateTime[], filelist = Vector{String}[]))
+            dict_entry = get!(new_validity, category, (valid_from = FileKey[], filelist = Vector{String}[]))
             push!(dict_entry.valid_from, valid_from)
             push!(dict_entry.filelist, filelist)
         end
@@ -148,9 +147,12 @@ _get_path(pd::PropsDB) = joinpath(_base_path(pd), _rel_path(pd)...)
 
 
 (pd::PropsDB{Nothing})(selection::ValiditySelection) = _any_props(_base_path(pd), _rel_path(pd), selection, _validity(pd))
-(pd::PropsDB{Nothing})(timestamp::DateTime, category::Symbol) = pd(ValiditySelection(timestamp, category))
+
+function(pd::PropsDB{Nothing})(timestamp::Union{DateTime,Timestamp,AbstractString}, category::Union{DataCategory,Symbol,AbstractString})
+    pd(ValiditySelection(timestamp, category))
+end
+
 (pd::PropsDB{Nothing})(filekey::FileKey) = pd(ValiditySelection(filekey))
-(pd::PropsDB{Nothing})(timestamp::AbstractString, category::Symbol) = pd(timestamp_from_string(timestamp), category)
 
 
 function Base.getproperty(pd::PropsDB, s::Symbol)

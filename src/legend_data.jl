@@ -85,12 +85,12 @@ end
 
 
 function _key_path_components(filekey::FileKey)
-    [String(filekey.category), filekey_period_str(filekey), filekey_run_str(filekey)]
+    [string(DataCategory(filekey)), string(DataPeriod(filekey)), string(DataRun(filekey))]
 end
 
 function data_filename(data::LegendData, filekey::FileKey, tier::Symbol)
     # ToDo: Check that setup matches setup name in data (to be added).
-    p = ["tier", String(tier), _key_path_components(filekey)..., "$(filekey)-tier_$(tier).lh5"]
+    p = ["tier", string(tier), _key_path_components(filekey)..., "$(filekey)-tier_$(tier).lh5"]
     setup_data_path(data, p)
 end
 export data_filename
@@ -147,9 +147,12 @@ function channel_info(data::LegendData, filekey::FileKey)
     
     filtered_keys = Array{Symbol}(filter(k -> haskey(chmap, k), collect(keys(dpcfg))))
 
+    # ToDo: Add this to PropDicts.jl
+    _get(d::PropDict, key::Symbol, default) = haskey(d, key) ? d[key] : default
+
     make_row(k::Symbol) = (
         detector = Symbol(k)::Symbol,
-        fcid = Int(chmap[k].daq.fcid)::Int,
+        fcid = Int(_get(chmap[k].daq, :fcid, -1))::Int,
         rawid = Int(chmap[k].daq.rawid)::Int,
         system = Symbol(chmap[k].system)::Symbol,
         processable = Bool(dpcfg[k].processable)::Bool,
