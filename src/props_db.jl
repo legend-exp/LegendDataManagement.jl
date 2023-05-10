@@ -32,10 +32,10 @@ end
 function _read_validity_sel_filelist(dir_path::AbstractString, validity::_ValidityDict, sel::ValiditySelection)
     filelist = if haskey(validity, sel.category)
         _get_validity_sel_filelist(validity, sel.category, sel.timestamp)
-    elseif haskey(validity, :all)
+    elseif haskey(validity, DataCategory(:all))
         _get_validity_sel_filelist(validity, DataCategory(:all), sel.timestamp)
     else
-        throw(ErrorException("No validity entries for category $category or category all"))
+        throw(ErrorException("No validity entries for category $(sel.category) or category all"))
     end
 
     abs_filelist = joinpath.(Ref(dir_path), filelist)
@@ -118,7 +118,8 @@ function _load_validity(new_validity_path::AbstractString, prev_validity::_Valid
         new_validity = _ValidityDict()
         for props in entries
             valid_from = _timestamp2datetime(props.valid_from)
-            category = DataCategory(props.category)
+            # Backward compatibility, fallback from "category" to "select":
+            category = haskey(props, :category) ? DataCategory(props.category) : DataCategory(props.select)
             filelist = props.apply
             dict_entry = get!(new_validity, category, (valid_from = FileKey[], filelist = Vector{String}[]))
             push!(dict_entry.valid_from, valid_from)
