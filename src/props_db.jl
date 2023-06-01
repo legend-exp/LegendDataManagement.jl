@@ -29,7 +29,7 @@ function _get_validity_sel_filelist(validity::_ValidityDict, category::DataCateg
     return validity_filelists[idx]
 end
 
-function _read_validity_sel_filelist(dir_path::AbstractString, validity::_ValidityDict, sel::ValiditySelection)
+function _read_validity_sel_filelist(dir_path::String, validity::_ValidityDict, sel::ValiditySelection)
     filelist = if haskey(validity, sel.category)
         _get_validity_sel_filelist(validity, sel.category, sel.timestamp)
     elseif haskey(validity, DataCategory(:all))
@@ -91,7 +91,7 @@ instead, which may return a `PropsDB` or a `PropDicts.PropDict`
 depending on what on-disk content `path` points to. 
 """
 struct PropsDB{VS<:Union{Nothing,ValiditySelection}} <: AbstractDict{Symbol,AbstractDict}
-    _base_path::AbstractString
+    _base_path::String
     _rel_path::Vector{String}
     _validity_sel::VS
     _validity::_ValidityDict
@@ -120,22 +120,22 @@ LegendDataManagement.AnyProps(base_path::AbstractString)
 """
 const AnyProps = Union{PropsDB,PropDict}
 
-AnyProps(base_path::AbstractString) = _any_props(base_path, String[], nothing, _ValidityDict())
+AnyProps(base_path::AbstractString) = _any_props(String(base_path), String[], nothing, _ValidityDict())
 
 g_state = nothing
-function _any_props(base_path::AbstractString, rel_path::Vector{String}, validity_sel::Union{Nothing,ValiditySelection}, prev_validity::_ValidityDict)
+function _any_props(base_path::String, rel_path::Vector{String}, validity_sel::Union{Nothing,ValiditySelection}, prev_validity::_ValidityDict)
     !isdir(base_path) && throw(ArgumentError("PropsDB base path \"$base_path\" is not a directory"))
     new_validity_path = joinpath(base_path, rel_path..., validity_filename)
-    new_validity = _load_validity(new_validity_path, prev_validity)
+    new_validity = _load_validity(String(new_validity_path), prev_validity)
 
-    files_in_dir = readdir(joinpath(base_path, rel_path...))
+    files_in_dir = String.(readdir(joinpath(base_path, rel_path...)))
     validity_filerefs = vcat(vcat(map(x -> x.filelist, values(new_validity))...)...)
     validity_filerefs_found = !isempty(intersect(files_in_dir, validity_filerefs))
 
     global g_state = (;base_path, rel_path, validity_sel, new_validity, validity_filerefs_found, files_in_dir)
     if validity_filerefs_found
         if !isnothing(validity_sel)
-            _read_validity_sel_filelist(joinpath(base_path, rel_path...), new_validity, validity_sel)
+            _read_validity_sel_filelist(String(joinpath(base_path, rel_path...)), new_validity, validity_sel)
         else
             PropsDB(base_path, rel_path, validity_sel, new_validity, Symbol[], true)
         end
@@ -146,13 +146,13 @@ function _any_props(base_path::AbstractString, rel_path::Vector{String}, validit
 end
 
 
-function _read_jsonl(filename::AbstractString)
+function _read_jsonl(filename::String)
     open(filename) do io
         JSON.parse.(filter(!isempty, collect(eachline(io))))
     end
 end
 
-function _load_validity(new_validity_path::AbstractString, prev_validity::_ValidityDict)
+function _load_validity(new_validity_path::String, prev_validity::_ValidityDict)
     if isfile(new_validity_path)
         entries = PropDict.(_read_jsonl(new_validity_path))
         new_validity = _ValidityDict()
@@ -262,7 +262,7 @@ function _is_metadata_property_filename(filename)
     endswith(filename, ".json") || isdir(filename)
 end
 
-function _md_propertyname(rel_filename::AbstractString)
+function _md_propertyname(rel_filename::String)
     @assert !contains(rel_filename, "/") && !contains(rel_filename, "\\")
     if !contains(rel_filename, ".")
         Symbol(rel_filename)
