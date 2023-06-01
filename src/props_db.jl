@@ -90,7 +90,7 @@ Use code should *not* instantiate `PropsDB` directly, use
 instead, which may return a `PropsDB` or a `PropDicts.PropDict`
 depending on what on-disk content `path` points to. 
 """
-struct PropsDB{VS<:Union{Nothing,ValiditySelection}}
+struct PropsDB{VS<:Union{Nothing,ValiditySelection}} <: AbstractDict{Symbol,AbstractDict}
     _base_path::AbstractString
     _rel_path::Vector{String}
     _validity_sel::VS
@@ -103,7 +103,6 @@ function Base.:(==)(a::PropsDB, b::PropsDB)
     _base_path(a) == _base_path(b) && _rel_path(a) == _rel_path(b) && _validity_sel(a) == _validity_sel(b) &&
         _validity(a) == _validity(b) && _prop_names(a) == _prop_names(b) && _needs_vsel(a) == _needs_vsel(b)
 end
-
 
 
 """
@@ -188,6 +187,14 @@ _needs_vsel(pd::PropsDB) = getfield(pd, :_needs_vsel)
 _get_path(pd::PropsDB) = joinpath(_base_path(pd), _rel_path(pd)...)
 
 
+function _check_propery_access(pd)
+    if _needs_vsel(pd)
+        full_path = joinpath(_base_path(pd), _rel_path(pd)...)
+        throw(ArgumentError("Content access not available for PropsDB at \"$full_path\" without validity selection"))
+    end
+end
+
+
 (pd::PropsDB{Nothing})(selection::ValiditySelection) = _any_props(_base_path(pd), _rel_path(pd), selection, _validity(pd))
 
 function(pd::PropsDB{Nothing})(timestamp::Union{DateTime,Timestamp,AbstractString}, category::Union{DataCategory,Symbol,AbstractString})
@@ -226,12 +233,8 @@ function Base.getproperty(pd::PropsDB, s::Symbol)
 end
 
 function Base.keys(pd::PropsDB)
-    if _needs_vsel(pd)
-        full_path = joinpath(_base_path(pd), _rel_path(pd)...)
-        throw(ArgumentError("Keys resp. property names not available for PropsDB at \"$full_path\" without validity selection"))
-    else
-        _prop_names(pd)
-    end
+    _check_propery_access(pd)
+    _prop_names(pd)
 end
 
 Base.propertynames(pd::PropsDB) = keys(pd)
@@ -269,6 +272,28 @@ function _md_propertyname(rel_filename::AbstractString)
         else
             :__no_property
         end 
+    end
+end
+
+
+function Base.length(pd::PropsDB)
+    _check_propery_access(pd)
+    length(_prop_names(pd))
+end
+
+function Base.iterate(pd::PropsDB)
+    _check_propery_access(pd)
+    nms = _prop_names(pd)
+    i = firstindex(nms)
+    (pd[nms[i]], i+1)
+end
+
+function Base.iterate(pd::PropsDB, i::Int)
+    nms = _prop_names(pd)
+    if checkbounds(Bool, nms, i)
+        (pd[nms[i]], i+1)
+    else
+        nothing
     end
 end
 
