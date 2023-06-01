@@ -15,17 +15,19 @@ using Unitful
 using PropDicts
 
 
+const _SSDDefaultNumtype = Float32
+
 """
-    SolidStateDetector(data::LegendData, detector::Union{Symbol,AbstractString}
-    SolidStateDetector{T<:Real}(data::LegendData, detector::Union{Symbol,AbstractString}
-    SolidStateDetector{T<:Real}(::Type{LegendData}, detector_props::PropDicts.PropDict}
+    SolidStateDetector[{T<:Real}](data::LegendData, detector::Union{Symbol,AbstractString}
+    SolidStateDetector[{T<:Real}(::Type{LegendData}, detector_props::AbstractDict)
+    SolidStateDetector[{T<:Real}(::Type{LegendData}, json_filename::AbstractString)
 
 LegendDataManagement provides an extension for SolidStateDetectors, a
 `SolidStateDetector` can be constructed from LEGEND metadata  using the
 methods above.
 """
 function SolidStateDetectors.SolidStateDetector(data::LegendData, detector::Union{Symbol,AbstractString})
-    SolidStateDetectors.SolidStateDetector{Float32}(data, Symbol(detector))
+    SolidStateDetectors.SolidStateDetector{_SSDDefaultNumtype}(data, Symbol(detector))
 end
 
 function SolidStateDetectors.SolidStateDetector{T}(data::LegendData, detector::AbstractString) where {T<:Real}
@@ -39,6 +41,23 @@ end
 
 
 to_SSD_units(::Type{T}, x, unit) where {T} = T(SolidStateDetectors.to_internal_units(x*unit)) 
+
+
+function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, filename::String) where {T<:Real}
+    SolidStateDetector{T}(LegendData, read(PropDict, filename))
+end
+
+function SolidStateDetectors.SolidStateDetector(::Type{LegendData}, filename::String)
+    SolidStateDetector{_SSDDefaultNumtype}(LegendData, read(PropDict, filename))
+end
+
+function SolidStateDetectors.SolidStateDetector(::Type{LegendData}, meta::AbstractDict)
+    SolidStateDetectors.SolidStateDetector{_SSDDefaultNumtype}(LegendData, meta)
+end
+
+function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::AbstractDict) where {T<:Real}
+    SolidStateDetectors.SolidStateDetector{T}(LegendData, convert(PropDict, meta))
+end
 
 function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::PropDict) where {T<:Real}
     # Not all possible configurations are yet implemented!

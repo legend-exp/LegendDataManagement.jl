@@ -7,6 +7,9 @@
 using Documenter
 using LegendDataManagement
 
+using LegendTestData
+using SolidStateDetectors
+
 # Doctest setup
 DocMeta.setdocmeta!(
     LegendDataManagement,
@@ -25,6 +28,7 @@ makedocs(
     pages = [
         "Home" => "index.md",
         "API" => "api.md",
+        "Extensions" => "extensions.md",
         "LICENSE" => "LICENSE.md",
     ],
     doctest = ("fixdoctests" in ARGS) ? :fix : true,
