@@ -177,14 +177,14 @@ function _load_validity(new_validity_path::AbstractString, prev_validity::_Valid
 end
 
 
-_base_path(pd::PropsDB) = getfield(pd, :_base_path)
-_rel_path(pd::PropsDB) = getfield(pd, :_rel_path)
-_validity_sel(pd::PropsDB) = getfield(pd, :_validity_sel)
-_validity(pd::PropsDB) = getfield(pd, :_validity)
-_prop_names(pd::PropsDB) = getfield(pd, :_prop_names)
-_needs_vsel(pd::PropsDB) = getfield(pd, :_needs_vsel)
+_base_path(@nospecialize(pd::PropsDB)) = getfield(pd, :_base_path)
+_rel_path(@nospecialize(pd::PropsDB)) = getfield(pd, :_rel_path)
+_validity_sel(@nospecialize(pd::PropsDB)) = getfield(pd, :_validity_sel)
+_validity(@nospecialize(pd::PropsDB)) = getfield(pd, :_validity)
+_prop_names(@nospecialize(pd::PropsDB)) = getfield(pd, :_prop_names)
+_needs_vsel(@nospecialize(pd::PropsDB)) = getfield(pd, :_needs_vsel)
 
-_get_path(pd::PropsDB) = joinpath(_base_path(pd), _rel_path(pd)...)
+_get_path(@nospecialize(pd::PropsDB)) = joinpath(_base_path(pd), _rel_path(pd)...)
 
 
 function _check_propery_access(pd)
@@ -195,25 +195,25 @@ function _check_propery_access(pd)
 end
 
 
-(pd::PropsDB{Nothing})(selection::ValiditySelection) = _any_props(_base_path(pd), _rel_path(pd), selection, _validity(pd))
+(@nospecialize(pd::PropsDB{Nothing}))(selection::ValiditySelection) = _any_props(_base_path(pd), _rel_path(pd), selection, _validity(pd))
 
-function(pd::PropsDB{Nothing})(timestamp::Union{DateTime,Timestamp,AbstractString}, category::Union{DataCategory,Symbol,AbstractString})
+function(@nospecialize(pd::PropsDB{Nothing}))(timestamp::Union{DateTime,Timestamp,AbstractString}, category::Union{DataCategory,Symbol,AbstractString})
     pd(ValiditySelection(timestamp, category))
 end
 
-(pd::PropsDB{Nothing})(filekey::FileKey) = pd(ValiditySelection(filekey))
+(@nospecialize(pd::PropsDB{Nothing}))(filekey::FileKey) = pd(ValiditySelection(filekey))
 
 
-function Base.getindex(pd::PropsDB, s::Symbol)
+function Base.getindex(@nospecialize(pd::PropsDB), s::Symbol)
     _get_md_property(pd, s)
 end
 
-function Base.getindex(pd::PropsDB, S::AbstractArray{<:Symbol})
+function Base.getindex(@nospecialize(pd::PropsDB), S::AbstractArray{<:Symbol})
     _get_md_property.(Ref(pd), S)
 end
 
 
-function Base.getproperty(pd::PropsDB, s::Symbol)
+function Base.getproperty(@nospecialize(pd::PropsDB), s::Symbol)
     # Include internal fields:
     if s == :_base_path
         _base_path(pd)
@@ -232,20 +232,20 @@ function Base.getproperty(pd::PropsDB, s::Symbol)
     end
 end
 
-function Base.keys(pd::PropsDB)
+function Base.keys(@nospecialize(pd::PropsDB))
     _check_propery_access(pd)
     _prop_names(pd)
 end
 
-Base.propertynames(pd::PropsDB) = keys(pd)
+Base.propertynames(@nospecialize(pd::PropsDB)) = keys(pd)
 
-function Base.propertynames(pd::PropsDB, private::Bool)
+function Base.propertynames(@nospecialize(pd::PropsDB), private::Bool)
     props = propertynames(pd)
     private ? vcat([:_base_path, :_rel_path, :_validity_sel, :_validity], props) : props
 end
 
 
-function _get_md_property(pd::PropsDB, s::Symbol)
+function _get_md_property(@nospecialize(pd::PropsDB), s::Symbol)
     new_relpath = push!(copy(_rel_path(pd)), string(s))
     json_filename = joinpath(_get_path(pd), "$s.json")
 
@@ -276,19 +276,19 @@ function _md_propertyname(rel_filename::AbstractString)
 end
 
 
-function Base.length(pd::PropsDB)
+function Base.length(@nospecialize(pd::PropsDB))
     _check_propery_access(pd)
     length(_prop_names(pd))
 end
 
-function Base.iterate(pd::PropsDB)
+function Base.iterate(@nospecialize(pd::PropsDB))
     _check_propery_access(pd)
     nms = _prop_names(pd)
     i = firstindex(nms)
     (pd[nms[i]], i+1)
 end
 
-function Base.iterate(pd::PropsDB, i::Int)
+function Base.iterate(@nospecialize(pd::PropsDB), i::Int)
     nms = _prop_names(pd)
     if checkbounds(Bool, nms, i)
         (pd[nms[i]], i+1)
@@ -298,7 +298,7 @@ function Base.iterate(pd::PropsDB, i::Int)
 end
 
 
-function Base.show(io::IO, m::MIME"text/plain", pd::PropsDB)
+function Base.show(io::IO, m::MIME"text/plain", @nospecialize(pd::PropsDB))
     print(io, nameof(typeof(pd)), "(")
     show(io, m, _base_path(pd))
     print(")")
