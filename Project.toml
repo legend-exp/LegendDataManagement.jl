@@ -1,6 +1,6 @@
 name = "LegendDataManagement"
 uuid = "9feedd95-f0e0-423f-a8dc-de0970eae6b3"
-version = "0.2.0"
+version = "0.2.3"
 
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
@@ -8,12 +8,26 @@ Glob = "c27321d9-0574-5035-807b-f59d2c89b15c"
 JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 PropDicts = "4dc08600-4268-439e-8673-d706fafbb426"
 PropertyDicts = "f8a19df8-e894-5f55-a973-672c1158cbca"
+Requires = "ae029012-a4dd-5104-9daa-d747884805df"
 StructArrays = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
+Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
+
+[weakdeps]
+SolidStateDetectors = "71e43887-2bd9-5f77-aebd-47f656f0a3f0"
+
+[extensions]
+LegendDataManagementSolidStateDetectorsExt = "SolidStateDetectors"
 
 [compat]
 Glob = "1"
 JSON = "0.21, 1"
 PropDicts = "0.2"
 PropertyDicts = "0.2"
+Requires = "1"
+SolidStateDetectors = "0.8"
 StructArrays = "0.4, 0.5, 0.6"
+Unitful = "1"
 julia = "1.6"
+
+[extras]
+SolidStateDetectors = "71e43887-2bd9-5f77-aebd-47f656f0a3f0"

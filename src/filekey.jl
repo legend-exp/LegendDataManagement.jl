@@ -275,6 +275,7 @@ const _filekey_relaxed_expr = r"^([a-z][a-z0-9]*)-p([0-9]{2})-r([0-9]{3})-([a-z]
 
 _is_filekey_string(s::AbstractString) = occursin(_filekey_expr, s)
 
+@inline FileKey(filekey::FileKey) = filekey
 
 function FileKey(s::AbstractString)
     m = match(_filekey_relaxed_expr, basename(s))

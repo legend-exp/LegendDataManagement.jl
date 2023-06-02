@@ -110,8 +110,11 @@ Data configuration multiple experimental setups.
 
 Contains a single field `setups::PropertyDict{Symbol,SetupConfig}`.
 
-Can be read from a config file via `LegendDataConfig(config_filename)`, or simply
-`LegendDataConfig()` if the environment variable `\$$_data_config_envvar_name` is set.
+Can be read from a config file via `LegendDataConfig(config_filename[s])`, or
+simply `LegendDataConfig()` if the environment variable
+`\$$_data_config_envvar_name` is set. `\$$_data_config_envvar_name` may
+be a list of colon-separated config filenames, which are applied/merged in
+reverse order (analog to the order of prioritiy in `\$PATH` and similar).
 
 Example:
 
@@ -137,14 +140,15 @@ function LegendDataConfig(p::PropDict)
     LegendDataConfig(setups)
 end
 
-function LegendDataConfig(filename::AbstractString)
-    p = read(PropDict, filename, subst_pathvar = true, subst_env = true)
+function LegendDataConfig(config_filenames::Union{AbstractString,AbstractArray{<:AbstractString}})
+    p = read(PropDict, config_filenames, subst_pathvar = true, subst_env = true)
     LegendDataConfig(p)
 end
 
 function LegendDataConfig()
     if haskey(ENV, _data_config_envvar_name)
-        LegendDataConfig(ENV[_data_config_envvar_name])
+        config_filenames = reverse(String.(split(ENV[_data_config_envvar_name], ':')))
+        LegendDataConfig(config_filenames)
     else
         throw(ErrorException("Environment variable $_data_config_envvar_name not set"))
     end
