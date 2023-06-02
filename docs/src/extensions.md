@@ -4,7 +4,7 @@
 
 LegendDataManagment provides an extension for [SolidStateDetectors](https://github.com/JuliaPhysics/SolidStateDetectors.jl). This makes it possible to create `SolidStateDetector` instances from LEGEND metadata.
 
-Example (requires a `$LEGEND_CONFIG` environment variable pointing to a legend data-config file):
+Example (requires a `$LEGEND_DATA_CONFIG` environment variable pointing to a legend data-config file):
 
 ```julia
 using LegendDataManagement, SolidStateDetectors, Plots
@@ -12,7 +12,7 @@ det = SolidStateDetector(LegendData(:l200), :V99000A)
 plot(det)
 ```
 
-A detector can also be constructed using the filename of the LEGEND metadata detector-datasheet JSON file (no `$LEGEND_CONFIG` required):
+A detector can also be constructed using the filename of the LEGEND metadata detector-datasheet JSON file (no `$LEGEND_DATA_CONFIG` required):
 
 ```julia
 det = SolidStateDetector(LegendData, "V99000A.json")
