@@ -102,15 +102,31 @@ Constructors:
 LegendDataManagement.LegendTierData(data::LegendData)
 ```
 
-`tier_data::LegendTierData` supports
-
-The full path of data files can be retrieved using
+The path to data directories and files can be accessed via `getindex` on
+`tier_data::LegendTierData`:
 
 ```julia
-data[tier::Symbol]
-data[tier::Symbol, filekey::FileKey]
-data[tier::Symbol, filekey::AbstractString]
+tier_data[]
+tier_data[tier::DataTierLike]
+tier_data[tier::DataTierLike, category::DataCategoryLike]
+tier_data[tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike]
+tier_data[tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike, run::DataRunLike]
+
+tier_data[tier::DataTierLike, filekey::FileKeyLike]
 ```
+
+Examples:
+
+```julia
+l200 = LegendData(:l200)
+
+filekey = FileKey("l200-p02-r006-cal-20221226T200846Z")
+isfile(l200.tier[:raw, filekey])
+
+isdir(l200.tier[:raw, :cal])
+isdir(l200.tier[:raw, :cal, "p02"])
+isdir(l200.tier[:raw, :cal, "p02", "r006"])
+isdir(l200.tier[DataTier(:raw), DataCategory(:cal), DataPeriod(2), DataRun(6)])
 """
 struct LegendTierData
     data::LegendData
@@ -124,17 +140,73 @@ Get the full absolute path for the given `path_components` relative to `tier_dat
 """
 data_path(tier_data::LegendTierData, path_components::AbstractString...) = data_path(tier_data.data, "tier", path_components...)
 
+Base.getindex(tier_data::LegendTierData, args...) = _getindex_impl(tier_data, args...)
 
-function Base.getindex(tier_data::LegendTierData, tier::DataTierLike)
+function _getindex_impl(tier_data::LegendTierData)
+    data_path(tier_data)
+end
+
+function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike)
     data_path(tier_data, string(DataTier(tier)))
 end
 
-function Base.getindex(tier_data::LegendTierData, tier::DataTierLike, filekey::FileKeyLike)
+function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, category::Union{Symbol, DataCategory})
+    data_path(tier_data, string.((DataTier(tier), DataCategory(category),))...)
+end
+
+function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike)
+    data_path(tier_data, string.((
+        DataTier(tier), DataCategory(category), DataPeriod(period))
+    )...)
+end
+
+function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike, run::DataRunLike)
+    data_path(tier_data, string.((
+        DataTier(tier), DataCategory(category), DataPeriod(period), DataRun(run))
+    )...)
+end
+
+function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, filekey::FileKey)
     key = FileKey(filekey)
-    data_path(tier_data,
-        string.((DataTier(tier), DataCategory(key), DataPeriod(key), DataRun(key)))...,
+    joinpath(
+        tier_data[DataTier(tier), DataCategory(key), DataPeriod(key), DataRun(key)],
         "$filekey-tier_$tier.lh5"
     )
+end
+
+# Disambiguation between DataCategory and FileKey:
+function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, s::AbstractString)
+    if _can_convert_to(DataCategory, s)
+        String(tier_data[tier, DataCategory(s)])::String
+    else
+        String(tier_data[tier, FileKey(s)])::String
+    end
+end
+
+
+"""
+    search_disk(::Type{<:DataSelector}, path::AbstractString)
+
+Search on-disk data for data categories, periods, runs, and filekeys.
+
+Examples:
+
+```julia
+l200 = LegendData(:l200)
+
+search_disk(DataCategory, l200.tier[:raw])
+search_disk(DataPeriod, l200.tier[:raw, :cal])
+search_disk(DataRun, l200.tier[:raw, :cal, "p02"])
+search_disk(FileKey, l200.tier[DataTier(:raw), :cal, DataPeriod(2), "r006"])
+```
+"""
+function search_disk end
+export search_disk
+
+function search_disk(::Type{DT}, path::AbstractString) where DT<:DataSelector
+    all_files = readdir(path)
+    valid_files = filter(filename -> _can_convert_to(DT, filename), all_files)
+    return unique(sort(DT.(valid_files)))
 end
 
 
