@@ -354,6 +354,8 @@ Example:
 ```julia
 filekey = FileKey("l200-p02-r006-cal-20221226T200846Z")
 ```
+
+See also [`read_filekeys`](@ref) and [`write_filekeys`](@ref).
 """
 struct FileKey <: DataSelector
     setup::ExpSetup
@@ -450,3 +452,33 @@ Anything that can represent a file key, like
 """
 const FileKeyLike = Union{FileKey, AbstractString}
 export FileKeyLike
+
+
+"""
+    read_filekeys(filename::AbstractString)::AbstractVector{FileKey}
+
+Reads a list of [`FileKey`](@ref) from a text file, one file key per line.
+
+Ignores empty lines. `#` may be used to start a comment in the file.
+"""
+function read_filekeys(filename::AbstractString)
+    lines = filter(!isempty, [strip(first(split(l, '#'))) for l in readlines(filename)])
+    filtered_lines = strip.(filter(l -> !isempty(l) && !startswith(l, "#"), lines))
+    return FileKey.(filtered_lines)
+end
+export read_filekeys
+
+
+"""
+    write_filekeys(filename::AbstractString, filekeys::AbstractVector{<:FileKey})
+
+Writes a list of [`FileKey`](@ref) to a text file, one file key per line.
+"""
+function write_filekeys(filename::AbstractString, filekeys::AbstractVector{<:FileKey})
+    open(filename, "w") do io
+        for key in filekeys
+            print(io, key, "\n")
+        end
+    end
+end
+export write_filekeys
