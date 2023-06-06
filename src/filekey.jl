@@ -1,8 +1,18 @@
 # This file is a part of LegendDataManagement.jl, licensed under the MIT License (MIT).
 
+"""
+    abstract type DataSelector
+
+Abstract type for data selectors like
+[`ExpSetup`](@ref), [`DataTier`](@ref), [`DataPeriod`](@ref),
+[`DataRun`](@ref), [`DataCategory`](@ref), [`Timestamp`](@ref) and
+[`FileKey`](@ref).
+"""
+abstract type DataSelector end
+
 
 """
-    struct ExpSetup
+    struct ExpSetup <: DataSelector
 
 Represents a LEGEND experimental setup like "l200".
 
@@ -15,7 +25,7 @@ string(setup) == "l200"
 ExpSetup("l200") == setup
 ```
 """
-struct ExpSetup
+struct ExpSetup <: DataSelector
     label::Symbol
 end
 export ExpSetup
@@ -27,8 +37,10 @@ Base.isless(a::ExpSetup, b::ExpSetup) = isless(a.label, b.label)
 
 const _setup_expr = r"^([a-z][a-z0-9]*)$"
 
+_can_convert_to(::Type{ExpSetup}, s::AbstractString) = !isnothing(match(_setup_expr, s))
+
 function ExpSetup(s::AbstractString)
-    isnothing(match(_setup_expr, s)) && throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND setup name"))
+    _can_convert_to(ExpSetup, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND setup name"))
     length(s) < 3 && throw(ArgumentError("String \"$s\" is too short to be a valid LEGEND setup name"))
     length(s) > 8 && throw(ArgumentError("String \"$s\" is too long to be a valid LEGEND setup name"))
     ExpSetup(Symbol(s))
@@ -53,7 +65,7 @@ export ExpSetupLike
 
 
 """
-    struct DataTier
+    struct DataTier <: DataSelector
 
 Represents a LEGEND data tier like "raw, "dsp", etc.
 
@@ -66,7 +78,7 @@ string(tier) == "raw"
 DataTier("raw") == tier
 ```
 """
-struct DataTier
+struct DataTier <: DataSelector
     label::Symbol
 end
 export DataTier
@@ -78,8 +90,10 @@ Base.isless(a::DataTier, b::DataTier) = isless(a.label, b.label)
 
 const tier_expr = r"^([a-z]+)$"
 
+_can_convert_to(::Type{DataTier}, s::AbstractString) = !isnothing(match(tier_expr, s))
+
 function DataTier(s::AbstractString)
-    isnothing(match(tier_expr, s)) && throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data tier"))
+    _can_convert_to(DataTier, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data tier"))
     length(s) > 3 && throw(ArgumentError("String \"$s\" is too short to be a valid LEGEND data tier"))
     length(s) > 6 && throw(ArgumentError("String \"$s\" is too long to be a valid LEGEND data tier"))
     DataTier(Symbol(s))
@@ -104,7 +118,7 @@ export DataTierLike
 
 
 """
-    struct DataPeriod
+    struct DataPeriod <: DataSelector
 
 Represents a LEGEND data-taking period.
 
@@ -117,7 +131,7 @@ string(period) == "p02"
 DataPeriod("p02") == period
 ```
 """
-struct DataPeriod
+struct DataPeriod <: DataSelector
     no::Int
 end
 export DataPeriod
@@ -131,6 +145,8 @@ Base.isless(a::DataPeriod, b::DataPeriod) = isless(a.no, b.no)
 Base.print(io::IO, period::DataPeriod) = print(io, "p$(lpad(string(period.no), 2, string(0)))")
 
 const period_expr = r"^p([0-9]{2})$"
+
+_can_convert_to(::Type{DataPeriod}, s::AbstractString) = !isnothing(match(period_expr, s))
 
 function DataPeriod(s::AbstractString)
     m = match(period_expr, s)
@@ -155,7 +171,7 @@ export DataPeriodLike
 
 
 """
-    struct DataRun
+    struct DataRun <: DataSelector
 
 Represents a LEGEND data-taking run.
 
@@ -167,7 +183,7 @@ r.no == 6
 string(r) == "r006"
 DataRun("r006") == r
 """
-struct DataRun
+struct DataRun <: DataSelector
     no::Int
 end
 export DataRun
@@ -181,6 +197,8 @@ Base.isless(a::DataRun, b::DataRun) = isless(a.no, b.no)
 Base.print(io::IO, run::DataRun) = print(io, "r$(lpad(string(run.no), 3, string(0)))")
 
 const run_expr = r"^r([0-9]{3})$"
+
+_can_convert_to(::Type{DataRun}, s::AbstractString) = !isnothing(match(run_expr, s))
 
 function DataRun(s::AbstractString)
     m = match(run_expr, s)
@@ -203,7 +221,7 @@ export DataRunLike
 
 
 """
-    struct DataCategory
+    struct DataCategory <: DataSelector
 
 Represents a LEGEND data category (related to a DAQ/measuring mode) like
 "cal" or "phy".
@@ -217,7 +235,7 @@ string(category) == "cal"
 DataCategory("cal") == category
 ```
 """
-struct DataCategory
+struct DataCategory <: DataSelector
     label::Symbol
 end
 export DataCategory
@@ -229,8 +247,10 @@ Base.isless(a::DataCategory, b::DataCategory) = isless(a.label, b.label)
 
 const category_expr = r"^([a-z]+)$"
 
+_can_convert_to(::Type{DataCategory}, s::AbstractString) = !isnothing(match(category_expr, s))
+
 function DataCategory(s::AbstractString)
-    isnothing(match(category_expr, s)) && throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data category"))
+    _can_convert_to(DataCategory, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data category"))
     length(s) > 3 && throw(ArgumentError("String \"$s\" is too short to be a valid LEGEND data category"))
     length(s) > 6 && throw(ArgumentError("String \"$s\" is too long to be a valid LEGEND data category"))
     DataCategory(Symbol(s))
@@ -255,7 +275,7 @@ export DataCategoryLike
 
 
 """
-    struct Timestamp
+    struct Timestamp <: DataSelector
 
 Represents a LEGEND timestamp.
 
@@ -267,7 +287,7 @@ timestamp.unixtime == 1672085326
 string(timestamp) == "20221226T200846Z"
 ````
 """
-struct Timestamp
+struct Timestamp <: DataSelector
     unixtime::Int
 end
 export Timestamp
@@ -276,6 +296,8 @@ export Timestamp
 
 Dates.DateTime(timestamp::Timestamp) = Dates.unix2datetime(timestamp.unixtime)
 Timestamp(datetime::Dates.DateTime) = Timestamp(round(Int, Dates.datetime2unix(datetime)))
+
+_can_convert_to(::Type{Timestamp}, s::AbstractString) = _is_timestamp_string(s) || _is_filekey_string(s)
 
 function Timestamp(s::AbstractString)
     if _is_timestamp_string(s)
@@ -323,7 +345,7 @@ export TimestampLike
 
 
 """
-    struct FileKey
+    struct FileKey <: DataSelector
 
 Represents a LEGEND file key.
 
@@ -333,7 +355,7 @@ Example:
 filekey = FileKey("l200-p02-r006-cal-20221226T200846Z")
 ```
 """
-struct FileKey
+struct FileKey <: DataSelector
     setup::ExpSetup
     period::DataPeriod
     run::DataRun
@@ -373,6 +395,8 @@ const _filekey_relaxed_expr = r"^([a-z][a-z0-9]*)-p([0-9]{2})-r([0-9]{3})-([a-z]
 _is_filekey_string(s::AbstractString) = occursin(_filekey_expr, s)
 
 @inline FileKey(filekey::FileKey) = filekey
+
+_can_convert_to(::Type{FileKey}, s::AbstractString) = !isnothing(match(_filekey_relaxed_expr, basename(s)))
 
 function FileKey(s::AbstractString)
     m = match(_filekey_relaxed_expr, basename(s))
