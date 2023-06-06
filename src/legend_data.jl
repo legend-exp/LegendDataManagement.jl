@@ -95,9 +95,9 @@ function _key_path_components(filekey::FileKey)
     [string(DataCategory(filekey)), string(DataPeriod(filekey)), string(DataRun(filekey))]
 end
 
-function data_filename(data::LegendData, filekey::FileKey, tier::Symbol)
+function data_filename(data::LegendData, filekey::FileKey, tier::DataTierLike)
     # ToDo: Check that setup matches setup name in data (to be added).
-    p = ["tier", string(tier), _key_path_components(filekey)..., "$(filekey)-tier_$(tier).lh5"]
+    p = ["tier", string(tier), _key_path_components(filekey)..., "$(filekey)-tier_$(DataTier(tier)).lh5"]
     setup_data_path(data, p)
 end
 export data_filename
@@ -131,15 +131,15 @@ struct LegendTierData
     data::LegendData
 end
 
-function Base.getindex(tier_data::LegendTierData, tier::Symbol)
-    setup_data_path(get_setup_config(tier_data.data), ["tier", string(tier)])
+function Base.getindex(tier_data::LegendTierData, tier::DataTierLike)
+    setup_data_path(get_setup_config(tier_data.data), ["tier", string(DataTier(tier))])
 end
 
-function Base.getindex(tier_data::LegendTierData, tier::Symbol, filekey::Union{FileKey,AbstractString})
+function Base.getindex(tier_data::LegendTierData, tier::DataTierLike, filekey::FileKeyLike)
     key = FileKey(filekey)
     setup_data_path(
         get_setup_config(tier_data.data), [
-            "tier", string(tier), string(DataCategory(key)),
+            "tier", string(DataTier(tier)), string(DataCategory(key)),
             string(DataPeriod(key)), string(DataRun(key)),
             "$filekey-tier_$tier.lh5"
         ]

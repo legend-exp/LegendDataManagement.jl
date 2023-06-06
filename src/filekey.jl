@@ -41,6 +41,67 @@ Base.convert(::Type{ExpSetup}, s::AbstractString) = ExpSetup(s)
 Base.print(io::IO, category::ExpSetup) = print(io, category.label)
 
 
+"""
+    ExpSetupLike = Union{ExpSetup, Symbol, AbstractString}
+
+Anything that can represent a setup label, like `ExpSetup(:l200)`, `:l200` or
+`"l200"`.
+"""
+const ExpSetupLike = Union{ExpSetup, Symbol, AbstractString}
+export ExpSetupLike
+
+
+
+"""
+    struct DataTier
+
+Represents a LEGEND data tier like "raw, "dsp", etc.
+
+Example:
+
+```julia
+tier = DataTier(:raw)
+tier.label == :raw
+string(tier) == "raw"
+DataTier("raw") == tier
+```
+"""
+struct DataTier
+    label::Symbol
+end
+export DataTier
+
+@inline DataTier(tier::DataTier) = tier
+
+Base.:(==)(a::DataTier, b::DataTier) = a.label == b.label
+Base.isless(a::DataTier, b::DataTier) = isless(a.label, b.label)
+
+const tier_expr = r"^([a-z]+)$"
+
+function DataTier(s::AbstractString)
+    isnothing(match(tier_expr, s)) && throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data tier"))
+    length(s) > 3 && throw(ArgumentError("String \"$s\" is too short to be a valid LEGEND data tier"))
+    length(s) > 6 && throw(ArgumentError("String \"$s\" is too long to be a valid LEGEND data tier"))
+    DataTier(Symbol(s))
+end
+
+Base.convert(::Type{DataTier}, s::AbstractString) = DataTier(s)
+Base.convert(::Type{DataTier}, s::Symbol) = DataTier(s)
+
+# ToDo: Improve implementation
+Base.print(io::IO, tier::DataTier) = print(io, tier.label)
+
+
+"""
+    DataTierLike = Union{DataTier, Symbol, AbstractString}
+
+Anything that can represent a data tier, like `DataTier(:raw)`, `:raw` or
+`"raw"`.
+"""
+const DataTierLike = Union{DataTier, Symbol, AbstractString}
+export DataTierLike
+
+
 
 """
     struct DataPeriod
@@ -83,6 +144,15 @@ end
 Base.convert(::Type{DataPeriod}, s::AbstractString) = DataPeriod(s)
 
 
+"""
+    DataPeriodLike = Union{DataPeriod, Integer, AbstractString}
+
+Anything that can represent a data period, like `DataPeriod(2)` or "p02".
+"""
+const DataPeriodLike = Union{DataPeriod, AbstractString}
+export DataPeriodLike
+
+
 
 """
     struct DataRun
@@ -123,6 +193,13 @@ end
 
 Base.convert(::Type{DataRun}, s::AbstractString) = DataRun(s)
 
+"""
+    DataRunLike = Union{DataRun, Integer, AbstractString}
+
+Anything that can represent a data run, like `DataRun(6)` or "r006".
+"""
+DataRunLike = Union{DataRun, AbstractString}
+export DataRunLike
 
 
 """
@@ -164,6 +241,16 @@ Base.convert(::Type{DataCategory}, s::Symbol) = DataCategory(s)
 
 # ToDo: Improve implementation
 Base.print(io::IO, category::DataCategory) = print(io, category.label)
+
+
+"""
+    DataCategoryLike = Union{DataCategory, Symbol, AbstractString}
+
+Anything that can represent a data category, like `DataCategory(:cal)`,
+`:cal` or `"cal"`.
+"""
+const DataCategoryLike = Union{DataCategory, Symbol, AbstractString}
+export DataCategoryLike
 
 
 
@@ -222,6 +309,16 @@ _is_timestamp_string(s::AbstractString) = occursin(_timestamp_expr, s)
 
 # ToDo: Remove _timestamp_from_string
 _timestamp_from_string(s::AbstractString) = DateTime(Timestamp(s))
+
+
+"""
+    TimestampLike = Union{Timestamp, AbstractString, Integer}
+
+Anything that can represent a timestamp, like `Timestamp("20221226T200846Z")`
+or "20221226T200846Z".
+"""
+const TimestampLike = Union{Timestamp, AbstractString, Integer}
+export TimestampLike
 
 
 
@@ -318,3 +415,14 @@ DataCategory(key::FileKey) = DataCategory(key.category)
 
 Timestamp(key::FileKey) = Timestamp(key.time)
 Dates.DateTime(key::FileKey) = DateTime(Timestamp(key))
+
+
+"""
+    FileKeyLike = Union{FileKey, AbstractString}
+
+Anything that can represent a file key, like
+`FileKey("l200-p02-r006-cal-20221226T200846Z")` or
+`"l200-p02-r006-cal-20221226T200846Z"`.
+"""
+const FileKeyLike = Union{FileKey, AbstractString}
+export FileKeyLike
