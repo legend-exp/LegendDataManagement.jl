@@ -224,14 +224,20 @@ function channel_info(data::LegendData, filekey::FileKey)
     # ToDo: Add this to PropDicts.jl
     _get(d::PropDict, key::Symbol, default) = haskey(d, key) ? d[key] : default
 
-    make_row(k::Symbol) = (
-        detector = Symbol(k)::Symbol,
-        fcid = Int(_get(chmap[k].daq, :fcid, -1))::Int,
-        rawid = Int(chmap[k].daq.rawid)::Int,
-        system = Symbol(chmap[k].system)::Symbol,
-        processable = Bool(dpcfg[k].processable)::Bool,
-        usability = (dpcfg[k].usability == "on")::Bool,
-    )
+    function make_row(k::Symbol)
+        fcid::Int = _get(chmap[k].daq, :fcid, -1)
+        rawid::Int = chmap[k].daq.rawid
+        chid = fcid >= 0 ? fcid : rawid
+        (
+            detector = Symbol(k)::Symbol,
+            channel = chid,
+            fcid = fcid,
+            rawid = rawid,
+            system = Symbol(chmap[k].system)::Symbol,
+            processable = Bool(dpcfg[k].processable)::Bool,
+            usability = (dpcfg[k].usability == "on")::Bool,
+        )
+    end
 
     StructArray(make_row.(filtered_keys))
 end
