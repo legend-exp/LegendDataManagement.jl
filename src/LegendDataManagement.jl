@@ -21,6 +21,7 @@ include("dataset.jl")
 include("data_config.jl")
 include("props_db.jl")
 include("legend_data.jl")
+include("workers.jl")
 
 
 @static if !isdefined(Base, :get_extension)
