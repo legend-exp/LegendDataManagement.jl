@@ -6,6 +6,9 @@ module LegendDataManagement
 
 using Dates
 
+import Distributed
+import Pkg
+
 using Glob
 using JSON
 using PropDicts
