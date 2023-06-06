@@ -10,6 +10,6 @@ include("testing_utils.jl")
     setup = dconfig.setups.l200
 
     # ToDo: Add proper tests.
-    @test @inferred(data_path(setup, ["tier", "raw", "cal", "p02", "r006", "l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5"])) isa AbstractString
+    @test @inferred(data_path(setup, "tier", "raw", "cal", "p02", "r006", "l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5")) isa AbstractString
     @test @inferred(data_path(setup, "tier/raw/cal/p02/r006/l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5")) isa AbstractString
 end

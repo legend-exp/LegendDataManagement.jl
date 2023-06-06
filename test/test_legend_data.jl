@@ -10,7 +10,7 @@ include("testing_utils.jl")
 @testset "legend_data" begin
     l200 = LegendData(:l200)
 
-    @test @inferred(data_path(l200, ["tier", "raw", "cal", "p02", "r006", "l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5"])) isa AbstractString
+    @test @inferred(data_path(l200, "tier", "raw", "cal", "p02", "r006", "l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5")) isa AbstractString
     @test @inferred(data_path(l200, "tier/raw/cal/p02/r006/l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5")) isa AbstractString
 
     filekey = FileKey("l200-p02-r006-cal-20221226T200846Z")

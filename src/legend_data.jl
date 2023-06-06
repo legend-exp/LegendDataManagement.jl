@@ -64,7 +64,7 @@ get_setup_config(data::LegendData) = getfield(data, :_config)
     if s == :_config
         getfield(d, :_config)
     elseif s == :metadata
-        AnyProps(data_path(d, ["metadata"]))
+        AnyProps(data_path(d, "metadata"))
     elseif s == :tier
         LegendTierData(d)
     else
@@ -133,13 +133,11 @@ end
 
 
 """
-    data_path(tier_data::LegendTierData, path_components::AbstractVector{<:AbstractString})
-    data_path(tier_data::LegendTierData, path::AbstractString})
+    data_path(tier_data::LegendTierData, path_components::AbstractString...)
 
 Get the full absolute path for the given `path_components` relative to `tier_data`.
 """
-data_path(tier_data::LegendTierData, path_components::AbstractVector{<:AbstractString}) = data_path(tier_data.data, ["tier", path_components...])
-data_path(tier_data::LegendTierData, path::AbstractString) = data_path(tier_data.data, ["tier", path])
+data_path(tier_data::LegendTierData, path_components::AbstractString...) = data_path(tier_data.data, "tier", path_components...)
 
 
 function Base.getindex(tier_data::LegendTierData, tier::DataTierLike)
@@ -148,11 +146,10 @@ end
 
 function Base.getindex(tier_data::LegendTierData, tier::DataTierLike, filekey::FileKeyLike)
     key = FileKey(filekey)
-    data_path(tier_data, [
-            string(DataTier(tier)), string(DataCategory(key)),
-            string(DataPeriod(key)), string(DataRun(key)),
-            "$filekey-tier_$tier.lh5"
-        ]
+    data_path(tier_data,
+        string(DataTier(tier)), string(DataCategory(key)),
+        string(DataPeriod(key)), string(DataRun(key)),
+        "$filekey-tier_$tier.lh5"
     )
 end
 
