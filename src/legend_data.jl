@@ -86,24 +86,9 @@ function LegendData(setup::Symbol)
     LegendData(getproperty(LegendDataConfig().setups, setup))
 end
 
-
-# tier/raw/cal/p03/r002/l200-p03-r002-cal-20230324T171017Z-tier_raw.lh5
-#  par/hit/cal/p03/r003/l200-p03-r003-cal-20230331T161141Z-par_hit.json
-
-
-function _key_path_components(filekey::FileKey)
-    [string(DataCategory(filekey)), string(DataPeriod(filekey)), string(DataRun(filekey))]
-end
-
-function data_filename(data::LegendData, filekey::FileKey, tier::DataTierLike)
-    # ToDo: Check that setup matches setup name in data (to be added).
-    p = ["tier", string(tier), _key_path_components(filekey)..., "$(filekey)-tier_$(DataTier(tier)).lh5"]
-    data_path(data, p)
-end
+Base.@deprecate data_filename(data::LegendData, filekey::FileKey, tier::DataTierLike) data.tier[tier, filekey]
 export data_filename
 
-# ToDo:
-# par_filename(data::LegendData, key::FileKey, tier::Symbol)
 
 
 """
@@ -147,8 +132,7 @@ end
 function Base.getindex(tier_data::LegendTierData, tier::DataTierLike, filekey::FileKeyLike)
     key = FileKey(filekey)
     data_path(tier_data,
-        string(DataTier(tier)), string(DataCategory(key)),
-        string(DataPeriod(key)), string(DataRun(key)),
+        string.((DataTier(tier), DataCategory(key), DataPeriod(key), DataRun(key)))...,
         "$filekey-tier_$tier.lh5"
     )
 end

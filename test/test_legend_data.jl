@@ -15,9 +15,6 @@ include("testing_utils.jl")
 
     filekey = FileKey("l200-p02-r006-cal-20221226T200846Z")
 
-    @test @inferred(data_filename(l200, filekey, :raw)) isa String
-    @test normalize_path(data_filename(l200, filekey, :raw)) == "/some/other/storage/raw_lh5/cal/p02/r006/l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5"
-
     @test getproperty(l200, :tier) isa LegendDataManagement.LegendTierData
     @test normalize_path(@inferred(l200.tier[:raw, filekey])) == "/some/other/storage/raw_lh5/cal/p02/r006/l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5"
     @test normalize_path(@inferred(l200.tier[:raw, "l200-p02-r006-cal-20221226T200846Z"])) == "/some/other/storage/raw_lh5/cal/p02/r006/l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5"
