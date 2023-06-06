@@ -64,7 +64,7 @@ get_setup_config(data::LegendData) = getfield(data, :_config)
     if s == :_config
         getfield(d, :_config)
     elseif s == :metadata
-        AnyProps(setup_data_path(d, ["metadata"]))
+        AnyProps(data_path(d, ["metadata"]))
     elseif s == :tier
         LegendTierData(d)
     else
@@ -98,7 +98,7 @@ end
 function data_filename(data::LegendData, filekey::FileKey, tier::DataTierLike)
     # ToDo: Check that setup matches setup name in data (to be added).
     p = ["tier", string(tier), _key_path_components(filekey)..., "$(filekey)-tier_$(DataTier(tier)).lh5"]
-    setup_data_path(data, p)
+    data_path(data, p)
 end
 export data_filename
 
@@ -132,12 +132,12 @@ struct LegendTierData
 end
 
 function Base.getindex(tier_data::LegendTierData, tier::DataTierLike)
-    setup_data_path(get_setup_config(tier_data.data), ["tier", string(DataTier(tier))])
+    data_path(get_setup_config(tier_data.data), ["tier", string(DataTier(tier))])
 end
 
 function Base.getindex(tier_data::LegendTierData, tier::DataTierLike, filekey::FileKeyLike)
     key = FileKey(filekey)
-    setup_data_path(
+    data_path(
         get_setup_config(tier_data.data), [
             "tier", string(DataTier(tier)), string(DataCategory(key)),
             string(DataPeriod(key)), string(DataRun(key)),

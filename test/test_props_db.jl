@@ -11,7 +11,7 @@ using LegendDataManagement: PropsDB, AnyProps, ValiditySelection
 include("testing_utils.jl")
 
 @testset "props_db" begin
-    props_base_path = setup_data_path(LegendDataConfig().setups.l200, "metadata")
+    props_base_path = data_path(LegendDataConfig().setups.l200, "metadata")
 
     @test AnyProps(props_base_path) isa PropsDB
     @test_throws ArgumentError AnyProps("/no/such/props/db")

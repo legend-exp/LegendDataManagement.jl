@@ -12,13 +12,13 @@ Data configuration for an experimental setup.
 Supports
 
 ```julia
-setup_data_path(setup, path_components)
+data_path(setup, path_components)
 ```
 
 Examples:
 
 ```julia
-setup_data_path(setup, ["tier", "raw", "cal", "p02", "r006", "l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5"])
+data_path(setup, ["tier", "raw", "cal", "p02", "r006", "l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5"])
 ```
 """
 struct SetupConfig
@@ -55,15 +55,19 @@ end
 
 
 """
-    setup_data_path(setup::SetupConfig, path_components::AbstractVector{<:AbstractString})
-    setup_data_path(setup::SetupConfig, path::AbstractString})
+    data_path(setup::SetupConfig, path_components::AbstractVector{<:AbstractString})
+    data_path(setup::SetupConfig, path::AbstractString})
 
 Get the full absolute path for the given `path_components` as configured for `setup`.
 """
-function setup_data_path end
+function data_path end
+export data_path
+
+Base.@deprecate setup_data_path(setup::SetupConfig, args...) data_path(setup, args...)
 export setup_data_path
 
-function setup_data_path(setup::SetupConfig, path_components::AbstractVector{<:AbstractString})
+
+function data_path(setup::SetupConfig, path_components::AbstractVector{<:AbstractString})
     idx = findlast(Base.Fix1(_path_key_match, path_components) ∘ first, setup.paths)
     isnothing(idx) && throw(ArgumentError("No path configured for $path_components in given setup"))
     (k, v) = setup.paths[idx]
@@ -72,7 +76,7 @@ function setup_data_path(setup::SetupConfig, path_components::AbstractVector{<:A
     joinpath(v, path_components[begin+n:end]...)
 end
 
-setup_data_path(setup::SetupConfig, path::AbstractString) = setup_data_path(setup, (split(path, "/")))
+data_path(setup::SetupConfig, path::AbstractString) = data_path(setup, (split(path, "/")))
 
 
 
@@ -93,13 +97,15 @@ function get_setup_config end
 
 
 """
-    setup_data_path(setup::AbstractSetupData, path_components::AbstractVector{<:AbstractString})
-    setup_data_path(setup::AbstractSetupData, path::AbstractString})
+    data_path(setup::AbstractSetupData, path_components::AbstractVector{<:AbstractString})
+    data_path(setup::AbstractSetupData, path::AbstractString})
 
 Get the full absolute path for the given `path_components` as configured for `setup`.
 """
-setup_data_path(data::AbstractSetupData, path_components::AbstractVector{<:AbstractString}) = setup_data_path(get_setup_config(data), path_components)
-setup_data_path(data::AbstractSetupData, path::AbstractString) = setup_data_path(get_setup_config(data), path)
+data_path(data::AbstractSetupData, path_components::AbstractVector{<:AbstractString}) = data_path(get_setup_config(data), path_components)
+data_path(data::AbstractSetupData, path::AbstractString) = data_path(get_setup_config(data), path)
+
+Base.@deprecate setup_data_path(setup::AbstractSetupData, args...) data_path(setup, args...)
 
 
 
@@ -121,7 +127,7 @@ Example:
 ```julia
 config = LegendDataConfig("/path/to/config.json")
 setup = config.setups.l200
-setup_data_path(setup, ["tier", "raw", "cal", "p02", "r006", "l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5"])
+data_path(setup, ["tier", "raw", "cal", "p02", "r006", "l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5"])
 ```
 
 See also [`SetupConfig`](@ref).
