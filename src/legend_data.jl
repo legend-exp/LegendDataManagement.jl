@@ -131,15 +131,25 @@ struct LegendTierData
     data::LegendData
 end
 
+
+"""
+    data_path(tier_data::LegendTierData, path_components::AbstractVector{<:AbstractString})
+    data_path(tier_data::LegendTierData, path::AbstractString})
+
+Get the full absolute path for the given `path_components` relative to `tier_data`.
+"""
+data_path(tier_data::LegendTierData, path_components::AbstractVector{<:AbstractString}) = data_path(tier_data.data, ["tier", path_components...])
+data_path(tier_data::LegendTierData, path::AbstractString) = data_path(tier_data.data, ["tier", path])
+
+
 function Base.getindex(tier_data::LegendTierData, tier::DataTierLike)
-    data_path(get_setup_config(tier_data.data), ["tier", string(DataTier(tier))])
+    data_path(tier_data, string(DataTier(tier)))
 end
 
 function Base.getindex(tier_data::LegendTierData, tier::DataTierLike, filekey::FileKeyLike)
     key = FileKey(filekey)
-    data_path(
-        get_setup_config(tier_data.data), [
-            "tier", string(DataTier(tier)), string(DataCategory(key)),
+    data_path(tier_data, [
+            string(DataTier(tier)), string(DataCategory(key)),
             string(DataPeriod(key)), string(DataRun(key)),
             "$filekey-tier_$tier.lh5"
         ]
