@@ -94,7 +94,7 @@ _can_convert_to(::Type{DataTier}, s::AbstractString) = !isnothing(match(tier_exp
 
 function DataTier(s::AbstractString)
     _can_convert_to(DataTier, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data tier"))
-    length(s) > 3 && throw(ArgumentError("String \"$s\" is too short to be a valid LEGEND data tier"))
+    length(s) < 3 && throw(ArgumentError("String \"$s\" is too short to be a valid LEGEND data tier"))
     length(s) > 6 && throw(ArgumentError("String \"$s\" is too long to be a valid LEGEND data tier"))
     DataTier(Symbol(s))
 end
@@ -251,7 +251,7 @@ _can_convert_to(::Type{DataCategory}, s::AbstractString) = !isnothing(match(cate
 
 function DataCategory(s::AbstractString)
     _can_convert_to(DataCategory, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data category"))
-    length(s) > 3 && throw(ArgumentError("String \"$s\" is too short to be a valid LEGEND data category"))
+    length(s) < 3 && throw(ArgumentError("String \"$s\" is too short to be a valid LEGEND data category"))
     length(s) > 6 && throw(ArgumentError("String \"$s\" is too long to be a valid LEGEND data category"))
     DataCategory(Symbol(s))
 end
