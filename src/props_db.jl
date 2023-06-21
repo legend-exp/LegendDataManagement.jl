@@ -184,7 +184,12 @@ _validity(@nospecialize(pd::PropsDB)) = getfield(pd, :_validity)
 _prop_names(@nospecialize(pd::PropsDB)) = getfield(pd, :_prop_names)
 _needs_vsel(@nospecialize(pd::PropsDB)) = getfield(pd, :_needs_vsel)
 
-_get_path(@nospecialize(pd::PropsDB)) = joinpath(_base_path(pd), _rel_path(pd)...)
+"""
+    data_path(pd::LegendDataManagement.PropsDB)
+
+Return the path to the data directory that contains `pd`.
+"""
+data_path(@nospecialize(pd::PropsDB)) = joinpath(_base_path(pd), _rel_path(pd)...)
 
 
 function _check_propery_access(pd)
@@ -247,7 +252,7 @@ end
 
 function _get_md_property(@nospecialize(pd::PropsDB), s::Symbol)
     new_relpath = push!(copy(_rel_path(pd)), string(s))
-    json_filename = joinpath(_get_path(pd), "$s.json")
+    json_filename = joinpath(data_path(pd), "$s.json")
 
     if isdir(joinpath(_base_path(pd), new_relpath...))
         _any_props(_base_path(pd), new_relpath, _validity_sel(pd), _validity(pd))
