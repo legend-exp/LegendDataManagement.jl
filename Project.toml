@@ -23,7 +23,7 @@ LegendDataManagementSolidStateDetectorsExt = "SolidStateDetectors"
 [compat]
 Glob = "1"
 JSON = "0.21, 1"
-PropDicts = "0.2"
+PropDicts = "0.2.2"
 PropertyDicts = "0.2"
 Requires = "1"
 SolidStateDetectors = "0.8, 0.9"

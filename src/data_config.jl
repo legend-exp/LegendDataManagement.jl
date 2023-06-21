@@ -150,7 +150,7 @@ function LegendDataConfig(p::PropDict)
 end
 
 function LegendDataConfig(config_filenames::Union{AbstractString,AbstractArray{<:AbstractString}})
-    p = read(PropDict, config_filenames, subst_pathvar = true, subst_env = true)
+    p = readprops(config_filenames)
     LegendDataConfig(p)
 end
 

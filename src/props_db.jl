@@ -39,7 +39,7 @@ function _read_validity_sel_filelist(dir_path::String, validity::_ValidityDict, 
     end
 
     abs_filelist = joinpath.(Ref(dir_path), filelist)
-    return read(PropDict, abs_filelist, subst_pathvar = true, subst_env = true)
+    return readprops(abs_filelist)
 end
 
 
@@ -252,7 +252,7 @@ function _get_md_property(@nospecialize(pd::PropsDB), s::Symbol)
     if isdir(joinpath(_base_path(pd), new_relpath...))
         _any_props(_base_path(pd), new_relpath, _validity_sel(pd), _validity(pd))
     elseif isfile(json_filename)
-        read(PropDict, json_filename, subst_pathvar = true, subst_env = true)
+        readprops(json_filename)
     else
         throw(ArgumentError("Metadata entry doesn't have a property $s"))
     end

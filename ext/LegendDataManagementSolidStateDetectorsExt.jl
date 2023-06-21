@@ -44,11 +44,11 @@ to_SSD_units(::Type{T}, x, unit) where {T} = T(SolidStateDetectors.to_internal_u
 
 
 function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, filename::String) where {T<:Real}
-    SolidStateDetector{T}(LegendData, read(PropDict, filename))
+    SolidStateDetector{T}(LegendData, readprops(filename, subst_pathvar = false, subst_env = false, trim_null = false))
 end
 
 function SolidStateDetectors.SolidStateDetector(::Type{LegendData}, filename::String)
-    SolidStateDetector{_SSDDefaultNumtype}(LegendData, read(PropDict, filename))
+    SolidStateDetector{_SSDDefaultNumtype}(LegendData, filename)
 end
 
 function SolidStateDetectors.SolidStateDetector(::Type{LegendData}, meta::AbstractDict)
