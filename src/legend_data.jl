@@ -236,6 +236,14 @@ function channel_info(data::LegendData, filekey::FileKey)
             system = Symbol(chmap[k].system)::Symbol,
             processable = Bool(dpcfg[k].processable)::Bool,
             usability = (dpcfg[k].usability == "on")::Bool,
+            string = chmap[k].location.string,
+            position = chmap[k].location.position,
+            cc4 = chmap[k].electronics.cc4.id,
+            cc4ch = chmap[k].electronics.cc4.channel,
+            daqcrate = chmap[k].daq.crate,
+            daqcard = chmap[k].daq.card.id,
+            hvcard = chmap[k].voltage.card.id,
+            hvch = chmap[k].voltage.channel,
         )
     end
 
