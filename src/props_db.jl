@@ -122,7 +122,6 @@ const AnyProps = Union{PropsDB,PropDict}
 
 AnyProps(base_path::AbstractString) = _any_props(String(base_path), String[], nothing, _ValidityDict())
 
-g_state = nothing
 function _any_props(base_path::String, rel_path::Vector{String}, validity_sel::Union{Nothing,ValiditySelection}, prev_validity::_ValidityDict)
     !isdir(base_path) && throw(ArgumentError("PropsDB base path \"$base_path\" is not a directory"))
     new_validity_path = joinpath(base_path, rel_path..., validity_filename)
@@ -132,7 +131,6 @@ function _any_props(base_path::String, rel_path::Vector{String}, validity_sel::U
     validity_filerefs = vcat(vcat(map(x -> x.filelist, values(new_validity))...)...)
     validity_filerefs_found = !isempty(intersect(files_in_dir, validity_filerefs))
 
-    global g_state = (;base_path, rel_path, validity_sel, new_validity, validity_filerefs_found, files_in_dir)
     if validity_filerefs_found
         if !isnothing(validity_sel)
             _read_validity_sel_filelist(String(joinpath(base_path, rel_path...)), new_validity, validity_sel)
