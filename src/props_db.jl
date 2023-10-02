@@ -207,8 +207,16 @@ end
 (@nospecialize(pd::PropsDB{Nothing}))(filekey::FileKey) = pd(ValiditySelection(filekey))
 
 
+function Base.getindex(@nospecialize(pd::PropsDB), a, b, cs...)
+    getindex(getindex(pd, a), b, cs...)
+end
+
 function Base.getindex(@nospecialize(pd::PropsDB), s::Symbol)
     _get_md_property(pd, s)
+end
+
+function Base.getindex(@nospecialize(pd::PropsDB), s::DataSelector)
+    getindex(pd, Symbol(string(s)))
 end
 
 function Base.getindex(@nospecialize(pd::PropsDB), S::AbstractArray{<:Symbol})
