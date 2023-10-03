@@ -94,14 +94,13 @@ struct PropsDB{VS<:Union{Nothing,ValiditySelection}} <: AbstractDict{Symbol,Abst
     _base_path::String
     _rel_path::Vector{String}
     _validity_sel::VS
-    _validity::_ValidityDict
     _prop_names::Vector{Symbol}
     _needs_vsel::Bool
 end
 
 function Base.:(==)(a::PropsDB, b::PropsDB)
     _base_path(a) == _base_path(b) && _rel_path(a) == _rel_path(b) && _validity_sel(a) == _validity_sel(b) &&
-        _validity(a) == _validity(b) && _prop_names(a) == _prop_names(b) && _needs_vsel(a) == _needs_vsel(b)
+        _prop_names(a) == _prop_names(b) && _needs_vsel(a) == _needs_vsel(b)
 end
 
 
@@ -120,26 +119,28 @@ LegendDataManagement.AnyProps(base_path::AbstractString)
 """
 const AnyProps = Union{PropsDB,PropDict}
 
-AnyProps(base_path::AbstractString) = _any_props(String(base_path), String[], nothing, _ValidityDict())
+AnyProps(base_path::AbstractString) = _any_props(String(base_path), String[], nothing)
 
-function _any_props(base_path::String, rel_path::Vector{String}, validity_sel::Union{Nothing,ValiditySelection}, prev_validity::_ValidityDict)
+function _any_props(base_path::String, rel_path::Vector{String}, validity_sel::Union{Nothing,ValiditySelection})
     !isdir(base_path) && throw(ArgumentError("PropsDB base path \"$base_path\" is not a directory"))
-    new_validity_path = joinpath(base_path, rel_path..., validity_filename)
-    new_validity = _load_validity(String(new_validity_path), prev_validity)
+    validity_path = joinpath(base_path, rel_path..., validity_filename)
+    validity_info = _load_validity(String(validity_path))
 
     files_in_dir = String.(readdir(joinpath(base_path, rel_path...)))
-    validity_filerefs = vcat(vcat(map(x -> x.filelist, values(new_validity))...)...)
+    maybe_validity_info = something(validity_info, _ValidityDict())
+    validity_filerefs = vcat(vcat(map(x -> x.filelist, values(maybe_validity_info))...)...)
     validity_filerefs_found = !isempty(intersect(files_in_dir, validity_filerefs))
+    non_validity_files = setdiff(files_in_dir, validity_filerefs)
+    prop_names = filter(!isequal(:__no_property), _md_propertyname.(non_validity_files))
 
-    if validity_filerefs_found
+    if !isnothing(validity_info)
         if !isnothing(validity_sel)
-            _read_validity_sel_filelist(String(joinpath(base_path, rel_path...)), new_validity, validity_sel)
+            _read_validity_sel_filelist(String(joinpath(base_path, rel_path...)), validity_info, validity_sel)
         else
-            PropsDB(base_path, rel_path, validity_sel, new_validity, Symbol[], true)
+            PropsDB(base_path, rel_path, validity_sel, prop_names, true)
         end
     else
-        prop_names = filter(!isequal(:__no_property), _md_propertyname.(files_in_dir))
-        PropsDB(base_path, rel_path, validity_sel, new_validity, prop_names, false)
+        PropsDB(base_path, rel_path, validity_sel, prop_names, false)
     end
 end
 
@@ -150,9 +151,9 @@ function _read_jsonl(filename::String)
     end
 end
 
-function _load_validity(new_validity_path::String, prev_validity::_ValidityDict)
-    if isfile(new_validity_path)
-        entries = PropDict.(_read_jsonl(new_validity_path))
+function _load_validity(validity_path::String)
+    if isfile(validity_path)
+        entries = PropDict.(_read_jsonl(validity_path))
         new_validity = _ValidityDict()
         for props in entries
             valid_from = _timestamp2datetime(props.valid_from)
@@ -170,7 +171,7 @@ function _load_validity(new_validity_path::String, prev_validity::_ValidityDict)
         end
         return new_validity
     else
-        return prev_validity
+        return nothing
     end
 end
 
@@ -178,7 +179,6 @@ end
 _base_path(@nospecialize(pd::PropsDB)) = getfield(pd, :_base_path)
 _rel_path(@nospecialize(pd::PropsDB)) = getfield(pd, :_rel_path)
 _validity_sel(@nospecialize(pd::PropsDB)) = getfield(pd, :_validity_sel)
-_validity(@nospecialize(pd::PropsDB)) = getfield(pd, :_validity)
 _prop_names(@nospecialize(pd::PropsDB)) = getfield(pd, :_prop_names)
 _needs_vsel(@nospecialize(pd::PropsDB)) = getfield(pd, :_needs_vsel)
 
@@ -191,14 +191,14 @@ data_path(@nospecialize(pd::PropsDB)) = joinpath(_base_path(pd), _rel_path(pd)..
 
 
 function _check_propery_access(pd)
-    if _needs_vsel(pd)
+    if _needs_vsel(pd) && isempty(_prop_names(pd))
         full_path = joinpath(_base_path(pd), _rel_path(pd)...)
         throw(ArgumentError("Content access not available for PropsDB at \"$full_path\" without validity selection"))
     end
 end
 
 
-(@nospecialize(pd::PropsDB{Nothing}))(selection::ValiditySelection) = _any_props(_base_path(pd), _rel_path(pd), selection, _validity(pd))
+(@nospecialize(pd::PropsDB{Nothing}))(selection::ValiditySelection) = _any_props(_base_path(pd), _rel_path(pd), selection)
 
 function(@nospecialize(pd::PropsDB{Nothing}))(timestamp::Union{DateTime,Timestamp,AbstractString}, category::Union{DataCategory,Symbol,AbstractString})
     pd(ValiditySelection(timestamp, category))
@@ -232,8 +232,6 @@ function Base.getproperty(@nospecialize(pd::PropsDB), s::Symbol)
         _rel_path(pd)
     elseif s == :_validity_sel
         _validity_sel(pd)
-    elseif s == :_validity
-        _validity(pd)
     elseif s == :_prop_names
         _prop_names(pd)
     elseif s == :_needs_vsel
@@ -259,15 +257,17 @@ end
 function _get_md_property(@nospecialize(pd::PropsDB), s::Symbol)
     new_relpath = push!(copy(_rel_path(pd)), string(s))
     json_filename = joinpath(data_path(pd), "$s.json")
+    _check_propery_access(pd)
 
     if isdir(joinpath(_base_path(pd), new_relpath...))
-        _any_props(_base_path(pd), new_relpath, _validity_sel(pd), _validity(pd))
+        _any_props(_base_path(pd), new_relpath, _validity_sel(pd))
     elseif isfile(json_filename)
         readprops(json_filename)
     else
         throw(ArgumentError("Metadata entry doesn't have a property $s"))
     end
 end
+
 
 function _is_metadata_property_filename(filename)
     endswith(filename, ".json") || isdir(filename)
@@ -317,9 +317,12 @@ function Base.show(io::IO, m::MIME"text/plain", @nospecialize(pd::PropsDB))
         print(io, ".", p)
     end
     print(io, " ")
-    if _needs_vsel(pd)
+    if _needs_vsel(pd) && isempty(_prop_names(pd))
         print(io, "(validity selection required)")
     else
+        if _needs_vsel(pd)
+            println(io, "(validity selection available)")
+        end
         show(io, m, propertynames(pd))
     end
 end
