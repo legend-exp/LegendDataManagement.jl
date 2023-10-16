@@ -105,6 +105,43 @@ end
 
 
 """
+    struct LegendDataManagement.NoSuchPropsDBEntry
+
+Indicates that a given property (path) of a
+`LegendDataManagementPropsDB`[@ref] does not exist.
+
+Supports
+`PropDicts.writeprops(missing_props::NoSuchPropsDBEntry, props::PropDicts.PropDict)`
+to create the missing directories and file for the property path.
+"""
+struct NoSuchPropsDBEntry
+    _base_path::String
+    _rel_path::Vector{String}
+end
+
+_base_path(@nospecialize(pd::NoSuchPropsDBEntry)) = getfield(pd, :_base_path)
+_rel_path(@nospecialize(pd::NoSuchPropsDBEntry)) = getfield(pd, :_rel_path)
+
+function _get_md_property(missing_props::NoSuchPropsDBEntry, s::Symbol)
+    NoSuchPropsDBEntry(_base_path(missing_props), push!(copy(_rel_path(missing_props)), string(s)))
+end
+
+function PropDicts.writeprops(@nospecialize(missing_props::NoSuchPropsDBEntry), @nospecialize(props::PropDict))
+    rp = _rel_path(missing_props)
+    dir = joinpath(_base_path(missing_props), rp[begin:end-1]...)
+    maybe_dirpath = joinpath(dir, rp[end])
+    if isdir(maybe_dirpath)
+        throw(ErrorException("Cannot write properties to existing directory \"$maybe_dirpath\", target must be a file"))
+    end
+    file = "$(rp[end]).json"
+    mkpath(dir)
+    writeprops(joinpath(dir, file), props)
+    nothing
+end
+
+
+
+"""
     LegendDataManagement.AnyProps = Union{LegendDataManagement.PropsDB,PropDicts.PropDict}
 
 Properties stored either in a directory managed via
@@ -207,24 +244,27 @@ end
 (@nospecialize(pd::PropsDB{Nothing}))(filekey::FileKey) = pd(ValiditySelection(filekey))
 
 
-function Base.getindex(@nospecialize(pd::PropsDB), a, b, cs...)
+const MaybePropsDB = Union{PropsDB,NoSuchPropsDBEntry}
+
+
+function Base.getindex(@nospecialize(pd::MaybePropsDB), a, b, cs...)
     getindex(getindex(pd, a), b, cs...)
 end
 
-function Base.getindex(@nospecialize(pd::PropsDB), s::Symbol)
+function Base.getindex(@nospecialize(pd::MaybePropsDB), s::Symbol)
     _get_md_property(pd, s)
 end
 
-function Base.getindex(@nospecialize(pd::PropsDB), s::DataSelector)
+function Base.getindex(@nospecialize(pd::MaybePropsDB), s::DataSelector)
     getindex(pd, Symbol(string(s)))
 end
 
-function Base.getindex(@nospecialize(pd::PropsDB), S::AbstractArray{<:Symbol})
+function Base.getindex(@nospecialize(pd::MaybePropsDB), S::AbstractArray{<:Symbol})
     _get_md_property.(Ref(pd), S)
 end
 
 
-function Base.getproperty(@nospecialize(pd::PropsDB), s::Symbol)
+function Base.getproperty(@nospecialize(pd::MaybePropsDB), s::Symbol)
     # Include internal fields:
     if s == :_base_path
         _base_path(pd)
@@ -264,7 +304,11 @@ function _get_md_property(@nospecialize(pd::PropsDB), s::Symbol)
     elseif isfile(json_filename)
         readprops(json_filename)
     else
-        throw(ArgumentError("Metadata entry doesn't have a property $s"))
+        if !_needs_vsel(pd) && (isnothing(_validity_sel(pd)) || isempty(_validity_sel(pd)))
+            NoSuchPropsDBEntry(_base_path(pd), push!(copy(_rel_path(pd)), string(s)))
+        else
+            throw(ArgumentError("Metadata entry doesn't have a property $s"))
+        end
     end
 end
 
