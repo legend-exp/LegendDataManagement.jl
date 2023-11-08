@@ -237,7 +237,7 @@ function channel_info(data::LegendData, filekey::FileKey)
             rawid = rawid,
             system = Symbol(chmap[k].system)::Symbol,
             processable = Bool(dpcfg[k].processable)::Bool,
-            usability = (dpcfg[k].usability == "on")::Bool,
+            usability = Symbol(dpcfg[k].usability)::Symbol,
             string = chmap[k].location.string,
             position = chmap[k].location.position,
             cc4 = chmap[k].electronics.cc4.id,
