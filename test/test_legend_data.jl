@@ -26,6 +26,6 @@ include("testing_utils.jl")
     # ToDo: Make type-stable:
     @test #=@inferred=#(channel_info(l200, filekey)) isa StructArray
     chinfo = channel_info(l200, filekey)
-    @test all(filterby(@pf $processable && $usability)(chinfo).processable)
-    @test all(filterby(@pf $processable && $usability)(chinfo).usability)
+    @test all(filterby(@pf $processable && $usability == :on)(chinfo).processable)
+    @test all(filterby(@pf $processable && $usability == :on)(chinfo).usability .== :on)
 end
