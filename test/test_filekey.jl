@@ -49,4 +49,18 @@ using Dates
     @test @inferred(LegendDataManagement._timestamp_from_string("l200-p02-r006-cal-20221226T200846Z")) == DateTime("2022-12-26T20:08:46")
     @test @inferred(LegendDataManagement._timestamp_from_string("20221226T200846Z")) == DateTime("2022-12-26T20:08:46")
     @test_throws ArgumentError LegendDataManagement._timestamp_from_string("20221226200846Z")
+
+    ch = ChannelId(1083204)
+    @test ch.no == 1083204
+    @test @inferred(string(ch)) == "ch1083204"
+    @test @inferred(ChannelId("ch1083204")) == ch
+    ch = ChannelId(98)
+    @test ch.no == 98
+    @test @inferred(string(ch)) == "ch098"
+    @test @inferred(ChannelId("ch098")) == ch
+
+    detector = DetectorId(:V99000A)
+    @test detector.label == :V99000A
+    @test @inferred(string(detector)) == "V99000A"
+    @test @inferred(DetectorId("V99000A")) == detector
 end

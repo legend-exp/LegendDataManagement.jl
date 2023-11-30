@@ -182,6 +182,7 @@ r = DataRun(6)
 r.no == 6
 string(r) == "r006"
 DataRun("r006") == r
+```
 """
 struct DataRun <: DataSelector
     no::Int
@@ -482,3 +483,115 @@ function write_filekeys(filename::AbstractString, filekeys::AbstractVector{<:Fil
     end
 end
 export write_filekeys
+
+
+
+"""
+    struct ChannelId <: DataSelector
+
+Represents a LEGEND data channel.
+
+Example:
+
+```julia
+ch = ChannelId(1083204)
+# ch = ChannelId(98) # with old channel numbering
+ch.no == 1083204
+string(ch) == "ch1083204"
+ChannelId("ch1083204") == ch
+```
+"""
+struct ChannelId <: DataSelector
+    no::Int
+end
+export ChannelId
+
+@inline ChannelId(ch::ChannelId) = ch
+
+Base.:(==)(a::ChannelId, b::ChannelId) = a.no == b.no
+Base.isless(a::ChannelId, b::ChannelId) = isless(a.no, b.no)
+
+function Base.print(io::IO, ch::ChannelId)
+    if ch.no < 1000
+        @printf(io, "ch%03d", ch.no)
+    else
+        @printf(io, "ch%03d", ch.no)
+    end
+end
+
+const ch_expr = r"^ch([0-9]{3}|[0-9]{7})$"
+
+_can_convert_to(::Type{ChannelId}, s::AbstractString) = !isnothing(match(ch_expr, s))
+
+function ChannelId(s::AbstractString)
+    m = match(ch_expr, s)
+    if (m == nothing)
+        throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data channel name"))
+    else
+        ChannelId(parse(Int, (m::RegexMatch).captures[1]))
+    end
+end
+
+Base.convert(::Type{ChannelId}, s::AbstractString) = ChannelId(s)
+
+
+"""
+    ChannelIdLike = Union{ChannelId, Integer, AbstractString}
+
+Anything that can represent a data channel, like `ChannelId(1083204)` or
+"ch1083204".
+"""
+ChannelIdLike = Union{ChannelId, AbstractString}
+export ChannelIdLike
+
+
+
+"""
+    struct DetectorId <: DataSelector
+
+Represents a LEGEND detector id id.
+
+Example:
+
+```julia
+detector = DetectorId(:V99000A)
+detector.label == :V99000A
+string(detector) == "V99000A"
+DetectorId("V99000A") == detector
+```
+"""
+struct DetectorId <: DataSelector
+    label::Symbol
+end
+export DetectorId
+
+@inline DetectorId(detector::DetectorId) = detector
+
+Base.:(==)(a::DetectorId, b::DetectorId) = a.label == b.label
+Base.isless(a::DetectorId, b::DetectorId) = isless(a.label, b.label)
+
+const detectorid_expr = r"^([A-Z][A-Z0-9]+)$"
+
+_can_convert_to(::Type{DetectorId}, s::AbstractString) = !isnothing(match(detectorid_expr, s))
+
+function DetectorId(s::AbstractString)
+    _can_convert_to(DetectorId, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND detector id"))
+    length(s) < 4 && throw(ArgumentError("String \"$s\" is too short to be a valid LEGEND detector id"))
+    length(s) > 7 && throw(ArgumentError("String \"$s\" is too long to be a valid LEGEND detector id"))
+    DetectorId(Symbol(s))
+end
+
+Base.convert(::Type{DetectorId}, s::AbstractString) = DetectorId(s)
+Base.convert(::Type{DetectorId}, s::Symbol) = DetectorId(s)
+
+# ToDo: Improve implementation
+Base.print(io::IO, detector::DetectorId) = print(io, detector.label)
+
+
+"""
+    DetectorIdLike = Union{DetectorId, Symbol, AbstractString}
+
+Anything that can represent a detector id.
+"""
+const DetectorIdLike = Union{DetectorId, Symbol, AbstractString}
+export DetectorIdLike
