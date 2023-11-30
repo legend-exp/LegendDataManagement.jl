@@ -17,6 +17,7 @@ using StructArrays
 
 using Printf: @printf
 
+using IntervalSets: AbstractInterval, ClosedInterval
 using LRUCache: LRU
 using ProgressMeter: @showprogress
 using PropertyFunctions: PropertyFunction, @pf
