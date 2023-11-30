@@ -31,6 +31,8 @@ include("workers.jl")
 include("map_datafiles.jl")
 include("ljl_expressions.jl")
 include("lpy_expressions.jl")
+include("ljl_dataprod.jl")
+include("lpy_dataprod.jl")
 
 
 @static if !isdefined(Base, :get_extension)

@@ -12,6 +12,8 @@ Test.@testset "Package LegendDataManagement" begin
     include("test_map_datafiles.jl")
     include("test_ljl_expressions.jl")
     include("test_lpy_expressions.jl")
+    include("test_ljl_dataprod.jl")
+    include("test_lpy_dataprod.jl")
     VERSION >= v"1.8.0" && include("test_ext_ssd.jl")
     include("test_docs.jl")
     isempty(Test.detect_ambiguities(LegendDataManagement))
