@@ -16,8 +16,19 @@ struct ValiditySelection
     timestamp::Timestamp
     category::DataCategory
 end
+export ValiditySelection
 
 ValiditySelection(filekey::FileKey) = ValiditySelection(DateTime(filekey), DataCategory(filekey))
+
+
+"""
+    const AnyValiditySelection = Union{ValiditySelection,FileKey}
+
+Anything that can be used in time/category-based data selection.
+"""
+const AnyValiditySelection = Union{ValiditySelection,FileKey}
+export AnyValiditySelection
+
 
 
 function _get_validity_sel_filelist(validity::_ValidityDict, category::DataCategory, sel_time::Timestamp)
