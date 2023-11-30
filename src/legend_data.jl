@@ -213,13 +213,14 @@ end
 
 
 """
-    channel_info(data::LegendData, filekey::FileKey)
+    channel_info(data::LegendData, sel::AnyValiditySelection)
 
-Get channel information for a given filekey.
+Get all channel information for the given [`LegendData`](@ref) and
+[`ValiditySelection`](@ref).
 """
-function channel_info(data::LegendData, filekey::FileKey)
-    chmap = data.metadata(filekey).hardware.configuration.channelmaps
-    dpcfg = data.metadata(filekey).dataprod.config.analysis
+function channel_info(data::LegendData, sel::AnyValiditySelection)
+    chmap = data.metadata(sel).hardware.configuration.channelmaps
+    dpcfg = data.metadata(sel).dataprod.config.analysis
     
     filtered_keys = Array{Symbol}(filter(k -> haskey(chmap, k), collect(keys(dpcfg))))
 
@@ -252,3 +253,35 @@ function channel_info(data::LegendData, filekey::FileKey)
     StructArray(make_row.(filtered_keys))
 end
 export channel_info
+
+
+"""
+    channel_info(data::LegendData, sel::AnyValiditySelection, channel::ChannelId)
+    channel_info(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+
+Get channel information validitiy selection and [`DetectorId`](@ref) resp.
+[`ChannelId`](@ref).
+"""
+function channel_info(data::LegendData, sel::AnyValiditySelection, channel::ChannelId)
+    chinfo = channel_info(data, sel)
+    idxs = findall(x -> ChannelId(x) == channel, chinfo.channel)
+    if isempty(idxs)
+        throw(ArgumentError("No channel information found for channel $channel"))
+    elseif length(idxs) > 1
+        throw(ArgumentError("Multiple channel information entries for channel $channel"))
+    else
+        return chinfo[only(idxs)]
+    end
+end
+
+function channel_info(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    chinfo = channel_info(data, sel)
+    idxs = findall(x -> DetectorId(x) == detector, chinfo.detector)
+    if isempty(idxs)
+        throw(ArgumentError("No channel information found for detector $detector"))
+    elseif length(idxs) > 1
+        throw(ArgumentError("Multiple channel information entries for detector $detector"))
+    else
+        return chinfo[only(idxs)]
+    end
+end
