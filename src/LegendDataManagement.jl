@@ -15,6 +15,8 @@ using PropDicts
 using PropertyDicts
 using StructArrays
 
+using Printf: @printf
+
 using LRUCache: LRU
 using PropertyFunctions: PropertyFunction, @pf
 
