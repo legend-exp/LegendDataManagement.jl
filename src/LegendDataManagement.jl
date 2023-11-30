@@ -15,6 +15,8 @@ using PropDicts
 using PropertyDicts
 using StructArrays
 
+using PropertyFunctions: PropertyFunction, @pf
+
 
 include("filekey.jl")
 include("dataset.jl")
