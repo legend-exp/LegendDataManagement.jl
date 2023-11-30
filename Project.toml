@@ -29,7 +29,7 @@ Requires = "1"
 SolidStateDetectors = "0.8, 0.9"
 StructArrays = "0.4, 0.5, 0.6"
 Unitful = "1"
-julia = "1.6"
+julia = "1.9"
 
 [extras]
 SolidStateDetectors = "71e43887-2bd9-5f77-aebd-47f656f0a3f0"
