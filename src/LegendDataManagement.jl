@@ -25,6 +25,8 @@ include("data_config.jl")
 include("props_db.jl")
 include("legend_data.jl")
 include("workers.jl")
+include("ljl_expressions.jl")
+include("lpy_expressions.jl")
 
 
 @static if !isdefined(Base, :get_extension)
