@@ -8,6 +8,8 @@ Test.@testset "Package LegendDataManagement" begin
     include("test_data_config.jl")
     include("test_props_db.jl")
     include("test_legend_data.jl")
+    include("test_workers.jl")
+    include("test_map_datafiles.jl")
     include("test_ljl_expressions.jl")
     include("test_lpy_expressions.jl")
     VERSION >= v"1.8.0" && include("test_ext_ssd.jl")
