@@ -3,5 +3,5 @@
 using LegendDataManagement
 using Test
 
-@testset "ljl_dataprod" begin
+@testset "dataprod_config" begin
 end
