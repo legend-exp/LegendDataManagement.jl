@@ -2,13 +2,8 @@
 
 module LegendDataManagementSolidStateDetectorsExt
 
-@static if isdefined(Base, :get_extension)
-    using SolidStateDetectors
-    import SolidStateDetectors.ConstructiveSolidGeometry as CSG
-else
-    using ..SolidStateDetectors
-    import ..SolidStateDetectors.ConstructiveSolidGeometry as CSG
-end
+using SolidStateDetectors
+import SolidStateDetectors.ConstructiveSolidGeometry as CSG
 
 using LegendDataManagement
 using Unitful
