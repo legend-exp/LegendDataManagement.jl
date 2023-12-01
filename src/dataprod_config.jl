@@ -64,3 +64,46 @@ function pydataprod_config(data::LegendData)
     dataprod_metadata.config
 end
 export pydataprod_config
+
+
+"""
+    data_partitions(data::LegendData, label::Symbol = :default)
+
+Return cross-period data partitions.
+"""
+function data_partitions(data::LegendData, label::Symbol = :default)
+    parts = pydataprod_config(data).partitions[label]
+    pidxs = Int.(keys(parts))
+    result::IdDict{
+        Int,
+        StructVector{
+            @NamedTuple{period::DataPeriod, run::DataRun},
+            @NamedTuple{period::Vector{DataPeriod}, run::Vector{DataRun}},
+            Int
+        }
+    } = IdDict([
+        let
+            periods_and_runs = [
+                let period = DataPeriod(string(p))
+                    map(run -> (period = period, run = run), _resolve_partition_runs(data, period, rs))
+                end
+                for (p,rs) in part
+            ]
+            flat_pr = vcat(periods_and_runs...)::Vector{@NamedTuple{period::DataPeriod, run::DataRun}}
+            pidx::Int => StructArray(flat_pr)
+        end
+        for (pidx, part) in parts
+    ])
+
+    return result
+end
+export data_partitions
+
+_resolve_partition_runs(data::LegendData, period::DataPeriod, runs::AbstractVector) = Vector{DataRun}(runs)
+function _resolve_partition_runs(data::LegendData, period::DataPeriod, runs::AbstractString)
+    if runs == "all"
+        search_disk(DataRun, data.tier[:raw, :cal, period])
+    else
+        throw(ArgumentError("Invalid specification \"$runs\" for runs in data partition"))
+    end
+end
