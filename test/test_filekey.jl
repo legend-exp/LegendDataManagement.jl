@@ -56,11 +56,15 @@ using Dates
     @test @inferred(ChannelId("ch1083204")) == ch
     ch = ChannelId(98)
     @test ch.no == 98
+    @test @inferred(Int(ch)) == 98
+    @test @inferred(convert(Int, ch)) == 98
     @test @inferred(string(ch)) == "ch098"
     @test @inferred(ChannelId("ch098")) == ch
 
     detector = DetectorId(:V99000A)
     @test detector.label == :V99000A
+    @test @inferred(Symbol(detector)) == :V99000A
+    @test @inferred(convert(Symbol, detector)) == :V99000A
     @test @inferred(string(detector)) == "V99000A"
     @test @inferred(DetectorId("V99000A")) == detector
 end

@@ -534,6 +534,9 @@ end
 
 Base.convert(::Type{ChannelId}, s::AbstractString) = ChannelId(s)
 
+Base.Int(ch::ChannelId) = ch.no
+Base.convert(::Type{Int}, ch::ChannelId) = ch.no
+
 
 """
     ChannelIdLike = Union{ChannelId, Integer, AbstractString}
@@ -583,6 +586,9 @@ end
 
 Base.convert(::Type{DetectorId}, s::AbstractString) = DetectorId(s)
 Base.convert(::Type{DetectorId}, s::Symbol) = DetectorId(s)
+
+Base.Symbol(detector::DetectorId) = detector.label
+Base.convert(::Type{Symbol}, detector::DetectorId) = detector.label
 
 # ToDo: Improve implementation
 Base.print(io::IO, detector::DetectorId) = print(io, detector.label)
