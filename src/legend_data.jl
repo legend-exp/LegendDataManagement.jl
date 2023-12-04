@@ -222,7 +222,21 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection)
     chmap = data.metadata(sel).hardware.configuration.channelmaps
     dpcfg = data.metadata(sel).dataprod.config.analysis
     
-    filtered_keys = Array{Symbol}(filter(k -> haskey(chmap, k), collect(keys(dpcfg))))
+    #filtered_keys = Array{Symbol}(filter(k -> haskey(chmap, k), collect(keys(dpcfg))))
+    channel_keys = collect(keys(chmap))
+
+    _convert_location(l::AbstractString) = (location = Symbol(l), strng = -1, position = -1, fiber = "")
+
+    function _convert_location(l::PropDict)
+        (
+            location = :array,
+            strng = get(l, :string, -1),
+            position = _convert_pos(get(l, :position, -1)),
+            fiber = get(l, :fiber, ""),
+        )
+    end
+
+    _convert_location(l::PropDicts.MissingProperty) = (location = :unkown, strng = -1, position = -1, fiber = "")
 
     _convert_pos(p::Integer) = Int(p)
     _convert_pos(p::AbstractString) = Symbol(p)
@@ -234,25 +248,25 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection)
 
         detector::Symbol = Symbol(k)
         system::Symbol = Symbol(chmap[k].system)
-        processable::Bool = dpcfg[k].processable
-        usability::Symbol = Symbol(dpcfg[k].usability)
-        strng::Int = get(chmap[k].location, :string, -1)
-        fiber::StaticString{8} = get(chmap[k].location, :fiber, "")
-        position::Union{Int,Symbol} = _convert_pos(chmap[k].location.position)
+        processable::Bool = get(dpcfg[k], :processable, false)
+        usability::Symbol = Symbol(get(dpcfg[k], :usability, :unkown))
+
+        location::Symbol, strng::Int, position::Union{Int,Symbol}, fiber::StaticString{8} = _convert_location(chmap[k].location)
+
         cc4::StaticString{8} = get(chmap[k].electronics.cc4, :id, "")
         cc4ch::Int = get(chmap[k].electronics.cc4, :channel, -1)
-        daqcrate::Int = chmap[k].daq.crate
+        daqcrate::Int = get(chmap[k].daq, :crate, -1)
         daqcard::Int = chmap[k].daq.card.id
         hvcard::Int = get(chmap[k].voltage.card, :id, -1)
         hvch::Int = get(chmap[k].voltage, :channel, -1)
 
         return (;
             detector, channel, fcid, rawid, system, processable, usability,
-            strng, fiber, position, cc4, cc4ch, daqcrate, daqcard, hvcard, hvch
+            location, strng, fiber, position, cc4, cc4ch, daqcrate, daqcard, hvcard, hvch
         )
     end
 
-    StructArray(make_row.(filtered_keys))
+    StructArray(make_row.(channel_keys))
 end
 export channelinfo
 
@@ -306,7 +320,9 @@ function channel_info(data::LegendData, sel::AnyValiditySelection)
         system = chinfo.system,
         processable = chinfo.processable,
         usability = chinfo.usability,
+        location = chinfo.location,
         string = chinfo.strng,
+        fiber = chinfo.fiber,
         position = chinfo.position,
         cc4 = chinfo.cc4,
         cc4ch = chinfo.cc4ch,
