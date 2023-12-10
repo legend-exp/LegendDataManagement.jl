@@ -225,18 +225,18 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection)
     #filtered_keys = Array{Symbol}(filter(k -> haskey(chmap, k), collect(keys(dpcfg))))
     channel_keys = collect(keys(chmap))
 
-    _convert_location(l::AbstractString) = (location = Symbol(l), strng = -1, position = -1, fiber = "")
+    _convert_location(l::AbstractString) = (location = Symbol(l), detstring = -1, position = -1, fiber = "")
 
     function _convert_location(l::PropDict)
         (
             location = :array,
-            strng = get(l, :string, -1),
+            detstring = get(l, :string, -1),
             position = _convert_pos(get(l, :position, -1)),
             fiber = get(l, :fiber, ""),
         )
     end
 
-    _convert_location(l::PropDicts.MissingProperty) = (location = :unkown, strng = -1, position = -1, fiber = "")
+    _convert_location(l::PropDicts.MissingProperty) = (location = :unkown, detstring = -1, position = -1, fiber = "")
 
     _convert_pos(p::Integer) = Int(p)
     _convert_pos(p::AbstractString) = Symbol(p)
@@ -251,7 +251,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection)
         processable::Bool = get(dpcfg[k], :processable, false)
         usability::Symbol = Symbol(get(dpcfg[k], :usability, :unkown))
 
-        location::Symbol, strng::Int, position::Union{Int,Symbol}, fiber::StaticString{8} = _convert_location(chmap[k].location)
+        location::Symbol, detstring::Int, position::Union{Int,Symbol}, fiber::StaticString{8} = _convert_location(chmap[k].location)
 
         cc4::StaticString{8} = get(chmap[k].electronics.cc4, :id, "")
         cc4ch::Int = get(chmap[k].electronics.cc4, :channel, -1)
@@ -262,7 +262,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection)
 
         return (;
             detector, channel, fcid, rawid, system, processable, usability,
-            location, strng, fiber, position, cc4, cc4ch, daqcrate, daqcard, hvcard, hvch
+            location, detstring, fiber, position, cc4, cc4ch, daqcrate, daqcard, hvcard, hvch
         )
     end
 
@@ -321,7 +321,7 @@ function channel_info(data::LegendData, sel::AnyValiditySelection)
         processable = chinfo.processable,
         usability = chinfo.usability,
         location = chinfo.location,
-        string = chinfo.strng,
+        string = chinfo.detstring,
         fiber = chinfo.fiber,
         position = chinfo.position,
         cc4 = chinfo.cc4,
