@@ -246,7 +246,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection)
         rawid::Int = chmap[k].daq.rawid
         channel::ChannelId = ChannelId(fcid >= 0 ? fcid : rawid)
 
-        detector::Symbol = Symbol(k)
+        detector::DetectorId = DetectorId(k)
         system::Symbol = Symbol(chmap[k].system)
         processable::Bool = get(dpcfg[k], :processable, false)
         usability::Symbol = Symbol(get(dpcfg[k], :usability, :unkown))
