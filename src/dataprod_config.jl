@@ -107,3 +107,18 @@ function _resolve_partition_runs(data::LegendData, period::DataPeriod, runs::Abs
         throw(ArgumentError("Invalid specification \"$runs\" for runs in data partition"))
     end
 end
+
+
+const _cached_bad_filekeys = LRU{UInt, Set{FileKey}}(maxsize = 10)
+
+"""
+    bad_filekeys(data::LegendData)
+
+Get the list of filekeys to ignore for `data`.
+"""
+function bad_filekeys(data::LegendData)
+    get!(_cached_bad_filekeys, objectid(data)) do
+        Set(read_filekeys(joinpath(data_path(pydataprod_config(data)), "ignore_keys.keylist")))
+    end
+end
+export bad_filekeys
