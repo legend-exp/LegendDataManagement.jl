@@ -69,13 +69,15 @@ get_setup_config(data::LegendData) = getfield(data, :_config)
         LegendTierData(d)
     elseif s == :par
         AnyProps(data_path(d, "par"))
+    elseif s == :jlpar
+        AnyProps(data_path(d, "jlpar"))
     else
         throw(ErrorException("LegendData has no property $s"))
     end
 end
 
 @inline function Base.propertynames(d::LegendData)
-    (:metadata, :tier, :par)
+    (:metadata, :tier, :par, :jlpar)
 end
 
 @inline function Base.propertynames(d::LegendData, private::Bool)

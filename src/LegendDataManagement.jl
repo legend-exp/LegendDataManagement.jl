@@ -14,10 +14,11 @@ using JSON
 using PropDicts
 using PropertyDicts
 using StructArrays
+using Unitful
 
 using Printf: @printf
 
-using IntervalSets: AbstractInterval, ClosedInterval
+using IntervalSets: AbstractInterval, ClosedInterval, leftendpoint, rightendpoint
 using LRUCache: LRU
 using ProgressMeter: @showprogress
 using PropertyFunctions: PropertyFunction, @pf
@@ -34,5 +35,6 @@ include("map_datafiles.jl")
 include("ljl_expressions.jl")
 include("lpy_expressions.jl")
 include("dataprod_config.jl")
+include("calibration_functions.jl")
 
 end # module

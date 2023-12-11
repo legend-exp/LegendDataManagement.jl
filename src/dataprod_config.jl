@@ -34,6 +34,24 @@ export dataprod_config
 
 
 """
+    dataprod_parameters(data::LegendData)
+
+Get the Julia data production parameters `data`.
+
+Examples:
+
+```julia
+l200 = LegendData(:l200)
+dataprod_config(l200)
+```
+"""
+function dataprod_parameters(data::LegendData)
+    data.jlpar
+end
+export dataprod_parameters
+
+
+"""
     pydataprod_config(data::LegendData)
 
 Get the Python data production configuration for `data`.
@@ -64,6 +82,24 @@ function pydataprod_config(data::LegendData)
     dataprod_metadata.config
 end
 export pydataprod_config
+
+
+"""
+    pydataprod_parameters(data::LegendData)
+
+Get the Julia data production parameters `data`.
+
+Examples:
+
+```julia
+l200 = LegendData(:l200)
+dataprod_config(l200)
+```
+"""
+function pydataprod_parameters(data::LegendData)
+    data.par
+end
+export pydataprod_parameters
 
 
 """

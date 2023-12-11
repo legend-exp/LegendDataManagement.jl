@@ -24,21 +24,38 @@ Parse an LEGEND Julia expression and return a Julia syntax tree.
 function parse_ljlexpr(@nospecialize(expr_string::AbstractString))
     get!(_cached_jlparsed, expr_string) do
         raw_expr = Meta.parse(expr_string)
-        return process_ljlexpr(raw_expr)
+        return process_ljlexpr(raw_expr, _ljl_expr_unitmap)
     end
 end
 export parse_ljlexpr
 
 
-const jl_expr_allowed_heads = (:call, :||, :&&)
+const ljl_expr_allowed_heads = (:call, :macrocall, :||, :&&, :comparison)
 
-const jl_expr_allowed_funcs = (
+const ljl_expr_allowed_funcs = Set([
     :!,
     :(==), :<, :>, :>=, :<=, :!=,
+    :isapprox, :≈, :≈,
     :+, :-, :*, :/,
-    :abs,
+    :^, :sqrt,
+    :abs, :abs2, :normalize, :norm,
+    :exp, exp2, :exp10, :log, :log2, :log10,
+    :sin, :cos, :tan, :asin, :acos, :atan,
     :isnan, :isinf
-)
+])
+
+const _ljlexpr_units = IdDict([
+    :s => :(u"s"),
+    :ms => :(u"ms"),
+    :μs => :(u"μs"),
+    :us => :(u"μs"),
+    :ns => :(u"ns"),
+    :MeV => :(u"MeV"),
+    :keV => :(u"keV"),
+    :eV => :(u"eV"),
+])
+_ljl_expr_unitmap(sym::Symbol) = get(_ljlexpr_units, sym, sym)
+
 
 const _cached_procjlexpr = LRU{Tuple{LJlExprLike,Any},LJlExprLike}(maxsize = 10^4)
 
@@ -59,27 +76,37 @@ export process_ljlexpr
 
 
 function _process_ljlexpr_impl(x, @nospecialize(f_varsubst))
-    throw(ArgumentError("Invalid component of type $(typeof(nameof(x))) in LEGEND Julia expression."))
+    throw(ArgumentError("Invalid component of type $(nameof(typeof(x))) in LEGEND Julia expression."))
 end
 
 _process_ljlexpr_impl(x::Real, @nospecialize(f_varsubst)) = x
+_process_ljlexpr_impl(x::LineNumberNode, @nospecialize(f_varsubst)) = x
 _process_ljlexpr_impl(sym::Symbol, f_varsubst) = f_varsubst(sym)
 
 function _process_ljlexpr_impl(@nospecialize(expr::Expr), @nospecialize(f_varsubst))
     _process_inner = Base.Fix2(_process_ljlexpr_impl, f_varsubst)
-    if expr.head in jl_expr_allowed_heads
+    if expr.head in ljl_expr_allowed_heads
         if expr.head == :call
             funcname = expr.args[begin]
             funcargs = expr.args[2:end]
-            if funcname in jl_expr_allowed_funcs
+            if funcname in ljl_expr_allowed_funcs
                 return Expr(expr.head, funcname, map(_process_inner, funcargs)...)
             else
-                throw(ArgumentError("Invalid function name $(funcname) in LEGEND Julia expression."))
+                throw(ArgumentError("Function \"$(funcname)\" not allowed in LEGEND Julia expression."))
+            end
+        elseif expr.head == :macrocall
+            macro_name = expr.args[begin]
+            macro_args = expr.args[2:end]
+            if macro_name == Symbol("@u_str")
+                return Expr(expr.head, macro_name, macro_args...)
+            else
+                throw(ArgumentError("Macro \"$(macro_name)\" not allowed in LEGEND Julia expression."))
             end
         else
             return Expr(expr.head, map(_process_inner, expr.args)...)
         end
     else
+        @info "EXPR:" expr
         throw(ArgumentError("Invalid head $(expr.head) in LEGEND Julia expression."))
     end
 end
