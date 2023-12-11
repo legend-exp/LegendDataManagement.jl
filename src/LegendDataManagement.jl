@@ -22,6 +22,7 @@ using LRUCache: LRU
 using ProgressMeter: @showprogress
 using PropertyFunctions: PropertyFunction, @pf
 using StaticStrings: StaticString
+using Tables: columns
 
 include("filekey.jl")
 include("dataset.jl")
