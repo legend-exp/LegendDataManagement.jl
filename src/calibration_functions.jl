@@ -150,7 +150,7 @@ end
     get_ged_cal_propfunc(data::LegendData, sel::ValiditySelection, detector::DetectorId)
 
 Get the HPGe calibration function for the given data, validity selection and
-channel.
+detector.
 
 Returns a `PropertyFunction` that takes a table-like data object with columns
 `e_trap`, `e_cusp`, `e_zac` and `qdrift` and returns a `StructArrays` with
@@ -314,14 +314,12 @@ end
 
 
 """
-    get_lar_cal_propfunc(data::LegendData, sel::ValiditySelection, detector::DetectorId)
+    get_spm_cal_propfunc(data::LegendData, sel::ValiditySelection, detector::DetectorId)
 
 Get the LAr/SPMS calibration function for the given data, validity selection
-detector.
+and detector.
 """
-function get_lar_cal_propfunc(data::LegendData, sel::ValiditySelection, detector::DetectorId)
-    dataprod_parameters(data).phy.p_sipm(sel)
-
+function get_spm_cal_propfunc(data::LegendData, sel::ValiditySelection, detector::DetectorId)
     larcal_props = _get_larcal_props(data, sel, detector)
 
     a::Float64 = get(larcal_props, :a, NaN)
@@ -334,4 +332,21 @@ function get_lar_cal_propfunc(data::LegendData, sel::ValiditySelection, detector
         )
     end
 end
-export get_lar_cal_propfunc
+export get_spm_cal_propfunc
+
+
+"""
+    get_pulser_cal_propfunc(data::LegendData, sel::ValiditySelection, detector::DetectorId)
+
+Get the pulser calibration function for the given data, validity selection
+and the pulser channel referred to by `detector`.
+"""
+function get_pulser_cal_propfunc(data::LegendData, sel::ValiditySelection, detector::DetectorId)
+    # ToDo: Make pulser threashold configurable:
+    let pulser_threshold = 100
+        @pf (
+            puls_trig = $e_10410 > pulser_threshold,
+        )
+    end
+end
+export get_pulser_cal_propfunc
