@@ -144,6 +144,19 @@ function _resolve_partition_runs(data::LegendData, period::DataPeriod, runs::Abs
     end
 end
 
+"""
+    is_analysis_run(data::LegendData, period::DataPeriod, run::DataRun)
+
+Return `true` if `run` is an analysis run for `data` in `period`.
+"""
+function is_analysis_run(data::LegendData, period::DataPeriod, run::DataRun)
+    if pydataprod_config(data).analysis_runs[Symbol(period)] == "all"
+        return true
+    else
+        return string(run) in pydataprod_config(data).analysis_runs[Symbol(period)]
+    end
+end
+export is_analysis_run
 
 const _cached_bad_filekeys = LRU{UInt, Set{FileKey}}(maxsize = 10)
 
