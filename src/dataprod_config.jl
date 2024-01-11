@@ -150,7 +150,9 @@ end
 Return `true` if `run` is an analysis run for `data` in `period`.
 """
 function is_analysis_run(data::LegendData, period::DataPeriod, run::DataRun)
-    if pydataprod_config(data).analysis_runs[Symbol(period)] == "all"
+    if !(period in keys(pydataprod_config(data).analysis_runs))
+        return false
+    elseif pydataprod_config(data).analysis_runs[Symbol(period)] == "all"
         return true
     else
         return string(run) in pydataprod_config(data).analysis_runs[Symbol(period)]
