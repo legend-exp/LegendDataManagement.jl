@@ -157,7 +157,12 @@ function DataPeriod(s::AbstractString)
     end
 end
 
+function DataPeriod(s::Symbol) 
+    DataPeriod(string(s)) 
+end
+
 Base.convert(::Type{DataPeriod}, s::AbstractString) = DataPeriod(s)
+Base.convert(::Type{DataPeriod}, s::Symbol) = DataPeriod(string(s))
 
 
 """
@@ -165,7 +170,7 @@ Base.convert(::Type{DataPeriod}, s::AbstractString) = DataPeriod(s)
 
 Anything that can represent a data period, like `DataPeriod(2)` or "p02".
 """
-const DataPeriodLike = Union{DataPeriod, AbstractString}
+const DataPeriodLike = Union{DataPeriod, Symbol, AbstractString}
 export DataPeriodLike
 
 
@@ -210,14 +215,19 @@ function DataRun(s::AbstractString)
     end
 end
 
+function DataRun(s::Symbol) 
+    DataRun(string(s)) 
+end
+
 Base.convert(::Type{DataRun}, s::AbstractString) = DataRun(s)
+Base.convert(::Type{DataRun}, s::Symbol) = DataRun(string(s))
 
 """
     DataRunLike = Union{DataRun, Integer, AbstractString}
 
 Anything that can represent a data run, like `DataRun(6)` or "r006".
 """
-DataRunLike = Union{DataRun, AbstractString}
+DataRunLike = Union{DataRun, Symbol, AbstractString}
 export DataRunLike
 
 

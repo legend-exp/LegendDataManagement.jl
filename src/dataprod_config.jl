@@ -160,6 +160,37 @@ function is_analysis_run(data::LegendData, period::DataPeriod, run::DataRun)
 end
 export is_analysis_run
 
+
+function _get_runinfo(data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, key::Symbol)
+    data.metadata.dataprod.runinfo[Symbol(period)][Symbol(run)][Symbol(category)][key]
+end
+
+"""
+    start_key(data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike)
+
+Get the starting filekey for `data` in `period`, `run`, `category`.
+"""
+function start_key(data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike)
+    return FileKey(
+        data.name,
+        period,
+        run,
+        category,
+        Timestamp(_get_runinfo(data, period, run, category, :start_key))
+    )
+end
+export start_key
+
+"""
+    phy_livetime(data::LegendData, period::DataPeriodLike, run::DataRunLike)
+
+Get the livetime for `data` in physics data taking of `run` in `period`.
+"""
+function phy_livetime(data::LegendData, period::DataPeriodLike, run::DataRunLike)
+    _get_runinfo(data, period, run, :phy, :livetime_in_s)*u"s"
+end
+export phy_livetime
+
 const _cached_bad_filekeys = LRU{UInt, Set{FileKey}}(maxsize = 10)
 
 """

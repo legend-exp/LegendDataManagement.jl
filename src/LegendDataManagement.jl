@@ -21,7 +21,7 @@ using Printf: @printf
 using IntervalSets: AbstractInterval, ClosedInterval, leftendpoint, rightendpoint
 using LRUCache: LRU
 using ProgressMeter: @showprogress
-using PropertyFunctions: PropertyFunction, @pf
+using PropertyFunctions: PropertyFunction, @pf, filterby
 using StaticStrings: StaticString
 using Tables: columns
 
