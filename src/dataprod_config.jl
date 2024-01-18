@@ -163,24 +163,31 @@ export is_analysis_run
 
 
 function _get_runinfo(data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, key::Symbol)
+    if !haskey(data.metadata.dataprod.runinfo, Symbol(period))
+        throw(ArgumentError("Invalid period $period for key $key"))
+    elseif !haskey(data.metadata.dataprod.runinfo[Symbol(period)], Symbol(run))
+        throw(ArgumentError("Invalid run $run for key $key in period $period"))
+    elseif !haskey(data.metadata.dataprod.runinfo[Symbol(period)][Symbol(run)], Symbol(category))
+        throw(ArgumentError("Invalid category $category for key $key in period $period and run $run"))
+    end
     data.metadata.dataprod.runinfo[Symbol(period)][Symbol(run)][Symbol(category)][key]
 end
+
+const _cached_start_filekeys = LRU{Tuple{DataPeriod, DataRun, DataCategory}, FileKey}(maxsize = 30)
 
 """
     start_key(data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike)
 
 Get the starting filekey for `data` in `period`, `run`, `category`.
 """
-function start_key(data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike)
-    return FileKey(
-        data.name,
-        period,
-        run,
-        category,
-        Timestamp(_get_runinfo(data, period, run, category, :start_key))
-    )
+function start_filekey(data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike)
+    get!(_cached_start_filekeys, (DataPeriod(period), DataRun(run), DataCategory(category))) do
+        FileKey(data.name, period, run, category, Timestamp(_get_runinfo(data, period, run, category, :start_key)))
+    end
 end
-export start_key
+export start_filekey
+
+const _cached_phy_livetime = LRU{Tuple{DataPeriod, DataRun}, Unitful.Quantity}(maxsize = 30)
 
 """
     phy_livetime(data::LegendData, period::DataPeriodLike, run::DataRunLike)
@@ -188,7 +195,9 @@ export start_key
 Get the livetime for `data` in physics data taking of `run` in `period`.
 """
 function phy_livetime(data::LegendData, period::DataPeriodLike, run::DataRunLike)
-    _get_runinfo(data, period, run, :phy, :livetime_in_s)*u"s"
+    get!(_cached_phy_livetime, (DataPeriod(period), DataRun(run))) do
+        Unitful.Quantity(_get_runinfo(data, period, run, :phy, :livetime_in_s), u"s")
+    end
 end
 export phy_livetime
 

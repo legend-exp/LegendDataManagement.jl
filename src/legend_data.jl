@@ -281,7 +281,7 @@ end
 export channelinfo
 
 function channelinfo(data::LegendData, sel::Tuple{DataPeriodLike, DataRunLike, DataCategoryLike})
-    channelinfo(data, start_key(data, sel[1], sel[2], sel[3]))
+    channelinfo(data, start_filekey(data, sel[1], sel[2], sel[3]))
 end
 
 function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, Tuple{DataPeriodLike, DataRunLike, DataCategoryLike}},; system::Symbol=:geds, processable::Bool=true)
