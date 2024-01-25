@@ -98,7 +98,6 @@ Base.@deprecate data_filename(data::LegendData, filekey::FileKey, tier::DataTier
 export data_filename
 
 
-
 """
     struct LegendDataManagement.LegendTierData
 
@@ -219,14 +218,13 @@ end
 
 
 """
-    channelinfo(data::LegendData, sel::AnyValiditySelection)
-    channelinfo(data::LegendData, sel::Tuple{DataPeriodLike, DataRunLike, DataCategoryLike})
-    channelinfo(data::LegendData, sel::Union{AnyValiditySelection, Tuple{DataPeriodLike, DataRunLike, DataCategoryLike}}, system::Symbol;, processable::Bool=true)
+    channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false)
+    channelinfo(data::LegendData, sel::RunCategorySelLike; system::Symbol = :all, only_processable::Bool = false)
 
 Get all channel information for the given [`LegendData`](@ref) and
 [`ValiditySelection`](@ref).
 """
-function channelinfo(data::LegendData, sel::AnyValiditySelection)
+function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false)
     chmap = data.metadata(sel).hardware.configuration.channelmaps
     dpcfg = data.metadata(sel).dataprod.config.analysis
     
@@ -255,7 +253,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection)
         channel::ChannelId = ChannelId(fcid >= 0 ? fcid : rawid)
 
         detector::DetectorId = DetectorId(k)
-        system::Symbol = Symbol(chmap[k].system)
+        local system::Symbol = Symbol(chmap[k].system)
         processable::Bool = get(dpcfg[k], :processable, false)
         usability::Symbol = Symbol(get(dpcfg[k], :usability, :unkown))
         is_blinded::Bool = get(dpcfg[k], :is_blinded, false)
@@ -276,16 +274,19 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection)
         )
     end
 
-    StructArray(make_row.(channel_keys))
+    chinfo = StructArray(make_row.(channel_keys)) 
+    if !(system == :all)
+        chinfo = chinfo |> filterby(@pf $system .== system)
+    end
+    if only_processable
+        chinfo = chinfo |> filterby(@pf $processable .== true)
+    end
+    return chinfo
 end
 export channelinfo
 
-function channelinfo(data::LegendData, sel::Tuple{DataPeriodLike, DataRunLike, DataCategoryLike})
-    channelinfo(data, start_filekey(data, sel[1], sel[2], sel[3]))
-end
-
-function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, Tuple{DataPeriodLike, DataRunLike, DataCategoryLike}},; system::Symbol=:geds, processable::Bool=true)
-    channelinfo(data, sel) |> filterby(@pf $system .== system && $processable == processable)
+function channelinfo(data::LegendData, sel::RunCategorySelLike; kwargs...)
+    channelinfo(data, start_filekey(data, sel); kwargs...)
 end
 
 
@@ -296,8 +297,8 @@ end
 Get channel information validitiy selection and [`DetectorId`](@ref) resp.
 [`ChannelId`](@ref).
 """
-function channelinfo(data::LegendData, sel::AnyValiditySelection, channel::ChannelIdLike)
-    chinfo = channelinfo(data, sel)
+function channelinfo(data::LegendData, sel::AnyValiditySelection, channel::ChannelIdLike; kwargs...)
+    chinfo = channelinfo(data, sel; kwargs...)
     idxs = findall(x -> ChannelId(x) == ChannelId(channel), chinfo.channel)
     if isempty(idxs)
         throw(ArgumentError("No channel information found for channel $channel"))
@@ -308,8 +309,8 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection, channel::Chann
     end
 end
 
-function channelinfo(data::LegendData, sel::AnyValiditySelection, detector::DetectorIdLike)
-    chinfo = channelinfo(data, sel)
+function channelinfo(data::LegendData, sel::AnyValiditySelection, detector::DetectorIdLike; kwargs...)
+    chinfo = channelinfo(data, sel; kwargs...)
     idxs = findall(x -> DetectorId(x) == DetectorId(detector), chinfo.detector)
     if isempty(idxs)
         throw(ArgumentError("No channel information found for detector $detector"))

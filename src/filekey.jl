@@ -231,20 +231,6 @@ DataRunLike = Union{DataRun, Symbol, AbstractString}
 export DataRunLike
 
 """
-    struct RunSelLike = Tuple{<:DataPeriodLike, <:DataRunLike}  
-
-Represents a LEGEND run selection.
-"""
-const RunSelLike = Tuple{<:DataPeriodLike, <:DataRunLike}  
-
-"""
-    struct RunCategorySelLike = Tuple{<:DataPeriodLike, <:DataRunLike}  
-
-Represents a LEGEND run selection for a specific `category`.
-"""
-const RunCategorySelLike = Tuple{<:DataPeriodLike, <:DataRunLike, <:DataCategoryLike}
-
-"""
     struct DataCategory <: DataSelector
 
 Represents a LEGEND data category (related to a DAQ/measuring mode) like
@@ -297,6 +283,19 @@ const DataCategoryLike = Union{DataCategory, Symbol, AbstractString}
 export DataCategoryLike
 
 
+"""
+    struct RunSelLike = Tuple{<:DataPeriodLike, <:DataRunLike}  
+
+Represents a LEGEND run selection.
+"""
+const RunSelLike = Tuple{<:DataPeriodLike, <:DataRunLike}
+
+"""
+    struct RunCategorySelLike = Tuple{<:DataPeriodLike, <:DataRunLike}  
+
+Represents a LEGEND run selection for a specific `category`.
+"""
+const RunCategorySelLike = Tuple{<:DataPeriodLike, <:DataRunLike, <:DataCategoryLike}
 
 """
     struct Timestamp <: DataSelector
