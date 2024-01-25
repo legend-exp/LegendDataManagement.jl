@@ -177,7 +177,7 @@ end
 export is_analysis_run
 
 
-const _cached_runinfo = LRU{RunCategorySelLike, NamedTuple{FileKey, Unitful.Quantity}}(maxsize = 30)
+const _cached_runinfo = LRU{Tuple{UInt, DataPeriod, DataRun, DataCategory}, typeof((startkey = FileKey("l200-p02-r006-cal-20221226T200846Z"), livetime = 0.0u"s"))}(maxsize = 30)
 
 """
     runinfo(data::LegendData, runsel::RunSelLike)::NamedTuple
@@ -185,10 +185,10 @@ const _cached_runinfo = LRU{RunCategorySelLike, NamedTuple{FileKey, Unitful.Quan
 Get the run information for `data` in `runsel`.
 """
 function runinfo(data::LegendData, runsel::RunCategorySelLike)::NamedTuple
-    get!(_cached_runinfo, runsel) do
-        # unpack runsel
-        period, run, category = runsel
-        period, run = DataPeriod(period), DataRun(run)
+    # unpack runsel
+    period_in, run_in, category_in = runsel
+    period, run, category = DataPeriod(period_in), DataRun(run_in), DataCategory(category_in)
+    get!(_cached_runinfo, (objectid(data), period, run, category)) do
         # check if run, period and category is available
         if !haskey(data.metadata.dataprod.runinfo, Symbol(period))
             throw(ArgumentError("Invalid period $period"))
@@ -211,7 +211,7 @@ export runinfo
 
 
 """
-    start_key(data::LegendData, runsel::RunCategorySelLike)
+    start_filekey(data::LegendData, runsel::RunCategorySelLike)
 
 Get the starting filekey for `data` in `period`, `run`, `category`.
 """
