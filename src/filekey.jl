@@ -230,6 +230,19 @@ Anything that can represent a data run, like `DataRun(6)` or "r006".
 DataRunLike = Union{DataRun, Symbol, AbstractString}
 export DataRunLike
 
+"""
+    struct RunSelLike = Tuple{<:DataPeriodLike, <:DataRunLike}  
+
+Represents a LEGEND run selection.
+"""
+const RunSelLike = Tuple{<:DataPeriodLike, <:DataRunLike}  
+
+"""
+    struct RunCategorySelLike = Tuple{<:DataPeriodLike, <:DataRunLike}  
+
+Represents a LEGEND run selection for a specific `category`.
+"""
+const RunCategorySelLike = Tuple{<:DataPeriodLike, <:DataRunLike, <:DataCategoryLike}
 
 """
     struct DataCategory <: DataSelector
