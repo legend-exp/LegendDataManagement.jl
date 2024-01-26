@@ -54,15 +54,19 @@ SolidStateDetector(l200, :V99000A)
 struct LegendData <: AbstractSetupData
     # ToDo: Add setup name
     _config::SetupConfig
+    _name::Symbol
 end
 export LegendData
 
 get_setup_config(data::LegendData) = getfield(data, :_config)
+get_setup_name(data::LegendData) = getfield(data, :_name)
 
 @inline function Base.getproperty(d::LegendData, s::Symbol)
     # Include internal fields:
     if s == :_config
         getfield(d, :_config)
+    elseif s == :name
+        getfield(d, :_name)
     elseif s == :metadata
         AnyProps(data_path(d, "metadata"))
     elseif s == :tier
@@ -87,12 +91,11 @@ end
 
 
 function LegendData(setup::Symbol)
-    LegendData(getproperty(LegendDataConfig().setups, setup))
+    LegendData(getproperty(LegendDataConfig().setups, setup), setup)
 end
 
 Base.@deprecate data_filename(data::LegendData, filekey::FileKey, tier::DataTierLike) data.tier[tier, filekey]
 export data_filename
-
 
 
 """
@@ -215,12 +218,13 @@ end
 
 
 """
-    channelinfo(data::LegendData, sel::AnyValiditySelection)
+    channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false)
+    channelinfo(data::LegendData, sel::RunCategorySelLike; system::Symbol = :all, only_processable::Bool = false)
 
 Get all channel information for the given [`LegendData`](@ref) and
 [`ValiditySelection`](@ref).
 """
-function channelinfo(data::LegendData, sel::AnyValiditySelection)
+function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false)
     chmap = data.metadata(sel).hardware.configuration.channelmaps
     dpcfg = data.metadata(sel).dataprod.config.analysis
     
@@ -249,9 +253,11 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection)
         channel::ChannelId = ChannelId(fcid >= 0 ? fcid : rawid)
 
         detector::DetectorId = DetectorId(k)
-        system::Symbol = Symbol(chmap[k].system)
+        local system::Symbol = Symbol(chmap[k].system)
         processable::Bool = get(dpcfg[k], :processable, false)
         usability::Symbol = Symbol(get(dpcfg[k], :usability, :unkown))
+        is_blinded::Bool = get(dpcfg[k], :is_blinded, false)
+        aoe_status::Symbol = Symbol(get(get(dpcfg[k], :psd_status, PropDict()), Symbol("A/E"), :unkown))
 
         location::Symbol, detstring::Int, position::Union{Int,Symbol}, fiber::StaticString{8} = _convert_location(chmap[k].location)
 
@@ -263,26 +269,37 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection)
         hvch::Int = get(chmap[k].voltage, :channel, -1)
 
         return (;
-            detector, channel, fcid, rawid, system, processable, usability,
+            detector, channel, fcid, rawid, system, processable, usability, is_blinded, aoe_status,
             location, detstring, fiber, position, cc4, cc4ch, daqcrate, daqcard, hvcard, hvch
         )
     end
 
-    StructArray(make_row.(channel_keys))
+    chinfo = StructArray(make_row.(channel_keys)) 
+    if !(system == :all)
+        chinfo = chinfo |> filterby(@pf $system .== system)
+    end
+    if only_processable
+        chinfo = chinfo |> filterby(@pf $processable .== true)
+    end
+    return chinfo
 end
 export channelinfo
 
+function channelinfo(data::LegendData, sel::RunCategorySelLike; kwargs...)
+    channelinfo(data, start_filekey(data, sel); kwargs...)
+end
+
 
 """
-    channelinfo(data::LegendData, sel::AnyValiditySelection, channel::ChannelId)
-    channelinfo(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    channelinfo(data::LegendData, sel::AnyValiditySelection, channel::ChannelIdLike)
+    channelinfo(data::LegendData, sel::AnyValiditySelection, detector::DetectorIdLike)
 
 Get channel information validitiy selection and [`DetectorId`](@ref) resp.
 [`ChannelId`](@ref).
 """
-function channelinfo(data::LegendData, sel::AnyValiditySelection, channel::ChannelId)
-    chinfo = channelinfo(data, sel)
-    idxs = findall(x -> ChannelId(x) == channel, chinfo.channel)
+function channelinfo(data::LegendData, sel::AnyValiditySelection, channel::ChannelIdLike; kwargs...)
+    chinfo = channelinfo(data, sel; kwargs...)
+    idxs = findall(x -> ChannelId(x) == ChannelId(channel), chinfo.channel)
     if isempty(idxs)
         throw(ArgumentError("No channel information found for channel $channel"))
     elseif length(idxs) > 1
@@ -292,9 +309,9 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection, channel::Chann
     end
 end
 
-function channelinfo(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    chinfo = channelinfo(data, sel)
-    idxs = findall(x -> DetectorId(x) == detector, chinfo.detector)
+function channelinfo(data::LegendData, sel::AnyValiditySelection, detector::DetectorIdLike; kwargs...)
+    chinfo = channelinfo(data, sel; kwargs...)
+    idxs = findall(x -> DetectorId(x) == DetectorId(detector), chinfo.detector)
     if isempty(idxs)
         throw(ArgumentError("No channel information found for detector $detector"))
     elseif length(idxs) > 1
@@ -303,7 +320,6 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection, detector::Dete
         return chinfo[only(idxs)]
     end
 end
-
 
 
 function channel_info(data::LegendData, sel::AnyValiditySelection)

@@ -144,6 +144,92 @@ function _resolve_partition_runs(data::LegendData, period::DataPeriod, runs::Abs
     end
 end
 
+const _cached_analysis_runs = LRU{UInt, StructVector{@NamedTuple{period::DataPeriod, run::DataRun}}}(maxsize = 10)
+
+"""
+    analysis_runs(data::LegendData)
+
+Return cross-period analysis runs.
+"""
+function analysis_runs(data::LegendData)
+    get!(_cached_analysis_runs, objectid(data)) do
+        aruns = pydataprod_config(data).analysis_runs
+        periods_and_runs = [
+            let period = DataPeriod(string(p))
+                map(run -> (period = period, run = run), _resolve_partition_runs(data, period, rs))
+            end
+            for (p,rs) in aruns
+        ]
+        flat_pr = vcat(periods_and_runs...)::Vector{@NamedTuple{period::DataPeriod, run::DataRun}}
+        StructArray(flat_pr)
+    end
+end
+export analysis_runs
+
+"""
+    is_analysis_run(data::LegendData, period::DataPeriod, run::DataRun)
+
+Return `true` if `run` is an analysis run for `data` in `period`.
+"""
+function is_analysis_run(data::LegendData, period::DataPeriodLike, run::DataRunLike)
+    (period = DataPeriod(period), run = DataRun(run)) in analysis_runs(data)
+end
+export is_analysis_run
+
+
+const _cached_runinfo = LRU{Tuple{UInt, DataPeriod, DataRun, DataCategory}, typeof((startkey = FileKey("l200-p02-r006-cal-20221226T200846Z"), livetime = 0.0u"s"))}(maxsize = 30)
+
+"""
+    runinfo(data::LegendData, runsel::RunSelLike)::NamedTuple
+
+Get the run information for `data` in `runsel`.
+"""
+function runinfo(data::LegendData, runsel::RunCategorySelLike)::NamedTuple
+    # unpack runsel
+    period_in, run_in, category_in = runsel
+    period, run, category = DataPeriod(period_in), DataRun(run_in), DataCategory(category_in)
+    get!(_cached_runinfo, (objectid(data), period, run, category)) do
+        # check if run, period and category is available
+        if !haskey(data.metadata.dataprod.runinfo, Symbol(period))
+            throw(ArgumentError("Invalid period $period"))
+        elseif !haskey(data.metadata.dataprod.runinfo[Symbol(period)], Symbol(run))
+            throw(ArgumentError("Invalid run $run in period $period"))
+        elseif !haskey(data.metadata.dataprod.runinfo[Symbol(period)][Symbol(run)], Symbol(category))
+            throw(ArgumentError("Invalid category $category in period $period and run $run"))
+        end
+        (
+            startkey = FileKey(data.name, period, run, category, Timestamp(data.metadata.dataprod.runinfo[Symbol(period)][Symbol(run)][Symbol(category)][:start_key])), 
+            livetime =  if haskey(data.metadata.dataprod.runinfo[Symbol(period)][Symbol(run)][Symbol(category)], :livetime_in_s)
+                            Unitful.Quantity(data.metadata.dataprod.runinfo[Symbol(period)][Symbol(run)][Symbol(category)][:livetime_in_s], u"s") 
+                        else 
+                            Unitful.Quantity(NaN, u"s")
+                        end
+        )
+    end
+end
+export runinfo
+
+
+"""
+    start_filekey(data::LegendData, runsel::RunCategorySelLike)
+
+Get the starting filekey for `data` in `period`, `run`, `category`.
+"""
+function start_filekey(data::LegendData, runsel::RunCategorySelLike)
+    runinfo(data, runsel).startkey
+end
+export start_filekey
+
+
+"""
+    phy_livetime(data::LegendData, runsel::RunSelLike)
+
+Get the livetime for `data` in physics data taking of `run` in `period`.
+"""
+function livetime(data::LegendData, runsel::RunCategorySelLike)
+    runinfo(data, runsel).livetime
+end
+export phy_livetime
 
 const _cached_bad_filekeys = LRU{UInt, Set{FileKey}}(maxsize = 10)
 
