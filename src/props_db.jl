@@ -50,7 +50,7 @@ function _read_validity_sel_filelist(dir_path::String, validity::_ValidityDict, 
     end
 
     abs_filelist = joinpath.(Ref(dir_path), filelist)
-    return readprops(abs_filelist)
+    return readlprops(abs_filelist)
 end
 
 
