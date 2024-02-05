@@ -103,15 +103,15 @@ export pydataprod_parameters
 
 
 """
-    data_partitions(data::LegendData, label::Symbol = :default)
+    partitioninfo(data::LegendData, label::Symbol = :default)
 
 Return cross-period data partitions.
 """
-function data_partitions(data::LegendData, label::Symbol = :default)
+function partitioninfo(data::LegendData, label::Symbol = :default)
     parts = pydataprod_config(data).partitions[label]
     pidxs = Int.(keys(parts))
     result::IdDict{
-        Int,
+        DataPartition,
         StructVector{
             @NamedTuple{period::DataPeriod, run::DataRun},
             @NamedTuple{period::Vector{DataPeriod}, run::Vector{DataRun}},
@@ -126,14 +126,19 @@ function data_partitions(data::LegendData, label::Symbol = :default)
                 for (p,rs) in part
             ]
             flat_pr = vcat(periods_and_runs...)::Vector{@NamedTuple{period::DataPeriod, run::DataRun}}
-            pidx::Int => StructArray(flat_pr)
+            DataPartition(pidx)::DataPartition => StructArray(flat_pr)
         end
         for (pidx, part) in parts
     ])
 
     return result
 end
+export partitioninfo
+
+
+@deprecate data_partitions(data::LegendData, label::Symbol = :default) IdDict([k.no => v for (k, v) in partitioninfo(data, label)])
 export data_partitions
+
 
 _resolve_partition_runs(data::LegendData, period::DataPeriod, runs::AbstractVector) = Vector{DataRun}(runs)
 function _resolve_partition_runs(data::LegendData, period::DataPeriod, runs::AbstractString)
