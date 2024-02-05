@@ -297,7 +297,7 @@ end
 Get channel information validitiy selection and [`DetectorId`](@ref) resp.
 [`ChannelId`](@ref).
 """
-function channelinfo(data::LegendData, sel::AnyValiditySelection, channel::ChannelIdLike; kwargs...)
+function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, channel::ChannelIdLike; kwargs...)
     chinfo = channelinfo(data, sel; kwargs...)
     idxs = findall(x -> ChannelId(x) == ChannelId(channel), chinfo.channel)
     if isempty(idxs)
@@ -309,7 +309,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection, channel::Chann
     end
 end
 
-function channelinfo(data::LegendData, sel::AnyValiditySelection, detector::DetectorIdLike; kwargs...)
+function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, detector::DetectorIdLike; kwargs...)
     chinfo = channelinfo(data, sel; kwargs...)
     idxs = findall(x -> DetectorId(x) == DetectorId(detector), chinfo.detector)
     if isempty(idxs)
