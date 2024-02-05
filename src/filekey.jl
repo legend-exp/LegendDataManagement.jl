@@ -668,6 +668,7 @@ Base.convert(::Type{DetectorId}, s::Symbol) = DetectorId(s)
 
 Base.Symbol(detector::DetectorId) = detector.label
 Base.convert(::Type{Symbol}, detector::DetectorId) = detector.label
+Base.getindex(p::PropDicts.PropDict, detector::DetectorId) = p[detector.label]
 
 # ToDo: Improve implementation
 Base.print(io::IO, detector::DetectorId) = print(io, detector.label)
