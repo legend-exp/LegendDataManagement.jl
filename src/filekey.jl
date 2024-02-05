@@ -116,6 +116,63 @@ const DataTierLike = Union{DataTier, Symbol, AbstractString}
 export DataTierLike
 
 
+"""
+    struct DataPartition <: DataSelector
+
+Represents a LEGEND data-taking partition.
+
+Example:
+
+```julia
+partition = DataPartition(1)
+partition.no == 1
+string(partition) == "partition01"
+DataPartition("partiton01") == partition
+```
+"""
+struct DataPartition <: DataSelector
+    no::Int
+end
+export DataPartition
+
+@inline DataPartition(partition::DataPartition) = partition
+
+Base.:(==)(a::DataPartition, b::DataPartition) = a.no == b.no
+Base.isless(a::DataPartition, b::DataPartition) = isless(a.no, b.no)
+
+# ToDo: Improve implementation
+Base.print(io::IO, partition::DataPartition) = print(io, "partition$(lpad(string(partition.no), 2, string(0)))")
+
+const partition_expr = r"^partition([0-9]{2})$"
+
+_can_convert_to(::Type{DataPartition}, s::AbstractString) = !isnothing(match(partition_expr, s))
+
+function DataPartition(s::AbstractString)
+    m = match(partition_expr, s)
+    if (m == nothing)
+        throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data-partition name"))
+    else
+        DataPartition(parse(Int, (m::RegexMatch).captures[1]))
+    end
+end
+
+function DataPartition(s::Symbol) 
+    DataPartition(string(s)) 
+end
+
+Base.convert(::Type{DataPartition}, s::AbstractString) = DataPartition(s)
+Base.convert(::Type{DataPartition}, s::Symbol) = DataPartition(string(s))
+
+
+"""
+    DataPartitionLike = Union{DataPartition, Symbol, AbstractString}
+
+Anything that can represent a data partition, like `DataPartition(2)` or "partition02".
+"""
+const DataPartitionLike = Union{DataPartition, Symbol, AbstractString}
+export DataPartitionLike
+
+
 
 """
     struct DataPeriod <: DataSelector
@@ -166,7 +223,7 @@ Base.convert(::Type{DataPeriod}, s::Symbol) = DataPeriod(string(s))
 
 
 """
-    DataPeriodLike = Union{DataPeriod, Integer, AbstractString}
+    DataPeriodLike = Union{DataPeriod, Symbol, AbstractString}
 
 Anything that can represent a data period, like `DataPeriod(2)` or "p02".
 """
@@ -223,7 +280,7 @@ Base.convert(::Type{DataRun}, s::AbstractString) = DataRun(s)
 Base.convert(::Type{DataRun}, s::Symbol) = DataRun(string(s))
 
 """
-    DataRunLike = Union{DataRun, Integer, AbstractString}
+    DataRunLike = Union{DataRun, Symbol, AbstractString}
 
 Anything that can represent a data run, like `DataRun(6)` or "r006".
 """
