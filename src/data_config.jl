@@ -156,7 +156,7 @@ end
 
 function LegendDataConfig()
     if haskey(ENV, _data_config_envvar_name)
-        config_filenames = reverse(String.(split(ENV[_data_config_envvar_name], ':')))
+        config_filenames = reverse(String.(split(ENV[_data_config_envvar_name], r":(?!\\)")))
         LegendDataConfig(config_filenames)
     else
         throw(ErrorException("Environment variable $_data_config_envvar_name not set"))
