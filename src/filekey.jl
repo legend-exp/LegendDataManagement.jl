@@ -10,6 +10,10 @@ Abstract type for data selectors like
 """
 abstract type DataSelector end
 
+# make DataSelector compatible with PropDicts
+Base.getindex(p::PropDicts.PropDict, datasel::DataSelector) = p[Symbol(datasel)]
+Base.setindex!(p::PropDict, value, datasel::DataSelector) = setindex!(p, value, Symbol(datasel))
+Base.haskey(p::PropDicts.PropDict, datasel::DataSelector) = haskey(p, Symbol(datasel))
 
 """
     struct ExpSetup <: DataSelector
@@ -668,7 +672,6 @@ Base.convert(::Type{DetectorId}, s::Symbol) = DetectorId(s)
 
 Base.Symbol(detector::DetectorId) = detector.label
 Base.convert(::Type{Symbol}, detector::DetectorId) = detector.label
-Base.getindex(p::PropDicts.PropDict, detector::DetectorId) = p[detector.label]
 
 # ToDo: Improve implementation
 Base.print(io::IO, detector::DetectorId) = print(io, detector.label)
