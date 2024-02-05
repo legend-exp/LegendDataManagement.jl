@@ -1,7 +1,7 @@
 # This file is a part of LegendDataManagement.jl, licensed under the MIT License (MIT).
 
 """
-    uparse(pd::PropDict)
+    recursive_uparse(pd::PropDict)
 
 Recursively parse a PropDict and convert all `:val` fields to `Unitful.Quantity` objects while reading the units from the `:unit` fields.
 It respects possible errors in the `:err` fields and converts them to `Unitful.Quantity` objects as well.
@@ -9,7 +9,7 @@ If there are no other fields in the `:val` field, the `:unit` field is removed f
 # Returns
 - `pd::PropDict` with all `:val` fields converted to `Unitful.Quantity` objects.
 """
-function Unitful.uparse(pd::PropDict)
+function recursive_uparse(pd::PropDict)
     for (key, val) in pd
         if val isa PropDict
             if val isa Unitful.Quantity
@@ -26,13 +26,12 @@ function Unitful.uparse(pd::PropDict)
                     delete!(pd[key], :unit)
                 end
             else
-                pd[key] = uparse(val)
+                pd[key] = recursive_uparse(val)
             end
         end
     end
     pd
 end
-export uparse
 
 """
     measurement(pd::PropDict)
@@ -42,7 +41,7 @@ If there are no other fields in the `:val` field, the `:err` field is removed fr
 # Returns
 - `pd::PropDict` with all `:val` fields converted to `Measurements.Measurement` objects.
 """
-function Measurements.measurement(pd::PropDict)
+function recursive_measurement(pd::PropDict)
     for (key, val) in pd
         if val isa PropDict
             if val.val isa Measurements.Measurement 
@@ -55,12 +54,43 @@ function Measurements.measurement(pd::PropDict)
                     delete!(pd[key], :err)
                 end
             else
-                pd[key] = measurement(val)
+                pd[key] = recursive_measurement(val)
             end
         end
     end
     pd
 end
+
+function props2lprops(pd::PropDict)
+    if haskey(pd, :val) && length(keys(pd)) <= 3 && (haskey(pd, :unit) || haskey(pd, :err))
+        if haskey(pd, :unit)
+            if haskey(pd, :err)
+                Unitful.Quantity(measurement(pd.val, pd.err), Unitful.uparse(pd.unit))
+            else
+                Unitful.Quantity(pd.val, Unitful.uparse(pd.unit))
+            end
+        elseif haskey(pd, :err)
+            measurement(pd.val, pd.err)
+        else
+            throw(ArgumentError("props2lprops can't handle PropDict $pd"))
+        end
+    else
+        PropDict(Dict([key => props2lprops(val) for (key, val) in pd]))
+    end
+end
+
+props2lprops(x) = x
+props2lprops(A::AbstractArray) = props2lprops.(A)
+
+function lprops2props(pd::PropDict)
+    PropDict(Dict([key => lprops2props(val) for (key, val) in pd]))
+end
+
+lprops2props(x) = x
+lprops2props(A::AbstractArray) = lprops2props.(A)
+lprops2props(x::Unitful.Quantity{<:Real}) = PropDict(:val => x.val, :unit => string(unit(x)))
+lprops2props(x::Unitful.Quantity{<:Measurements.Measurement{<:Real}}) = PropDict(:val => Measurements.value(ustrip(x)), :err => Measurements.uncertainty(ustrip(x)), :unit => string(unit(x)))
+lprops2props(x::Measurements.Measurement) = PropDict(:val => Measurements.value(x), :err => Measurements.uncertainty(x))
 
 
 """
@@ -164,36 +194,31 @@ export uncertainty
 
 
 """
-    readlprops(filename::AbstractString; read_units::Bool=true, read_errors::Bool=true)
+    readlprops(filename::AbstractString)
+    readprops(filenames::Vector{<:AbstractString}) 
+
 
 Read a PropDict from a file and parse it to `Unitful.Quantity` and `Measurements.Measurement` objects.
 # Returns
 - `pd::PropDict` with all `:val` fields converted to `Unitful.Quantity` objects and all `:val` fields converted to `Measurements.Measurement` objects.
 """
-function readlprops(filename::AbstractString; read_units::Bool=true, read_errors::Bool=true)
-    pd = readprops(filename) 
-    pd = if read_units
-        pd = uparse(pd)
-    end
-    if read_errors
-        pd = measurement(pd)
-    end
-    pd
-end
+function readlprops end
 export readlprops
+
+readlprops(filename::AbstractString) = props2lprops(readprops(filename))
+readlprops(filenames::Vector{<:AbstractString}) = props2lprops(readprops(filenames)) 
 
 """
     writelprops(f::IO, p::PropDict; write_units::Bool=true, write_errors::Bool=true, mutliline::Bool=true, indent::Int=4)
-    
+    writelprops(filename::AbstractString, p::PropDict; multiline::Bool=true, indent::Int=4)
+    writelprops(db::PropsDB, key::Union{Symbol, DataSelector}, p::PropDict; kwargs...)
+
 Write a PropDict to a file and strip it to `:val` and `:unit` fields and `:val` and `:err` fields.
 """
-function writelprops(f, p::PropDict; write_units::Bool=true, write_errors::Bool=true, mutliline::Bool=true, indent::Int=4)
-    if write_units
-        p = ustrip(p)
-    end
-    if write_errors
-        p = mstrip(p)
-    end
-    writeprops(f, p; mutliline=mutliline, indent=indent)
-end
+function writelprops end
 export writelprops
+
+writelprops(io::IO, p::PropDict; multiline::Bool = true, indent::Int = 4) = writeprops(io, lprops2props(p); multiline=multiline, indent=indent)
+writelprops(filename::AbstractString, p::PropDict; multiline::Bool = true, indent::Int = 4) = writeprops(filename, lprops2props(p); multiline=multiline, indent=indent)
+
+writelprops(db::PropsDB, key::Union{Symbol, DataSelector}, p::PropDict; kwargs...) = writelprops(joinpath(data_path(db), "$(string(key)).json"), p; kwargs...)
