@@ -145,9 +145,9 @@ Base.:(==)(a::DataPartition, b::DataPartition) = a.no == b.no
 Base.isless(a::DataPartition, b::DataPartition) = isless(a.no, b.no)
 
 # ToDo: Improve implementation
-Base.print(io::IO, partition::DataPartition) = print(io, "partition$(lpad(string(partition.no), 2, string(0)))")
+Base.print(io::IO, partition::DataPartition) = print(io, "part$(lpad(string(partition.no), 2, string(0)))")
 
-const partition_expr = r"^partition([0-9]{2})$"
+const partition_expr = r"^part([0-9]{2})$"
 
 _can_convert_to(::Type{DataPartition}, s::AbstractString) = !isnothing(match(partition_expr, s))
 
