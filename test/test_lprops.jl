@@ -12,7 +12,7 @@ using LegendDataManagement: PropsDB, AnyProps, ValiditySelection
 
 include("testing_utils.jl")
 
-@testset "units" begin
+@testset "lprops" begin
     a = """
 {
 "A00000": {
