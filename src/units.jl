@@ -4,12 +4,12 @@ function _props2lprops(pd::PropDict)
     if haskey(pd, :val) && length(keys(pd)) <= 3 && (haskey(pd, :unit) || haskey(pd, :err))
         if haskey(pd, :unit)
             if haskey(pd, :err)
-                Unitful.Quantity(measurement(pd.val, pd.err), Unitful.uparse(pd.unit))
+                Unitful.Quantity.(measurement.(pd.val, pd.err), Unitful.uparse(pd.unit))
             else
-                Unitful.Quantity(pd.val, Unitful.uparse(pd.unit))
+                Unitful.Quantity.(pd.val, Unitful.uparse(pd.unit))
             end
         elseif haskey(pd, :err)
-            measurement(pd.val, pd.err)
+            measurement.(pd.val, pd.err)
         else
             throw(ArgumentError("_props2lprops can't handle PropDict $pd"))
         end
@@ -21,15 +21,15 @@ end
 _props2lprops(x) = x
 _props2lprops(A::AbstractArray) = _props2lprops.(A)
 
-function _props2lprops(pd::PropDict)
-    PropDict(Dict([key => _props2lprops(val) for (key, val) in pd]))
+function _lprops2props(pd::PropDict)
+    PropDict(Dict([key => _lprops2props(val) for (key, val) in pd]))
 end
 
-_props2lprops(x) = x
-_props2lprops(A::AbstractArray) = _props2lprops.(A)
-_props2lprops(x::Unitful.Quantity{<:Real}) = PropDict(:val => x.val, :unit => string(unit(x)))
-_props2lprops(x::Unitful.Quantity{<:Measurements.Measurement{<:Real}}) = PropDict(:val => Measurements.value(ustrip(x)), :err => Measurements.uncertainty(ustrip(x)), :unit => string(unit(x)))
-_props2lprops(x::Measurements.Measurement) = PropDict(:val => Measurements.value(x), :err => Measurements.uncertainty(x))
+_lprops2props(x) = x
+_lprops2props(A::AbstractArray) = _lprops2props.(A)
+_lprops2props(x::Unitful.Quantity{<:Real}) = PropDict(:val => x.val, :unit => string(unit(x)))
+_lprops2props(x::Unitful.Quantity{<:Measurements.Measurement{<:Real}}) = PropDict(:val => Measurements.value(ustrip(x)), :err => Measurements.uncertainty(ustrip(x)), :unit => string(unit(x)))
+_lprops2props(x::Measurements.Measurement) = PropDict(:val => Measurements.value(x), :err => Measurements.uncertainty(x))
 
 
 """
@@ -57,7 +57,7 @@ Write a PropDict to a file and strip it to `:val` and `:unit` fields and `:val` 
 function writelprops end
 export writelprops
 
-writelprops(io::IO, p::PropDict; multiline::Bool = true, indent::Int = 4) = writeprops(io, _props2lprops(p); multiline=multiline, indent=indent)
-writelprops(filename::AbstractString, p::PropDict; multiline::Bool = true, indent::Int = 4) = writeprops(filename, _props2lprops(p); multiline=multiline, indent=indent)
+writelprops(io::IO, p::PropDict; multiline::Bool = true, indent::Int = 4) = writeprops(io, _lprops2props(p); multiline=multiline, indent=indent)
+writelprops(filename::AbstractString, p::PropDict; multiline::Bool = true, indent::Int = 4) = writeprops(filename, _lprops2props(p); multiline=multiline, indent=indent)
 
 writelprops(db::PropsDB, key::Union{Symbol, DataSelector}, p::PropDict; kwargs...) = writelprops(joinpath(data_path(db), "$(string(key)).json"), p; kwargs...)
