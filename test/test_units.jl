@@ -37,17 +37,13 @@ include("testing_utils.jl")
 
     @test pd isa PropDict
 
-    pd = uparse(pd)
-    @test pd.A00000.a.val isa Unitful.Quantity
-    @test pd.A00000.a.err isa Unitful.Quantity
-    @test pd.A00000.b isa Unitful.Quantity
+    pd = LegendDataManagement._props2lprops(pd)
 
-    pd = measurement(pd)
     @test pd.A00000.a isa Unitful.Quantity
     @test ustrip(pd.A00000.a) isa Measurements.Measurement
     @test pd.A00000.b isa Unitful.Quantity
     @test pd.A00000.c isa Measurements.Measurement
 
-    @test PropDict(JSON.parse(a)) == mstrip(ustrip(measurement(uparse(PropDict(JSON.parse(a))))))
+    @test PropDict(JSON.parse(a)) == LegendDataManagement._lprops2props(LegendDataManagement._props2lprops(PropDict(JSON.parse(a))))
 
 end
