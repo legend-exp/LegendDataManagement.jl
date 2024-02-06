@@ -61,3 +61,31 @@ writelprops(io::IO, p::PropDict; multiline::Bool = true, indent::Int = 4) = writ
 writelprops(filename::AbstractString, p::PropDict; multiline::Bool = true, indent::Int = 4) = writeprops(filename, _lprops2props(p); multiline=multiline, indent=indent)
 
 writelprops(db::PropsDB, key::Union{Symbol, DataSelector}, p::PropDict; kwargs...) = writelprops(joinpath(data_path(db), "$(string(key)).json"), p; kwargs...)
+
+
+"""
+    get_values(x::Unitful.Quantity{<:Measurements.Measurement{<:Real}})
+    get_values(x::Unitful.Quantity{<:Real})
+    get_values(pd::PropDict)
+    get_values(A::AbstractArray)
+
+Get the value of a `Unitful.Quantity` or `Measurements.Measurement` object or a `PropDict` or an array of `Unitful.Quantity` or `Measurements.Measurement` objects.
+"""
+function get_values end
+export get_values
+
+get_values(x) = x
+get_values(pd::PropDict) = PropDict(Dict([key => get_values(val) for (key, val) in pd]))
+get_values(A::AbstractArray) = get_values.(A)
+get_values(x::Unitful.Quantity{<:Measurements.Measurement{<:Real}}) = Measurements.value(x)
+get_values(x::Measurements.Measurement{<:Real}) = Measurements.value(x)
+
+
+function get_uncertainties end
+export get_uncertainties
+
+get_uncertainties(x) = x
+get_uncertainties(pd::PropDict) = PropDict(Dict([key => get_uncertainties(val) for (key, val) in pd]))
+get_uncertainties(A::AbstractArray) = get_uncertainties.(A)
+get_uncertainties(x::Unitful.Quantity{<:Measurements.Measurement{<:Real}}) = Measurements.uncertainty(x)
+get_uncertainties(x::Measurements.Measurement{<:Real}) = Measurements.uncertainty(x)
