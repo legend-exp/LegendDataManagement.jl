@@ -25,6 +25,7 @@ using ProgressMeter: @showprogress
 using PropertyFunctions: PropertyFunction, @pf, filterby
 using StaticStrings: StaticString
 using Tables: columns
+import Markdown
 
 include("filekey.jl")
 include("dataset.jl")
