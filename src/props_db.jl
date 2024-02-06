@@ -50,7 +50,7 @@ function _read_validity_sel_filelist(dir_path::String, validity::_ValidityDict, 
     end
 
     abs_filelist = joinpath.(Ref(dir_path), filelist)
-    return readprops(abs_filelist)
+    return readlprops(abs_filelist)
 end
 
 
@@ -313,7 +313,7 @@ function _get_md_property(@nospecialize(pd::PropsDB), s::Symbol)
     if isdir(joinpath(_base_path(pd), new_relpath...))
         _any_props(_base_path(pd), new_relpath, _validity_sel(pd))
     elseif isfile(json_filename)
-        readprops(json_filename)
+        readlprops(json_filename)
     else
         if !_needs_vsel(pd) && (isnothing(_validity_sel(pd)) || isempty(_validity_sel(pd)))
             NoSuchPropsDBEntry(_base_path(pd), push!(copy(_rel_path(pd)), string(s)))

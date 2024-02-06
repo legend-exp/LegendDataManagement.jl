@@ -15,6 +15,7 @@ using PropDicts
 using PropertyDicts
 using StructArrays
 using Unitful
+using Measurements
 
 using Printf: @printf
 
@@ -36,5 +37,7 @@ include("ljl_expressions.jl")
 include("lpy_expressions.jl")
 include("dataprod_config.jl")
 include("calibration_functions.jl")
+include("lprops.jl")
+
 
 end # module
