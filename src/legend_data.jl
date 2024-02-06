@@ -149,6 +149,20 @@ data_path(tier_data::LegendTierData, path_components::AbstractString...) = data_
 
 Base.getindex(tier_data::LegendTierData, args...) = _getindex_impl(tier_data, args...)
 
+const _OneManyOrColon{T} = Union{T, AbstractVector{T}, Colon}
+
+_getindex_impl(tier_data::LegendTierData, tier::_OneManyOrColon{<:DataTierLike}) = _getindex_impl(tier_data, tier, category, period)
+
+#=
+function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, category::DataCategoryLike, period::_OneManyOrColon{<:DataPeriodLike])
+    _getindex_impl_(tier_data, tier, category, period, run)
+end
+
+function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, category::DataCategoryLike, period::_OneManyOrColon{<:DataPeriodLike], run::_OneManyOrColon{<:DataRunLike})
+    _getindex_impl(tier_data, tier, category, period, run)
+end
+=#
+
 function _getindex_impl(tier_data::LegendTierData)
     data_path(tier_data)
 end
@@ -165,6 +179,10 @@ function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, category:
     data_path(tier_data, string.((
         DataTier(tier), DataCategory(category), DataPeriod(period))
     )...)
+end
+
+function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, category::DataCategoryLike, ::Colon)
+    search_disk() #!!!!!!!!!!!!!
 end
 
 function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike, run::DataRunLike)
