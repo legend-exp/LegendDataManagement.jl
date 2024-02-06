@@ -24,9 +24,12 @@ using LRUCache: LRU
 using ProgressMeter: @showprogress
 using PropertyFunctions: PropertyFunction, @pf, filterby
 using StaticStrings: StaticString
+import Tables
 using Tables: columns
 import Markdown
 
+include("legend_report.jl")
+include("status_types.jl")
 include("filekey.jl")
 include("dataset.jl")
 include("data_config.jl")
