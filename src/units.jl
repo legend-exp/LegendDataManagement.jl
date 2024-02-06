@@ -81,6 +81,14 @@ get_values(x::Unitful.Quantity{<:Measurements.Measurement{<:Real}}) = Measuremen
 get_values(x::Measurements.Measurement{<:Real}) = Measurements.value(x)
 
 
+"""
+    get_uncertainties(x::Unitful.Quantity{<:Measurements.Measurement{<:Real}})
+    get_uncertainties(x::Unitful.Quantity{<:Real})
+    get_uncertainties(pd::PropDict)
+    get_uncertainties(A::AbstractArray)
+
+Get the uncertainty of a `Unitful.Quantity` or `Measurements.Measurement` object or a `PropDict` or an array of `Unitful.Quantity` or `Measurements.Measurement` objects.
+"""
 function get_uncertainties end
 export get_uncertainties
 
