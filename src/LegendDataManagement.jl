@@ -27,6 +27,7 @@ using StaticStrings: StaticString
 import Tables
 using Tables: columns
 import Markdown
+using MIMEs: mime_from_extension
 
 include("legend_report.jl")
 include("status_types.jl")
