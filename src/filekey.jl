@@ -15,6 +15,10 @@ Base.getindex(p::PropDicts.PropDict, datasel::DataSelector) = p[Symbol(datasel)]
 Base.setindex!(p::PropDict, value, datasel::DataSelector) = setindex!(p, value, Symbol(datasel))
 Base.haskey(p::PropDicts.PropDict, datasel::DataSelector) = haskey(p, Symbol(datasel))
 
+_markdown_cell_content(@nospecialize(content::DataSelector)) = string(content)
+lreport!(rpt::LegendReport, @nospecialize(sel::DataSelector)) = lreport!(rpt, string(sel))
+
+
 """
     struct ExpSetup <: DataSelector
 
