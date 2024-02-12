@@ -168,6 +168,9 @@ function lreport!(rpt::LegendReport, @nospecialize(markdown_str::AbstractString)
     lreport!(rpt, Markdown.parse(markdown_str))
 end
 
+lreport!(rpt::LegendReport, @nospecialize(number::AbstractFloat)) = lreport!(rpt, string(round(number, digits=3)))
+lreport!(rpt::LegendReport, @nospecialize(number::Quantity{<:Real})) = lreport!(rpt, string(round(unit(number), number, digits=3)))
+
 
 """
     LegendDataManagement.lreport_for_show!(rpt::LegendReport, mime::MIME, content)
@@ -220,6 +223,7 @@ _markdown_cell_content(@nospecialize(content::Expr)) = string(content)
 _markdown_cell_content(@nospecialize(content::Number)) = _show_plain_compact(content)
 _markdown_cell_content(@nospecialize(content::AbstractInterval)) = _show_plain_compact(content)
 _markdown_cell_content(@nospecialize(content::Array)) = _show_plain_compact(content)
+
 
 _show_plain_compact(@nospecialize(content)) = sprint(show, content; context = :compact=>true)
 
