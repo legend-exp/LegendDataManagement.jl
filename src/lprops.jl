@@ -13,6 +13,8 @@ function _props2lprops(pd::PropDict)
         else
             throw(ArgumentError("_props2lprops can't handle PropDict $pd"))
         end
+    elseif haskey(pd, :unit) && length(keys(pd)) == 1
+        Unitful.Quantity(NaN, Unitful.uparse(pd.unit))
     else
         PropDict(Dict([key => _props2lprops(val) for (key, val) in pd]))
     end
@@ -20,6 +22,7 @@ end
 
 _props2lprops(x) = x
 _props2lprops(A::AbstractArray) = _props2lprops.(A)
+_props2lprops(d::Dict) = _props2lprops(PropDict(d))
 
 function _lprops2props(pd::PropDict)
     PropDict(Dict([key => _lprops2props(val) for (key, val) in pd]))
@@ -30,7 +33,7 @@ _lprops2props(A::AbstractArray) = _lprops2props.(A)
 _lprops2props(x::Unitful.Quantity{<:Real}) = PropDict(:val => x.val, :unit => string(unit(x)))
 _lprops2props(x::Unitful.Quantity{<:Measurements.Measurement{<:Real}}) = PropDict(:val => Measurements.value(ustrip(x)), :err => Measurements.uncertainty(ustrip(x)), :unit => string(unit(x)))
 _lprops2props(x::Measurements.Measurement) = PropDict(:val => Measurements.value(x), :err => Measurements.uncertainty(x))
-
+_lprops2props(d::Dict) = _lprops2props(PropDict(d))
 
 """
     readlprops(filename::AbstractString)
