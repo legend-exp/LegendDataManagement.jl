@@ -46,7 +46,7 @@ dataprod_config(l200)
 ```
 """
 function dataprod_parameters(data::LegendData)
-    data.jlpar
+    data.par
 end
 export dataprod_parameters
 
