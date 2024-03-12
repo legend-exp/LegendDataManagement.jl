@@ -88,7 +88,7 @@ end
 
 function _get_e_ctc_cal_function(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol)
     e_filter_ctc = Symbol("$(e_filter)_ctc")
-    ctc_pars = _get_ctc_props(data, sel, detector)[e_filter].ctc
+    ctc_pars = _get_ctc_props(data, sel, detector)[e_filter]
     post_ctc_cal_pars = _get_ecal_props(data, sel, detector)[e_filter_ctc]
 
     fct::Float64 = get(ctc_pars, :fct, NaN)
@@ -267,35 +267,65 @@ function get_ged_qc_cuts_propfunc(data::LegendData, sel::AnyValiditySelection)
             is_nopileup = !($inTrace_intersect > $t0 + 2 * $drift_time && $inTrace_n > 1) || ($e_cusp_ctc_cal < 25kev || $e_cusp_ctc_cal != $e_cusp_ctc_cal),
             is_saturated = $n_sat_high > 0,
             is_upgoing_baseline = $blslope > 0.2 / (16ns),
-            is_valid_baseline = $blsigma < 20,
             is_valid_dteff = $qdrift / $e_10410 > -30 || ($e_cusp_ctc_cal < 25kev || $e_cusp_ctc_cal != $e_cusp_ctc_cal),
-            is_valid_ediff = abs($e_10410 - $e_313) > 100 || ($e_cusp_ctc_cal < 25kev || ($e_cusp_ctc_cal != $e_cusp_ctc_cal || $n_sat_high > 0)),
+            is_valid_ediff = abs($e_10410 - $e_313) < 100 || ($e_cusp_ctc_cal < 25kev || ($e_cusp_ctc_cal != $e_cusp_ctc_cal || $n_sat_high > 0)),
             is_valid_efrac = $e_10410 / $e_313 > 0.95 && $e_10410 / $e_313 < 1.1 || ($e_cusp_ctc_cal < 25kev || ($e_cusp_ctc_cal != $e_cusp_ctc_cal || $n_sat_high > 0)),
             is_valid_rt = $t90 - $t10 > 96ns && $t50 - $t0 >= 16ns || ($e_cusp_ctc_cal < 25kev || $e_cusp_ctc_cal != $e_cusp_ctc_cal),
             is_valid_t0 = $t0 > 47000ns && $t0 < 55000ns || ($e_cusp_ctc_cal < 25kev || $e_cusp_ctc_cal != $e_cusp_ctc_cal),
             is_valid_tail = $tailsigma < 75 || (abs($blslope / $tailslope) < 0.4 && abs($blslope / $tailslope) > 2.5 || ($e_10410_inv > 100 && ($t0_inv > 45000ns && $t0_inv < 55000ns) || $n_sat_high > 0)),
+            is_valid_bl_slope = abs($blslope) < 0.2 / (16ns),
+            is_valid_bl_std = $blsigma < 25,
+            is_valid_bl_mean = $blmean > 0,
+            is_valid_t90 = 46000ns < $t90 < 120000ns,
+            is_valid_max_e10410 = $e_10410 < 100,
+            is_valid_e10410_inv = $e_10410_inv < 100,
+            is_valid_max_emax = $e_max < 300,
+            is_valid_baseline_wf = $e_max < 10*$blsigma || $n_sat_high > 0,
+            is_davide = $e_10410 < $blsigma * 3
         )
     end
-end 
+end
+
+"""
+    get_ged_qc_istrig_propfunc(data::LegendData, sel::AnyValiditySelection)
+
+Get the Ge-detector trigger cut for the given data and validity selection.
+"""
+function get_ged_qc_is_trig_propfunc(data::LegendData, sel::AnyValiditySelection)
+    @pf is_trig = $e_cusp_ctc_cal > 25u"keV"
+end
 
 
 # ToDo: Make configurable
 """
-    get_ged_qc_isgood_propfunc(data::LegendData, sel::AnyValiditySelection)
+    get_ged_qc_is_physical_propfunc(data::LegendData, sel::AnyValiditySelection)
 
 Get a `PropertyFunction` that returns `true` for events that pass the
 Ge-detector quality cuts.
 """
-function get_ged_qc_isgood_propfunc(data::LegendData, sel::AnyValiditySelection)
+function get_ged_qc_is_physical_propfunc(data::LegendData, sel::AnyValiditySelection)
     @pf begin
         !$is_discharge && !$is_downgoing_baseline && !$is_neg_energy &&
         !$is_negative_crosstalk && !$is_noise_burst && $is_nopileup &&
-        !$is_saturated && !$is_upgoing_baseline && $is_valid_baseline &&
+        !$is_saturated && !$is_upgoing_baseline && $is_valid_bl_std &&
         $is_valid_dteff && $is_valid_ediff && $is_valid_efrac &&
-        $is_valid_rt && $is_valid_t0 && $is_valid_tail
+        $is_valid_rt && $is_valid_t0 && $is_valid_tail && $is_valid_t90
     end
 end
 
+"""
+    get_ged_qc_is_physical_propfunc(data::LegendData, sel::AnyValiditySelection)
+
+Get a `PropertyFunction` that returns `true` for events that pass the
+Ge-detector quality cuts.
+"""
+function get_ged_qc_is_baseline_propfunc(data::LegendData, sel::AnyValiditySelection)
+    @pf begin
+        !$is_discharge && !$is_downgoing_baseline && !$is_noise_burst && $is_nopileup &&
+        !$is_saturated && !$is_upgoing_baseline && 
+        $is_valid_max_e10410 && $is_valid_max_emax && $is_valid_baseline_wf
+    end
+end
 
 """
     LegendDataManagement.dataprod_pars_aoe_window(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
