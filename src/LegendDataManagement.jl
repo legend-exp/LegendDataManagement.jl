@@ -5,6 +5,7 @@ __precompile__(true)
 module LegendDataManagement
 
 using Dates
+using UUIDs
 
 import Distributed
 import Pkg
