@@ -310,10 +310,10 @@ Ge-detector quality cuts.
 """
 function get_ged_qc_is_baseline_propfunc(data::LegendData, sel::AnyValiditySelection)
     @pf begin
-        (!$is_discharge &&  $is_nopileup && !$is_saturated &&
+        !$is_discharge &&  $is_nopileup && !$is_saturated &&
         $is_valid_bl_slope && $is_valid_bl_std && $is_valid_bl_mean &&
-        $is_valid_tail && $is_valid_max_e10410 && $is_valid_e10410_inv)
-        || $is_negative_crosstalk
+        $is_valid_tail && $is_valid_max_e10410 && $is_valid_e10410_inv || 
+        $is_negative_crosstalk
     end
 end
 
