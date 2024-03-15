@@ -260,28 +260,18 @@ function get_ged_qc_cuts_propfunc(data::LegendData, sel::AnyValiditySelection)
     @pf let ns = u"ns", kev = u"keV"
         (
             is_discharge = $n_sat_low > 0,
-            is_downgoing_baseline = $blslope < -0.2 / (16ns),
-            is_neg_energy = $e_10410_inv > 500 && ($t0_inv > 1000ns && !($e_10410_inv > 100 && ($t0_inv > 45000ns && $t0_inv < 55000ns))),
             is_negative_crosstalk = $e_10410_inv > 100 && ($t0_inv > 45000ns && $t0_inv < 55000ns),
-            is_noise_burst = $e_min - $blmean < -300 && ($e_max - $blmean > 300 && abs($t90 - $t10) < 800ns),
-            is_nopileup = !($inTrace_intersect > $t0 + 2 * $drift_time && $inTrace_n > 1) || ($e_cusp_ctc_cal < 25kev || $e_cusp_ctc_cal != $e_cusp_ctc_cal),
+            is_nopileup = !($inTrace_intersect > $t0 + 2 * $drift_time && $inTrace_n > 1),
             is_saturated = $n_sat_high > 0,
-            is_upgoing_baseline = $blslope > 0.2 / (16ns),
-            is_valid_dteff = $qdrift / $e_10410 > -30 || ($e_cusp_ctc_cal < 25kev || $e_cusp_ctc_cal != $e_cusp_ctc_cal),
-            is_valid_ediff = abs($e_10410 - $e_313) < 100 || ($e_cusp_ctc_cal < 25kev || ($e_cusp_ctc_cal != $e_cusp_ctc_cal || $n_sat_high > 0)),
-            is_valid_efrac = $e_10410 / $e_313 > 0.95 && $e_10410 / $e_313 < 1.1 || ($e_cusp_ctc_cal < 25kev || ($e_cusp_ctc_cal != $e_cusp_ctc_cal || $n_sat_high > 0)),
-            is_valid_rt = $t90 - $t10 > 96ns && $t50 - $t0 >= 16ns || ($e_cusp_ctc_cal < 25kev || $e_cusp_ctc_cal != $e_cusp_ctc_cal),
-            is_valid_t0 = $t0 > 47000ns && $t0 < 55000ns || ($e_cusp_ctc_cal < 25kev || $e_cusp_ctc_cal != $e_cusp_ctc_cal),
-            is_valid_tail = $tailsigma < 75 || (abs($blslope / $tailslope) < 0.4 && abs($blslope / $tailslope) > 2.5 || ($e_10410_inv > 100 && ($t0_inv > 45000ns && $t0_inv < 55000ns) || $n_sat_high > 0)),
+            is_valid_dteff = $qdrift / $e_10410 > 0,
+            is_valid_rt = $t90 - $t10 > 32ns,
+            is_valid_t0 = $t50 > 46000ns && $t50 < 55000ns,
             is_valid_bl_slope = abs($blslope) < 0.2 / (16ns),
-            is_valid_bl_std = $blsigma < 25,
-            is_valid_bl_mean = $blmean > 0,
-            is_valid_t90 = 46000ns < $t90 < 120000ns,
+            is_valid_bl_std = $blsigma < 50,
+            is_valid_bl_mean = $blmean > 12000 $$ bl_mean < 18000,
+            is_valid_tail = abs($tailmean / $tailoffset) < 5,
             is_valid_max_e10410 = $e_10410 < 100,
             is_valid_e10410_inv = $e_10410_inv < 100,
-            is_valid_max_emax = $e_max < 300,
-            is_valid_baseline_wf = $e_max < 10*$blsigma || $n_sat_high > 0,
-            is_davide = $e_10410 < $blsigma * 3
         )
     end
 end
@@ -305,11 +295,10 @@ Ge-detector quality cuts.
 """
 function get_ged_qc_is_physical_propfunc(data::LegendData, sel::AnyValiditySelection)
     @pf begin
-        !$is_discharge && !$is_downgoing_baseline && !$is_neg_energy &&
-        !$is_negative_crosstalk && !$is_noise_burst && $is_nopileup &&
-        !$is_saturated && !$is_upgoing_baseline && $is_valid_bl_std &&
-        $is_valid_dteff && $is_valid_ediff && $is_valid_efrac &&
-        $is_valid_rt && $is_valid_t0 && $is_valid_tail && $is_valid_t90
+        !$is_discharge && !$is_negative_crosstalk && $is_nopileup &&
+        !$is_saturated && $is_valid_dt_eff && $is_valid_rt && $is_valid_t0 &&
+        $is_valid_bl_slope && $is_valid_bl_std && $is_valid_bl_mean &&
+        $is_valid_tail 
     end
 end
 
@@ -321,9 +310,10 @@ Ge-detector quality cuts.
 """
 function get_ged_qc_is_baseline_propfunc(data::LegendData, sel::AnyValiditySelection)
     @pf begin
-        !$is_discharge && !$is_downgoing_baseline && !$is_noise_burst && $is_nopileup &&
-        !$is_saturated && !$is_upgoing_baseline && 
-        $is_valid_max_e10410 && $is_valid_max_emax && $is_valid_baseline_wf
+        (!$is_discharge &&  $is_nopileup && !$is_saturated &&
+        $is_valid_bl_slope && $is_valid_bl_std && $is_valid_bl_mean &&
+        $is_valid_tail && $is_valid_max_e10410 && $is_valid_e10410_inv)
+        || $is_negative_crosstalk
     end
 end
 
