@@ -41,7 +41,8 @@ const ljl_expr_allowed_funcs = Set([
     :abs, :abs2, :normalize, :norm,
     :exp, exp2, :exp10, :log, :log2, :log10,
     :sin, :cos, :tan, :asin, :acos, :atan,
-    :isnan, :isinf
+    :isnan, :isinf,
+    :±
 ])
 
 const _ljlexpr_units = IdDict([
@@ -112,6 +113,34 @@ function _process_ljlexpr_impl(@nospecialize(expr::Expr), @nospecialize(f_varsub
 end
 
 
+const _jlexpr_namespace = UUID("cdf3a628-300d-4c5f-ac08-f586248318e9")
+
+_expr_hash(expr) = uuid5(_jlexpr_namespace, string(expr))
+
+const _argexpr_dict = IdDict{UUID, @NamedTuple{args::Vector{Symbol}, body}}()
+
+
+struct _ExprFunction{hash} <:Function end
+
+@generated function (f::_ExprFunction{fhash})(__exprf_args__...) where fhash
+    argnames, body = _argexpr_dict[fhash]
+    argtuple = Expr(:tuple, argnames...)
+    quote      
+        $argtuple = __exprf_args__
+        $body
+    end
+end
+
+function _propfrom_from_expr(pf_body)
+    props, args, args_body = props2varsyms(pf_body)
+     args_body_hash = _expr_hash(args_body)
+    get!(_argexpr_dict, args_body_hash, (args = args, body = args_body))
+
+    sel_prop_func = _ExprFunction{args_body_hash}()
+    PropertyFunction{(props...,)}(sel_prop_func)
+end
+
+
 _pf_varsym(sym::Symbol) = Expr(:$, sym)
 
 const _cached_ljl_propfunc = Dict{Union{LJlExprLike}, PropertyFunction}()
@@ -129,11 +158,12 @@ See also [`parse_lpyexpr`](@ref).
 function ljl_propfunc end
 export ljl_propfunc
 
+
 function ljl_propfunc(@nospecialize(expr::LJlExprLike))
     lock(_cached_ljl_propfunc_lock) do
         get!(_cached_ljl_propfunc, expr) do
             pf_body = process_ljlexpr(expr, _pf_varsym)
-            return eval(:(@pf $pf_body))
+            return _propfrom_from_expr(pf_body)
         end
     end
 end
@@ -158,7 +188,7 @@ function ljl_propfunc(@nospecialize(expr_map::AbstractDict{Symbol,<:LJlExprLike}
     sort!(nt_entries, by = x -> x.args[1])
     pf_body = :(())
     append!(pf_body.args, nt_entries)
-    return eval(:(@pf $pf_body))
+    return _propfrom_from_expr(pf_body)
 end
 
 function ljl_propfunc(@nospecialize(expr_map::AbstractDict{Symbol,<:AbstractString}))

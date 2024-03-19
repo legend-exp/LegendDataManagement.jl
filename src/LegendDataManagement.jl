@@ -5,6 +5,7 @@ __precompile__(true)
 module LegendDataManagement
 
 using Dates
+using UUIDs
 
 import Distributed
 import Pkg
@@ -16,13 +17,14 @@ using PropertyDicts
 using StructArrays
 using Unitful
 using Measurements
+using Measurements: ±
 
 using Printf: @printf
 
 using IntervalSets: AbstractInterval, ClosedInterval, leftendpoint, rightendpoint
 using LRUCache: LRU
 using ProgressMeter: @showprogress
-using PropertyFunctions: PropertyFunction, @pf, filterby
+using PropertyFunctions: PropertyFunction, @pf, filterby, props2varsyms
 using StaticStrings: StaticString
 import Tables
 using Tables: columns
