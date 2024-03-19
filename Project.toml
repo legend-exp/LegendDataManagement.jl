@@ -18,6 +18,7 @@ ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
 PropDicts = "4dc08600-4268-439e-8673-d706fafbb426"
 PropertyDicts = "f8a19df8-e894-5f55-a973-672c1158cbca"
 PropertyFunctions = "09e99361-2bb8-48a2-a80f-de58f0739eb4"
+RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
 StaticStrings = "4db0a0c5-418a-4e1d-8806-cb305fe13294"
 StructArrays = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
 Tables = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
@@ -25,9 +26,11 @@ Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [weakdeps]
 SolidStateDetectors = "71e43887-2bd9-5f77-aebd-47f656f0a3f0"
+RecipesBase = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
 
 [extensions]
 LegendDataManagementSolidStateDetectorsExt = "SolidStateDetectors"
+LegendDataManagementRecipesBaseExt = "RecipesBase"
 
 [compat]
 Dates = "1"
@@ -45,6 +48,7 @@ ProgressMeter = "1"
 PropDicts = "0.2.4"
 PropertyDicts = "0.2"
 PropertyFunctions = "0.2"
+RecipesBase = "1"
 SolidStateDetectors = "0.8, 0.9"
 StaticStrings = "0.2"
 StructArrays = "0.4, 0.5, 0.6"
