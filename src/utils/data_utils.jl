@@ -28,7 +28,7 @@ function get_mltrainfilename end
 export get_mltrainfilename
 function get_mltrainfilename(data::LegendData, period::DataPeriodLike, category::DataCategoryLike)
     first_run = first(sort(filter(x -> x.period == DataPeriod(3), analysis_runs(l200)).run, by=x->x.no))
-    fk = start_filekey(l200, (period, first_run, category))
+    fk = start_filekey(data, (period, first_run, category))
     data.tier[:jlml, fk]
 end
 get_mltrainfilename(data::LegendData, filekey::FileKey) = get_mltrainfilename(data, filekey.period, filekey.category)
