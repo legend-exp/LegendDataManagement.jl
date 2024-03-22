@@ -11,8 +11,7 @@ using Measurements
 using Measurements: ±
 
 using PropertyFunctions: PropertyFunction, @pf, filterby, props2varsyms
-import Tables
-using Tables: columns
+using Tables
 
 include("data_utils.jl")
 include("log_utils.jl")

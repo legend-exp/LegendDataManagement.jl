@@ -29,5 +29,5 @@ Create a metadata table for a given filekey which can be added in a report.
 """
 function create_metadatatbl end
 export create_metadatatbl
-create_metadatatbl(filekey::FileKey) = Table(Setup = [filekey.setup], Period = [filekey.period], Run = [filekey.run], Category = [filekey.category])
-create_metadatatbl(filekey::FileKey, part::DataPartitionLike) = Table(Setup = [filekey.setup], Partition = [part], Category = [filekey.category])
+create_metadatatbl(filekey::FileKey) = StructArray(Setup = [filekey.setup], Period = [filekey.period], Run = [filekey.run], Category = [filekey.category])
+create_metadatatbl(filekey::FileKey, part::DataPartitionLike) = StructArray(Setup = [filekey.setup], Partition = [part], Category = [filekey.category])
