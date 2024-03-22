@@ -27,7 +27,7 @@ Get the filename for the machine learning training data.
 function get_mltrainfilename end
 export get_mltrainfilename
 function get_mltrainfilename(data::LegendData, period::DataPeriodLike, category::DataCategoryLike)
-    first_run = first(sort(filter(x -> x.period == DataPeriod(3), analysis_runs(l200)).run, by=x->x.no))
+    first_run = first(sort(filter(x -> x.period == DataPeriod(3), analysis_runs(data)).run, by=x->x.no))
     fk = start_filekey(data, (period, first_run, category))
     data.tier[:jlml, fk]
 end
