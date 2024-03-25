@@ -21,7 +21,7 @@ export create_pars
 function nt2pd(pd::PropDict, nt::Union{NamedTuple, Dict})
     for k in keys(nt)
         if nt[k] isa NamedTuple || nt[k] isa Dict
-            pd[k] = if !(haskey(pd, k)) PropDict() end
+            pd[k] = if !(haskey(pd, k)) || isnothing(pd[k]) PropDict() else pd[k] end
             nt2pd(pd[k], nt[k])
         else
             pd[k] = nt[k]
