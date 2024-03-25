@@ -4,6 +4,7 @@
 
 """
     get_peaksfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike)
+    get_peaksfilename(data::LegendData, filekey::FileKey, ch::ChannelIdLike) 
 Get the filename for the peaks data for a given channel.
 """
 function get_peaksfilename end
@@ -13,6 +14,7 @@ get_peaksfilename(data::LegendData, filekey::FileKey, ch::ChannelIdLike) = get_p
 
 """
     get_hitchfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike)
+    get_hitchfilename(data::LegendData, filekey::FileKey, ch::ChannelIdLike)
 Get the filename for the hitch data for a given channel.
 """
 function get_hitchfilename end
@@ -22,6 +24,7 @@ get_hitchfilename(data::LegendData, filekey::FileKey, ch::ChannelIdLike) = get_h
 
 """
     get_mltrainfilename(data::LegendData, period::DataPeriodLike, category::DataCategoryLike)
+    get_mltrainfilename(data::LegendData, filekey::FileKey)
 Get the filename for the machine learning training data.
 """
 function get_mltrainfilename end
