@@ -280,6 +280,11 @@ function get_ged_qc_cuts_propfunc(data::LegendData, sel::AnyValiditySelection)
             is_valid_tail = abs($tailmean / $tailoffset) < 5,
             is_valid_max_e10410 = $e_10410 < 100,
             is_valid_e10410_inv = $e_10410_inv < 100,
+
+            is_physical_ml = $qc_label == 0 || $qc_label == 6,
+            is_baseline_ml = $qc_label == 4 || $qc_label == 5 || $qc_label == 12 || $qc_label == 13,
+            is_discharge_recovery_ml = $qc_label == 1 || $qc_label == 2,
+            is_saturated_ml = $qc_label == 9,
         )
     end
 end
@@ -310,7 +315,13 @@ Ge-detector quality cuts.
 #     end
 # end
 function get_ged_qc_is_physical_propfunc(data::LegendData, sel::AnyValiditySelection)
-    @pf is_physical = $qc_label == 0.0
+    @pf begin
+        !$is_discharge && !$is_negative_crosstalk && $is_nopileup &&
+        !$is_saturated && $is_valid_dt_eff && $is_valid_rt && $is_valid_t0 &&
+        $is_valid_bl_slope && $is_valid_bl_std && $is_valid_bl_mean &&
+        $is_valid_tail || $is_physical_ml && !$is_discharge_recovery_ml &&
+        !$is_saturated_ml
+    end
 end
 
 """
@@ -328,7 +339,13 @@ Ge-detector quality cuts.
 #     end
 # end
 function get_ged_qc_is_baseline_propfunc(data::LegendData, sel::AnyValiditySelection)
-    @pf is_baseline = $qc_label == 13.0
+    @pf begin
+        !$is_discharge &&  $is_nopileup && !$is_saturated &&
+        $is_valid_bl_slope && $is_valid_bl_std && $is_valid_bl_mean &&
+        $is_valid_tail && $is_valid_max_e10410 && $is_valid_e10410_inv || 
+        $is_negative_crosstalk || $is_baseline_ml && !$is_discharge_recovery_ml &&
+        !$is_saturated_ml
+    end
 end
 
 """
