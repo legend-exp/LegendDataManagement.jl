@@ -59,6 +59,13 @@ function _get_e_cal_function(data::LegendData, sel::AnyValiditySelection, detect
     end
 end
 
+function _get_e_cal_propsfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol)
+    ecal_props = _get_ecal_props(data, sel, detector)
+    if ecal_props[e_filter].cal.func isa PropDicts.MissingProperty
+        return "0keV / 0"
+    end
+    return String(ecal_props[e_filter].cal.func)
+end
 
 #=
 function get_e_cal_propfunc(data::LegendData, sel::AnyValiditySelection, channel::ChannelId, e_filter::Symbol)
@@ -156,6 +163,13 @@ function _get_aoe_cal_function(data::LegendData, sel::AnyValiditySelection, dete
     end
 end
 
+function _get_aoe_cal_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    psdcal_props = _get_psdcal_props(data, sel, detector)
+    if psdcal_props.func isa PropDicts.MissingProperty
+        return "0 / 0"
+    end
+    return String(psdcal_props.func)
+end
 
 
 """
@@ -173,33 +187,27 @@ Note: Caches configuration/calibration data internally, use a fresh `data`
 object if on-disk configuration/calibration data may have changed.
 """
 function get_ged_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    let cf_trap = _get_e_cal_function(data, sel, detector, :e_trap),
-        cf_cusp = _get_e_cal_function(data, sel, detector, :e_cusp),
-        cf_zac = _get_e_cal_function(data, sel, detector, :e_zac),
-        cf_ctc_trap = _get_e_ctc_cal_function(data, sel, detector, :e_trap),
-        cf_ctc_cusp = _get_e_ctc_cal_function(data, sel, detector, :e_cusp),
-        cf_ctc_zac = _get_e_ctc_cal_function(data, sel, detector, :e_zac),
-        cf_313 = _get_e_cal_function(data, sel, detector, :e_313),
-        cf_10410 = _get_e_cal_function(data, sel, detector, :e_10410),
-        cf_aoe = _get_aoe_cal_function(data, sel, detector, :e_cusp)
+    let cf_trap = _get_e_cal_propsfunc_str(data, sel, detector, :e_trap),
+        cf_cusp = _get_e_cal_propsfunc_str(data, sel, detector, :e_cusp),
+        cf_zac = _get_e_cal_propsfunc_str(data, sel, detector, :e_zac),
+        cf_ctc_trap = _get_e_cal_propsfunc_str(data, sel, detector, :e_trap_ctc),
+        cf_ctc_cusp = _get_e_cal_propsfunc_str(data, sel, detector, :e_cusp_ctc),
+        cf_ctc_zac = _get_e_cal_propsfunc_str(data, sel, detector, :e_zac_ctc),
+        cf_313 = _get_e_cal_propsfunc_str(data, sel, detector, :e_313),
+        cf_10410 = _get_e_cal_propsfunc_str(data, sel, detector, :e_10410),
+        cf_aoe = _get_aoe_cal_propfunc_str(data, sel, detector)
 
-        @pf begin
-            # ToDo: Don't hardcode A/E reference energy source:
-            aoe_ref_e_uncal = $e_cusp
-            aoe_raw, aoe_corrected, aoe_classifier = cf_aoe(aoe_ref_e_uncal, $a)
-
-            (
-                e_trap_cal = cf_trap($e_trap),
-                e_cusp_cal = cf_cusp($e_cusp),
-                e_zac_cal = cf_zac($e_zac),
-                e_trap_ctc_cal = cf_ctc_trap($e_trap, $qdrift),
-                e_cusp_ctc_cal = cf_ctc_cusp($e_cusp, $qdrift),
-                e_zac_ctc_cal = cf_ctc_zac($e_zac, $qdrift),
-                e_short_cal = cf_313($e_313),
-                e_long_cal = cf_10410($e_10410),
-                aoe_raw = aoe_raw, aoe_corrected = aoe_corrected, aoe_classifier = aoe_classifier
-            )
-        end
+        ljl_propfunc(Dict{Symbol, String}(
+            :e_trap_cal => cf_trap,
+            :e_cusp_cal => cf_cusp,
+            :e_zac_cal => cf_zac,
+            :e_trap_ctc_cal => cf_ctc_trap,
+            :e_cusp_ctc_cal => cf_ctc_cusp,
+            :e_zac_ctc_cal => cf_ctc_zac,
+            :e_short_cal => cf_313,
+            :e_long_cal => cf_10410,
+            :aoe_classifier => cf_aoe
+        ))
     end
 end
 export get_ged_cal_propfunc
@@ -268,7 +276,7 @@ function get_ged_qc_cuts_propfunc(data::LegendData, sel::AnyValiditySelection)
             is_valid_t0 = $t50 > 46000ns && $t50 < 55000ns,
             is_valid_bl_slope = abs($blslope) < 0.2 / (16ns),
             is_valid_bl_std = $blsigma < 50,
-            is_valid_bl_mean = $blmean > 12000 $$ bl_mean < 18000,
+            is_valid_bl_mean = $blmean > 12000 && $blmean < 18000,
             is_valid_tail = abs($tailmean / $tailoffset) < 5,
             is_valid_max_e10410 = $e_10410 < 100,
             is_valid_e10410_inv = $e_10410_inv < 100,
@@ -293,13 +301,16 @@ end
 Get a `PropertyFunction` that returns `true` for events that pass the
 Ge-detector quality cuts.
 """
+# function get_ged_qc_is_physical_propfunc(data::LegendData, sel::AnyValiditySelection)
+#     @pf begin
+#         !$is_discharge && !$is_negative_crosstalk && $is_nopileup &&
+#         !$is_saturated && $is_valid_dt_eff && $is_valid_rt && $is_valid_t0 &&
+#         $is_valid_bl_slope && $is_valid_bl_std && $is_valid_bl_mean &&
+#         $is_valid_tail 
+#     end
+# end
 function get_ged_qc_is_physical_propfunc(data::LegendData, sel::AnyValiditySelection)
-    @pf begin
-        !$is_discharge && !$is_negative_crosstalk && $is_nopileup &&
-        !$is_saturated && $is_valid_dt_eff && $is_valid_rt && $is_valid_t0 &&
-        $is_valid_bl_slope && $is_valid_bl_std && $is_valid_bl_mean &&
-        $is_valid_tail 
-    end
+    @pf is_physical = $qc_label == 0.0
 end
 
 """
@@ -308,13 +319,16 @@ end
 Get a `PropertyFunction` that returns `true` for events that pass the
 Ge-detector quality cuts.
 """
+# function get_ged_qc_is_baseline_propfunc(data::LegendData, sel::AnyValiditySelection)
+#     @pf begin
+#         !$is_discharge &&  $is_nopileup && !$is_saturated &&
+#         $is_valid_bl_slope && $is_valid_bl_std && $is_valid_bl_mean &&
+#         $is_valid_tail && $is_valid_max_e10410 && $is_valid_e10410_inv || 
+#         $is_negative_crosstalk
+#     end
+# end
 function get_ged_qc_is_baseline_propfunc(data::LegendData, sel::AnyValiditySelection)
-    @pf begin
-        !$is_discharge &&  $is_nopileup && !$is_saturated &&
-        $is_valid_bl_slope && $is_valid_bl_std && $is_valid_bl_mean &&
-        $is_valid_tail && $is_valid_max_e10410 && $is_valid_e10410_inv || 
-        $is_negative_crosstalk
-    end
+    @pf is_baseline = $qc_label == 13.0
 end
 
 """
@@ -324,7 +338,7 @@ Get the A/E cut window for the given data, validity selection and detector.
 """
 function dataprod_pars_aoe_window(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
     aoecut_lo::Float64 = get(_dataprod_pars_p_psd(data, sel, detector).cut, :lowcut, NaN)
-    aoecut_hi::Float64 = get(_dataprod_pars_p_psd(data, sel, detector).cut, :highcut, NaN)   
+    aoecut_hi::Float64 = get(_dataprod_pars_p_psd(data, sel, detector).cut, :highcut, NaN)  
     ClosedInterval(aoecut_lo, aoecut_hi)
 end
 
