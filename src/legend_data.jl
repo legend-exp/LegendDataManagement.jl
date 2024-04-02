@@ -118,8 +118,10 @@ tier_data[tier::DataTierLike]
 tier_data[tier::DataTierLike, category::DataCategoryLike]
 tier_data[tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike]
 tier_data[tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike, run::DataRunLike]
+tier_data[tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike, run::DataRunLike, ch::ChannelIdLike]
 
 tier_data[tier::DataTierLike, filekey::FileKeyLike]
+tier_data[tier::DataTierLike, filekey::FileKeyLike, ch::ChannelIdLike]
 ```
 
 Examples:
@@ -172,6 +174,16 @@ function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, category:
         DataTier(tier), DataCategory(category), DataPeriod(period), DataRun(run))
     )...)
 end
+
+function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike, run::DataRunLike, ch::ChannelIdLike)
+    joinpath(
+        tier_data[DataTier(tier), DataCategory(category), DataPeriod(period), DataRun(run)],
+        "$(get_setup_name(tier_data.data))-$period-$run-$category-$ch-tier_$(first(split(string(tier), "ch"))).lh5"
+    )
+end
+
+_getindex_impl(tier_data::LegendTierData, tier::DataTierLike, filekey::FileKey, ch::ChannelIdLike) = _getindex_impl(tier_data, tier, filekey.category, filekey.period, filekey.run, ch)
+
 
 function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, filekey::FileKey)
     key = FileKey(filekey)
@@ -287,7 +299,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
     if only_processable
         chinfo = chinfo |> filterby(@pf $processable .== true)
     end
-    return chinfo
+    return Table(chinfo)
 end
 export channelinfo
 
