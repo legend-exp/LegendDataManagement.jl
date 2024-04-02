@@ -12,6 +12,9 @@ using Measurements: ±
 
 using PropertyFunctions: PropertyFunction, @pf, filterby, props2varsyms
 using Tables
+using Tables: columns
+using StructArrays
+using TypedTables: Table
 
 include("data_utils.jl")
 include("log_utils.jl")

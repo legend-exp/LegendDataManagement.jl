@@ -90,3 +90,86 @@ function load_runch(open_func::Function, flatten_func::Function, data::LegendDat
         ])
 end
 export load_runch
+
+
+"""
+    load_hitchfile(open_func::Function, data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike; append_filekeys::Bool=true, calibrate_energy::Bool=false, load_level::String="dataQC")
+    load_hitchfile(open_func::Function, data::LegendData, filekey::FileKey, ch::ChannelIdLike; kwargs...)
+Load data from a hitch file for a given channel.
+# Arguments
+- `open_func::Function`: function to open a file
+- `data::LegendData`: data object
+- `setup::ExpSetupLike`: setup
+- `period::DataPeriodLike`: period
+- `run::DataRunLike`: run
+- `category::DataCategoryLike`: category
+- `ch::ChannelIdLike`: channel
+- `append_filekeys::Bool=true`: append filekey to data for each event
+- `calibrate_energy::Bool=false`: calibrate energy with given energy calibration parameters
+- `load_level::String="dataQC"`: load level
+# Return
+- `Table`: data table for given hit file
+"""
+function load_hitchfile(open_func::Function, data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike; append_filekeys::Bool=true, calibrate_energy::Bool=false, load_level::String="dataQC")
+    # load hit file at DataQC level
+    data_ch_hit = open_func(get_hitchfilename(data, setup, period, run, category, ch))["$ch/$load_level"][:]
+    # append filekeys to data for each event
+    data_ch_hit = if append_filekeys
+        fks = search_disk(FileKey, data.tier[:jldsp, category, period, run])
+        fk_timestamps = [f.time.unixtime*u"s" for f in fks]
+        data_ch_hit_fks = broadcast(data_ch_hit.timestamp) do ts
+            idx_fk = findfirst(x -> x > ts, fk_timestamps)
+            if isnothing(idx_fk)
+                fks[end]
+            else
+                fks[idx_fk-1]
+            end
+        end
+        Table(StructVector(merge((filekey = data_ch_hit_fks,), columns(data_ch_hit))))
+    else
+        data_ch_hit
+    end
+    if calibrate_energy
+        # get detector name 
+        det = channelinfo(data, (period, run, category), ch).detector
+        ecal_pars = data.par.rpars.ecal[period, run][det]
+        # calibrate energy
+        e_names = Symbol.(["$(string(k))_cal" for k in keys(ecal_pars)])
+        Table(StructVector(merge(columns(data_ch_hit), columns(ljl_propfunc(Dict{Symbol, String}(
+            e_names .=> [ecal_pars[k].cal.func for k in keys(ecal_pars)]
+        )).(data_ch_hit)))))
+    end
+end
+load_hitchfile(open_func::Function, data::LegendData, filekey::FileKey, ch::ChannelIdLike; kwargs...) = load_hitchfile(open_func, data, filekey.setup, filekey.period, filekey.run, filekey.category, ch; kwargs...)
+export load_hitchfile
+
+
+"""
+    load_rawevt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::Int)
+    load_rawevt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::UnitRange{Int})
+Load data for a channel from a hitch file for a given selected event index or index range.
+# Arguments
+- `open_func::Function`: function to open a file
+- `data::LegendData`: data object
+- `ch::ChannelIdLike`: channel
+- `data_hit::Table`: hitch data
+- `sel_evt::Int/UnitRange{Int}`: selected event index
+# Return
+- `Table`: data table of raw events
+"""
+function load_rawevt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::Int)
+    data_ch_evtIDs = open_func(data.tier[:raw, data_hit.filekey[sel_evt]])[ch].raw.eventnumber[:]
+    open_func(data.tier[:raw, data_hit.filekey[sel_evt]])[ch].raw[findall(data_hit.eventID_fadc[sel_evt] .== data_ch_evtIDs)]
+end
+
+function load_rawevt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::UnitRange{Int})
+    tbl_vec = map(unique(data_hit.filekey[sel_evt])) do fk
+        data_ch_evtIDs = open_func(data.tier[:raw, fk])[ch].raw.eventnumber[:]
+        idxs = reduce(vcat, broadcast(data_hit.eventID_fadc[sel_evt]) do x
+            findall(x .== data_ch_evtIDs)
+        end)
+        open_func(data.tier[:raw, fk])[ch].raw[idxs]
+    end
+    Table(StructVector(vcat(tbl_vec...)))
+end
+export load_rawevt
