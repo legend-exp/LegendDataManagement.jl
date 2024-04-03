@@ -13,164 +13,41 @@ function _get_ecal_props(data::LegendData, sel::AnyValiditySelection, detector::
     _get_ecal_props(data, sel)[Symbol(detector)]
 end
 
-const _cached_get_ctc_props = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
-
-function _get_ctc_props(data::LegendData, sel::AnyValiditySelection)
-    key = (objectid(data), sel)
-    get!(_cached_get_ctc_props, key) do
-        get_values(dataprod_parameters(data).rpars.ctc(sel))
-    end
+function _get_e_cal_propsfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol)
+    ecal_props::String = get(get(get(_get_ecal_props(data, sel, detector), e_filter, PropDict()), :cal, PropDict()), :func, "0keV / 0")
+    return ecal_props
 end
 
-function _get_ctc_props(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    _get_ctc_props(data, sel)[Symbol(detector)]
-end
+const _cached_get_aoecal_props = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
 
-
-const _cached_get_psdcal_props = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
-
-function _get_psdcal_props(data::LegendData, sel::AnyValiditySelection)
+function _get_aoecal_props(data::LegendData, sel::AnyValiditySelection)
     key = (objectid(data), sel)
-    get!(_cached_get_psdcal_props, key) do
+    get!(_cached_get_aoecal_props, key) do
         get_values(dataprod_parameters(data).rpars.aoecal(sel))
     end
 end
 
-function _get_psdcal_props(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    _get_psdcal_props(data, sel)[Symbol(detector)]
-end
-
-#=
-function _get_e_cal_function(data::LegendData, sel::AnyValiditySelection, channel::ChannelId, e_filter::Symbol)
-    detector = channelinfo(data, sel, channel).detector
-    _get_e_cal_function(data, sel, detector, e_filter)
-end
-=#
-
-function _get_e_cal_function(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol)
-    ecal_props = _get_ecal_props(data, sel, detector)
-    cal_pars = ecal_props[e_filter]
-
-    cal_slope::Unitful.Energy{Float64} = get(cal_pars, :m_calib, NaN*u"keV")
-    cal_offset::Unitful.Energy{Float64} = get(cal_pars, :n_calib, NaN*u"keV")
-
-    let cal_slope = cal_slope, cal_offset = cal_offset
-        return _calib_energy(e_uncal::Real) = cal_slope * e_uncal + cal_offset
-    end
-end
-
-function _get_e_cal_propsfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol)
-    ecal_props = _get_ecal_props(data, sel, detector)
-    if ecal_props[e_filter].cal.func isa PropDicts.MissingProperty
-        return "0keV / 0"
-    end
-    return String(ecal_props[e_filter].cal.func)
-end
-
-#=
-function get_e_cal_propfunc(data::LegendData, sel::AnyValiditySelection, channel::ChannelId, e_filter::Symbol)
-    get_e_cal_propfunc(data, sel, channel, Val(e_filter))
-end
-export get_e_cal_propfunc
-
-for e_filter in (:e_trap, :e_cusp, :e_zac)
-    e_col_sym = Expr(:$, e_filter)
-    @eval begin
-        function get_e_cal_propfunc(data::LegendData, sel::AnyValiditySelection, channel::ChannelId, ::Val{$(Meta.quot(e_filter))})
-            let _calib_energy = _get_e_cal_function(data, sel, channel, $(Meta.quot(e_filter)))
-                @pf _calib_energy($e_col_sym)
-            end
-        end
-    end
-end
-=#
-
-
-#=
-function _get_e_ctc_cal_function(data::LegendData, sel::AnyValiditySelection, channel::ChannelId, e_filter::Symbol)
-    detector = channelinfo(data, sel, channel).detector
-    _get_e_ctc_cal_function(data, sel, detector, e_filter)
-end
-=#
-
-function _get_e_ctc_cal_function(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol)
-    e_filter_ctc = Symbol("$(e_filter)_ctc")
-    ctc_pars = _get_ctc_props(data, sel, detector)[e_filter]
-    post_ctc_cal_pars = _get_ecal_props(data, sel, detector)[e_filter_ctc]
-
-    fct::Float64 = get(ctc_pars, :fct, NaN)
-    cal_slope::Unitful.Energy{Float64} = get(post_ctc_cal_pars, :m_calib, NaN*u"keV")
-    cal_offset::Unitful.Energy{Float64} = get(post_ctc_cal_pars, :n_calib, NaN*u"keV")
-
-    let cal_slope = cal_slope, cal_offset = cal_offset, fct = fct
-        return function _calib_energy(e_uncal::Real, qdrift::Real)
-            cal_slope * (e_uncal + fct * qdrift) + cal_offset
-        end
-    end
-end
-
-#=
-function get_e_ctc_cal_propfunc(data::LegendData, sel::AnyValiditySelection, channel::ChannelId, e_filter::Symbol)
-    get_e_ctc_cal_propfunc(data, sel, channel, Val(e_filter))
-end
-export get_e_ctc_cal_propfunc
-
-for e_filter in (:e_trap, :e_cusp, :e_zac)
-    e_col_sym = Expr(:$, e_filter)
-    qdrift_sym = Expr(:$, :qdrift)
-    @eval begin
-        function get_e_ctc_cal_propfunc(data::LegendData, sel::AnyValiditySelection, channel::ChannelId, ::Val{$(Meta.quot(e_filter))})
-            let _calib_energy = _get_e_ctc_cal_function(data, sel, channel, $(Meta.quot(e_filter)))
-                @pf _calib_energy($e_col_sym, $qdrift_sym)
-            end
-        end
-    end
-end
-=#
-
-
-#=
-function _get_aoe_cal_function(data::LegendData, sel::AnyValiditySelection, channel::ChannelId)
-    detector = channelinfo(data, sel, channel).detector
-    _get_aoe_cal_function(data, sel, detector)
-end
-=#
-
-_f_aoe_sigma(x, p) = sqrt(abs(p[1]) + abs(p[2])/x^2)
-_f_aoe_mu(x, p) = p[1] .+ p[2]*x
-
-
-function _get_aoe_cal_function(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol)
-    ecal_props = _get_ecal_props(data, sel, detector)
-    cal_pars = ecal_props[e_filter]
-    psdcal_props = _get_psdcal_props(data, sel, detector)
-
-    cal_slope::Unitful.Energy{Float64} = get(cal_pars, :m_calib, NaN*u"keV")
-    cal_offset::Unitful.Energy{Float64} = get(cal_pars, :n_calib, NaN*u"keV")
-    μ_scs::Tuple{Float64, Quantity{Float64}} = (get(psdcal_props, :μ_scs, [NaN, NaN*u"keV^-1"])...,)
-    σ_scs::Tuple{Float64, Quantity{Float64}} = (get(psdcal_props, :σ_scs, [NaN, NaN*u"keV^2"])...,)
-
-    let cal_slope = cal_slope, cal_offset = cal_offset,
-        μ_scs = μ_scs, σ_scs = σ_scs
-
-        return function _calib_aoe(e_uncal::Real, a_uncal::Real)
-            e_cal = cal_slope * e_uncal + cal_offset
-            aoe_raw = ustrip(a_uncal / e_cal)
-            aoe_corrected = aoe_raw - _f_aoe_mu(e_cal, μ_scs)
-            aoe_classifier = aoe_corrected / _f_aoe_sigma(e_cal, σ_scs)
-            (aoe_raw = aoe_raw, aoe_corrected = aoe_corrected, aoe_classifier = aoe_classifier)
-        end
-    end
+function _get_aoecal_props(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    _get_aoecal_props(data, sel)[Symbol(detector)]
 end
 
 function _get_aoe_cal_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    psdcal_props = _get_psdcal_props(data, sel, detector)
-    if psdcal_props.func isa PropDicts.MissingProperty
-        return "0 / 0"
-    end
-    return String(psdcal_props.func)
+    psdcal_props::String = get(_get_aoecal_props(data, sel, detector), :func, "0 / 0")
+    return psdcal_props
 end
 
+const _cached_dataprod_ged_cal = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
+
+function _dataprod_ged_cal(data::LegendData, sel::AnyValiditySelection)
+    key = (objectid(data), sel)
+    get!(_cached_dataprod_ged_cal, key) do
+        dataprod_config(data).energy(sel)
+    end
+end
+
+function _dataprod_ged_cal(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    merge(_dataprod_ged_cal(data, sel).default, get(_dataprod_ged_cal(data, sel), detector, PropDict()))
+end
 
 """
     get_ged_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
@@ -178,153 +55,99 @@ end
 Get the HPGe calibration function for the given data, validity selection and
 detector.
 
-Returns a `PropertyFunction` that takes a table-like data object with columns
-`e_trap`, `e_cusp`, `e_zac` and `qdrift` and returns a `StructArrays` with
-columns `e_trap_cal`, `e_cusp_cal`, `e_zac_cal`, `e_trap_ctc_cal`,
-`e_cusp_ctc_cal` and `e_zac_ctc_cal`.
-
 Note: Caches configuration/calibration data internally, use a fresh `data`
 object if on-disk configuration/calibration data may have changed.
 """
 function get_ged_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    let cf_trap = _get_e_cal_propsfunc_str(data, sel, detector, :e_trap),
-        cf_cusp = _get_e_cal_propsfunc_str(data, sel, detector, :e_cusp),
-        cf_zac = _get_e_cal_propsfunc_str(data, sel, detector, :e_zac),
-        cf_ctc_trap = _get_e_cal_propsfunc_str(data, sel, detector, :e_trap_ctc),
-        cf_ctc_cusp = _get_e_cal_propsfunc_str(data, sel, detector, :e_cusp_ctc),
-        cf_ctc_zac = _get_e_cal_propsfunc_str(data, sel, detector, :e_zac_ctc),
-        cf_313 = _get_e_cal_propsfunc_str(data, sel, detector, :e_313),
-        cf_10410 = _get_e_cal_propsfunc_str(data, sel, detector, :e_10410),
-        cf_aoe = _get_aoe_cal_propfunc_str(data, sel, detector)
+    let energies = Symbol.(_dataprod_ged_cal(data, sel, detector).energies)
+        energies_cal = Symbol.(_dataprod_ged_cal(data, sel, detector).energies) .* "_cal"
 
         ljl_propfunc(Dict{Symbol, String}(
-            :e_trap_cal => cf_trap,
-            :e_cusp_cal => cf_cusp,
-            :e_zac_cal => cf_zac,
-            :e_trap_ctc_cal => cf_ctc_trap,
-            :e_cusp_ctc_cal => cf_ctc_cusp,
-            :e_zac_ctc_cal => cf_ctc_zac,
-            :e_short_cal => cf_313,
-            :e_long_cal => cf_10410,
-            :aoe_classifier => cf_aoe
+            append!(energies_cal, [:aoe_classifier]),
+            append!(_get_e_cal_propsfunc_str.(Ref(data), Ref(sel), Ref(detector), energies), [_get_aoe_cal_propfunc_str(data, sel, detector)])
         ))
     end
 end
 export get_ged_cal_propfunc
 
 
-const _cached_dataprod_pars_p_psd = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
-
-function _dataprod_pars_p_psd(data::LegendData, sel::AnyValiditySelection)
-    data_id = objectid(data)
-    key = (objectid(data), sel)
-    get!(_cached_dataprod_pars_p_psd, key) do
-        get_values(dataprod_parameters(data).ppars.aoe(sel))
-    end
-end
-
-function _dataprod_pars_p_psd(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    _dataprod_pars_p_psd(data, sel)[Symbol(detector)]
-end
-
-
 const _cached_dataprod_qc = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
 
 function _dataprod_qc(data::LegendData, sel::AnyValiditySelection)
-    data_id = objectid(data)
     key = (objectid(data), sel)
     get!(_cached_dataprod_qc, key) do
         dataprod_config(data).qc(sel)
     end
 end
 
+function _dataprod_qc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    merge(_dataprod_qc(data, sel).default, get(_dataprod_qc(data, sel), detector, PropDict()))
+end
 
 const _cached_dataprod_qc_cuts_pf = LRU{Tuple{UInt, AnyValiditySelection}, PropertyFunction}(maxsize = 10^2)
 
 
-# Will replace current get_ged_qc_cuts_propfunc in the future.
-# Currently suffers from world-age problems due to `ljl_propfunc`.
-function _get_ged_qc_cuts_propfunc_dynamic(data::LegendData, sel::AnyValiditySelection)
-    data_id = objectid(data)
+"""
+    get_ged_qc_cuts_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+
+Get the Ge-detector QC cut definitions for the given data and validity selection.
+"""
+function get_ged_qc_cuts_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
     key = (objectid(data), sel)
     get!(_cached_dataprod_qc_cuts_pf, key) do
-        cut_def_props = _dataprod_qc(data, sel).default.cuts
+        cut_def_props = _dataprod_qc(data, sel, detector).labels
         return ljl_propfunc(cut_def_props)
     end
 end
+export get_ged_qc_cuts_propfunc
 
+const _cached_dataprod_is_trig_pf = LRU{Tuple{UInt, AnyValiditySelection}, PropertyFunction}(maxsize = 10^2)
 
 """
-    LegendDataManagement.get_ged_qc_cuts_propfunc(data::LegendData, sel::AnyValiditySelection)
+    get_ged_qc_istrig_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
 
-Hardcoded Ge-detector quality cuts.
-
-Note: Temporary workaround for world-age problems with `ljl_propfunc`.
+Get the Ge-detector trigger condition for the given data and validity selection.
 """
-function get_ged_qc_cuts_propfunc(data::LegendData, sel::AnyValiditySelection)
-    # ToDo: Replace code with _get_ged_qc_cuts_propfunc_dynamic when world-age problems
-    # with ljl_propfunc are fixed.
-
-    @pf let ns = u"ns", kev = u"keV"
-        (
-            is_discharge = $n_sat_low > 0,
-            is_negative_crosstalk = $e_10410_inv > 100 && ($t0_inv > 45000ns && $t0_inv < 55000ns),
-            is_nopileup = !($inTrace_intersect > $t0 + 2 * $drift_time && $inTrace_n > 1),
-            is_saturated = $n_sat_high > 0,
-            is_valid_dteff = $qdrift / $e_10410 > 0,
-            is_valid_rt = $t90 - $t10 > 32ns,
-            is_valid_t0 = $t50 > 46000ns && $t50 < 55000ns,
-            is_valid_bl_slope = abs($blslope) < 0.2 / (16ns),
-            is_valid_bl_std = $blsigma < 50,
-            is_valid_bl_mean = $blmean > 12000 && $blmean < 18000,
-            is_valid_tail = abs($tailmean / $tailoffset) < 5,
-            is_valid_max_e10410 = $e_10410 < 100,
-            is_valid_e10410_inv = $e_10410_inv < 100,
-
-            is_physical_ml = $qc_label == 0 || $qc_label == 6,
-            is_baseline_ml = $qc_label == 4 || $qc_label == 5 || $qc_label == 12 || $qc_label == 13 || $qc_label == 3,
-            is_discharge_recovery_ml = $qc_label == 1 || $qc_label == 2,
-            is_nopileup_ml = !($qc_label == 10 || $qc_label == 11),
-            is_valid_t0_ml = $qc_label == 7 || $qc_label == 8,
-            is_saturated_ml = $qc_label == 9,
-        )
+function get_ged_qc_is_trig_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    key = (objectid(data), sel)
+    get!(_cached_dataprod_is_trig_pf, key) do
+        is_trig_def_props = _dataprod_qc(data, sel, detector).is_trig
+        return ljl_propfunc(is_trig_def_props)
     end
 end
+export get_ged_qc_is_trig_propfunc
+
+const _cached_dataprod_is_physical_pf = LRU{Tuple{UInt, AnyValiditySelection}, PropertyFunction}(maxsize = 10^2)
 
 """
-    get_ged_qc_istrig_propfunc(data::LegendData, sel::AnyValiditySelection)
+    get_ged_qc_is_physical_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
 
-Get the Ge-detector trigger cut for the given data and validity selection.
+Get a `PropertyFunction` that returns `true` for events that fullfill the `is_physical` definition.
 """
-function get_ged_qc_is_trig_propfunc(data::LegendData, sel::AnyValiditySelection)
-    @pf is_trig = $e_cusp_ctc_cal > 25u"keV"
-end
-
-
-# ToDo: Make configurable
-"""
-    get_ged_qc_is_physical_propfunc(data::LegendData, sel::AnyValiditySelection)
-
-Get a `PropertyFunction` that returns `true` for events that pass the
-Ge-detector quality cuts.
-"""
-function get_ged_qc_is_physical_propfunc(data::LegendData, sel::AnyValiditySelection)
-    @pf begin
-        $is_physical_ml && $is_valid_t0 && !$is_saturated && !$is_discharge
+function get_ged_qc_is_physical_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    key = (objectid(data), sel)
+    get!(_cached_dataprod_is_physical_pf, key) do
+        is_physical_def_props = _dataprod_qc(data, sel, detector).is_physical
+        return ljl_propfunc(is_physical_def_props)
     end
 end
+export get_ged_qc_is_physical_propfunc
+
+const _cached_dataprod_is_baseline_pf = LRU{Tuple{UInt, AnyValiditySelection}, PropertyFunction}(maxsize = 10^2)
 
 """
-    get_ged_qc_is_physical_propfunc(data::LegendData, sel::AnyValiditySelection)
+    get_ged_qc_is_baseline_propfunc(data::LegendData, sel::AnyValiditySelection)
 
-Get a `PropertyFunction` that returns `true` for events that pass the
-Ge-detector quality cuts.
+Get a `PropertyFunction` that returns `true` for events that fullfill the `is_baseline` definition.
 """
-function get_ged_qc_is_baseline_propfunc(data::LegendData, sel::AnyValiditySelection)
-    @pf begin
-        $is_baseline_ml && !$is_discharge && !$is_saturated && $is_valid_bl_slope
+function get_ged_qc_is_baseline_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    key = (objectid(data), sel)
+    get!(_cached_dataprod_is_baseline_pf, key) do
+        is_baseline_def_props = _dataprod_qc(data, sel, detector).is_baseline
+        return ljl_propfunc(is_baseline_def_props)
     end
 end
+export get_ged_qc_is_baseline_propfunc
 
 """
     LegendDataManagement.dataprod_pars_aoe_window(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
@@ -336,6 +159,7 @@ function dataprod_pars_aoe_window(data::LegendData, sel::AnyValiditySelection, d
     aoecut_hi::Float64 = get(_dataprod_pars_p_psd(data, sel, detector).cut, :highcut, NaN)  
     ClosedInterval(aoecut_lo, aoecut_hi)
 end
+export dataprod_pars_aoe_window
 
 
 

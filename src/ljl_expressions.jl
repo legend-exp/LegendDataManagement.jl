@@ -133,7 +133,7 @@ end
 
 function _propfrom_from_expr(pf_body)
     props, args, args_body = props2varsyms(pf_body)
-     args_body_hash = _expr_hash(args_body)
+    args_body_hash = _expr_hash(args_body)
     get!(_argexpr_dict, args_body_hash, (args = args, body = args_body))
 
     sel_prop_func = _ExprFunction{args_body_hash}()
