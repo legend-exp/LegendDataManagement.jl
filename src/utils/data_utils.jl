@@ -7,9 +7,15 @@
     get_peaksfilename(data::LegendData, filekey::FileKey, ch::ChannelIdLike) 
 Get the filename for the peaks data for a given channel.
 """
-function get_peaksfilename end
+function get_peaksfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike)
+    Base.depwarn(
+        "`get_peaksfilename(data, setup, period, run, category, ch)` is deprecated, use `l200.tier[:peaks, category, period, run, ch]` instead`.",
+        ((Base.Core).Typeof(get_peaksfilename)).name.mt.name, force=true
+    )
+    # joinpath(data.tier[:peaks, :cal, period, run], format("{}-{}-{}-{}-{}-tier_peaks.lh5", string(setup), string(period), string(run), string(category), string(ch)))
+    data.tier[:peaks, category, period, run, ch]
+end
 export get_peaksfilename
-get_peaksfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike) = joinpath(data.tier[:peaks, :cal, period, run], format("{}-{}-{}-{}-{}-tier_peaks.lh5", string(setup), string(period), string(run), string(category), string(ch)))
 get_peaksfilename(data::LegendData, filekey::FileKey, ch::ChannelIdLike) = get_peaksfilename(data, filekey.setup, filekey.period, filekey.run, filekey.category, ch)
 
 """
@@ -17,9 +23,16 @@ get_peaksfilename(data::LegendData, filekey::FileKey, ch::ChannelIdLike) = get_p
     get_hitchfilename(data::LegendData, filekey::FileKey, ch::ChannelIdLike)
 Get the filename for the hitch data for a given channel.
 """
-function get_hitchfilename end
+function get_hitchfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike)
+    Base.depwarn(
+        "`get_hitchfilename(data, setup, period, run, category, ch)` is deprecated, use `l200.tier[:jlhitch, category, period, run, ch]` instead`.",
+        ((Base.Core).Typeof(get_hitchfilename)).name.mt.name, force=true
+    )
+    # joinpath(data.tier[:jlhitch, category, period, run], format("{}-{}-{}-{}-{}-tier_jlhit.lh5", string(setup), string(period), string(run), string(category), string(ch)))
+    data.tier[:jlhitch, category, period, run, ch]
+end
 export get_hitchfilename
-get_hitchfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike) = joinpath(data.tier[:jlhitch, category, period, run], format("{}-{}-{}-{}-{}-tier_jlhit.lh5", string(setup), string(period), string(run), string(category), string(ch)))
+
 get_hitchfilename(data::LegendData, filekey::FileKey, ch::ChannelIdLike) = get_hitchfilename(data, filekey.setup, filekey.period, filekey.run, filekey.category, ch)
 
 """
@@ -93,7 +106,7 @@ export load_runch
 
 
 """
-    load_hitchfile(open_func::Function, data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike; append_filekeys::Bool=true, calibrate_energy::Bool=false, load_level::String="dataQC")
+    load_hitchfile(open_func::Function, data::LegendData, (period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike), ch::ChannelIdLike; append_filekeys::Bool=true, calibrate_energy::Bool=false, load_level::String="dataQC")
     load_hitchfile(open_func::Function, data::LegendData, filekey::FileKey, ch::ChannelIdLike; kwargs...)
 Load data from a hitch file for a given channel.
 # Arguments
@@ -110,9 +123,11 @@ Load data from a hitch file for a given channel.
 # Return
 - `Table`: data table for given hit file
 """
-function load_hitchfile(open_func::Function, data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike; append_filekeys::Bool=true, calibrate_energy::Bool=false, load_level::String="dataQC")
+function load_hitchfile(open_func::Function, data::LegendData, runsel::RunCategorySelLike, ch::ChannelIdLike; append_filekeys::Bool=true, calibrate_energy::Bool=false, load_level::String="dataQC")
+    # unpack runsel
+    period, run, category = runsel
     # load hit file at DataQC level
-    data_ch_hit = open_func(get_hitchfilename(data, setup, period, run, category, ch))["$ch/$load_level"][:]
+    data_ch_hit = open_func(data.tier[:jlhitch, category, period, run, ch])["$ch/$load_level"][:]
     # append filekeys to data for each event
     data_ch_hit = if append_filekeys
         fks = search_disk(FileKey, data.tier[:jldsp, category, period, run])
@@ -140,7 +155,7 @@ function load_hitchfile(open_func::Function, data::LegendData, setup::ExpSetupLi
         )).(data_ch_hit)))))
     end
 end
-load_hitchfile(open_func::Function, data::LegendData, filekey::FileKey, ch::ChannelIdLike; kwargs...) = load_hitchfile(open_func, data, filekey.setup, filekey.period, filekey.run, filekey.category, ch; kwargs...)
+load_hitchfile(open_func::Function, data::LegendData, filekey::FileKey, ch::ChannelIdLike; kwargs...) = load_hitchfile(open_func, data, (filekey.period, filekey.run, filekey.category), ch; kwargs...)
 export load_hitchfile
 
 
@@ -157,12 +172,15 @@ Load data for a channel from a hitch file for a given selected event index or in
 # Return
 - `Table`: data table of raw events
 """
+function load_rawevt end
+export load_rawevt
+
 function load_rawevt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::Int)
     data_ch_evtIDs = open_func(data.tier[:raw, data_hit.filekey[sel_evt]])[ch].raw.eventnumber[:]
     open_func(data.tier[:raw, data_hit.filekey[sel_evt]])[ch].raw[findall(data_hit.eventID_fadc[sel_evt] .== data_ch_evtIDs)]
 end
 
-function load_rawevt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::UnitRange{Int})
+function load_rawevt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::Union{UnitRange{Int}, Vector{Int}})
     tbl_vec = map(unique(data_hit.filekey[sel_evt])) do fk
         data_ch_evtIDs = open_func(data.tier[:raw, fk])[ch].raw.eventnumber[:]
         idxs = reduce(vcat, broadcast(data_hit.eventID_fadc[sel_evt]) do x
@@ -172,4 +190,30 @@ function load_rawevt(open_func::Function, data::LegendData, ch::ChannelIdLike, d
     end
     Table(StructVector(vcat(tbl_vec...)))
 end
-export load_rawevt
+
+
+"""
+    get_partitionfilekeys(data::LegendData, part::DataPartitionLike, tier::DataTierLike, category::DataCategoryLike; only_good::Bool=true)
+Get filekeys for a given partition.
+# Arguments
+- `data::LegendData`: data object
+- `part::DataPartitionLike`: partition to be searched in
+- `tier::DataTierLike`: tier
+- `category::DataCategoryLike`: category
+- `only_good::Bool=true`: only get good filekeys
+# Return
+- `Vector{FileKey}`: filekeys
+"""
+function get_partitionfilekeys(data::LegendData, part::DataPartitionLike, tier::DataTierLike, category::DataCategoryLike; only_good::Bool=true)
+    part = DataPartition(part)
+    # get partition info
+    partinfo = partitioninfo(data)[part]
+    found_filekeys = [filekey for (period, run) in partinfo if is_analysis_run(data, period, DataRun(run.no +1)) for filekey in search_disk(FileKey, data.tier[tier, category, period, run])]
+    found_filekeys = if only_good
+        filter(Base.Fix2(!in, bad_filekeys(data)), found_filekeys)
+    else
+        found_filekeys
+    end
+    found_filekeys
+end
+export get_partitionfilekeys
