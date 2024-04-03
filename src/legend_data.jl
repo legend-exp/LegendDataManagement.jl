@@ -118,8 +118,10 @@ tier_data[tier::DataTierLike]
 tier_data[tier::DataTierLike, category::DataCategoryLike]
 tier_data[tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike]
 tier_data[tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike, run::DataRunLike]
+tier_data[tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike, run::DataRunLike, ch::ChannelIdLike]
 
 tier_data[tier::DataTierLike, filekey::FileKeyLike]
+tier_data[tier::DataTierLike, filekey::FileKeyLike, ch::ChannelIdLike]
 ```
 
 Examples:
@@ -172,6 +174,16 @@ function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, category:
         DataTier(tier), DataCategory(category), DataPeriod(period), DataRun(run))
     )...)
 end
+
+function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike, run::DataRunLike, ch::ChannelIdLike)
+    joinpath(
+        tier_data[DataTier(tier), DataCategory(category), DataPeriod(period), DataRun(run)],
+        "$(get_setup_name(tier_data.data))-$period-$run-$category-$ch-tier_$(first(split(string(tier), "ch"))).lh5"
+    )
+end
+
+_getindex_impl(tier_data::LegendTierData, tier::DataTierLike, filekey::FileKey, ch::ChannelIdLike) = _getindex_impl(tier_data, tier, filekey.category, filekey.period, filekey.run, ch)
+
 
 function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, filekey::FileKey)
     key = FileKey(filekey)
@@ -226,6 +238,7 @@ Get all channel information for the given [`LegendData`](@ref) and
 """
 function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false)
     chmap = data.metadata(sel).hardware.configuration.channelmaps
+    diodmap = data.metadata.hardware.detectors.germanium.diodes
     dpcfg = data.metadata(sel).dataprod.config.analysis
     
     #filtered_keys = Array{Symbol}(filter(k -> haskey(chmap, k), collect(keys(dpcfg))))
@@ -253,11 +266,16 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
         channel::ChannelId = ChannelId(fcid >= 0 ? fcid : rawid)
 
         detector::DetectorId = DetectorId(k)
+        det_type::Symbol = Symbol(ifelse(haskey(diodmap, k), diodmap[k].type, :unknown))
+        enrichment::Float64 = ifelse(haskey(diodmap, k) && haskey(diodmap[k].production, :enrichment), diodmap[k].production.enrichment, Float64(NaN))
+        mass::Unitful.Mass{<:Float64} = ifelse(haskey(diodmap, k) && haskey(diodmap[k].production, :mass_in_g), diodmap[k].production.mass_in_g, Float64(NaN))*1e-3*u"kg"
         local system::Symbol = Symbol(chmap[k].system)
         processable::Bool = get(dpcfg[k], :processable, false)
         usability::Symbol = Symbol(get(dpcfg[k], :usability, :unkown))
         is_blinded::Bool = get(dpcfg[k], :is_blinded, false)
-        aoe_status::Symbol = Symbol(get(get(dpcfg[k], :psd_status, PropDict()), Symbol("A/E"), :unkown))
+        low_aoe_status::Symbol = Symbol(get(get(dpcfg[k], :psd_status, PropDict()), Symbol("low_AoE"), :unkown))
+        high_aoe_status::Symbol = Symbol(get(get(dpcfg[k], :psd_status, PropDict()), Symbol("high_AoE"), :unkown))
+        lq_status::Symbol = Symbol(get(get(dpcfg[k], :psd_status, PropDict()), Symbol("LQ"), :unkown))
 
         location::Symbol, detstring::Int, position::Union{Int,Symbol}, fiber::StaticString{8} = _convert_location(chmap[k].location)
 
@@ -269,8 +287,8 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
         hvch::Int = get(chmap[k].voltage, :channel, -1)
 
         return (;
-            detector, channel, fcid, rawid, system, processable, usability, is_blinded, aoe_status,
-            location, detstring, fiber, position, cc4, cc4ch, daqcrate, daqcard, hvcard, hvch
+            detector, channel, fcid, rawid, system, processable, usability, is_blinded, low_aoe_status, high_aoe_status, lq_status, det_type,
+            location, detstring, fiber, position, cc4, cc4ch, daqcrate, daqcard, hvcard, hvch, enrichment, mass
         )
     end
 
@@ -281,7 +299,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
     if only_processable
         chinfo = chinfo |> filterby(@pf $processable .== true)
     end
-    return chinfo
+    return Table(chinfo)
 end
 export channelinfo
 

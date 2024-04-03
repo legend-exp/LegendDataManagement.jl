@@ -3,7 +3,7 @@
 using LegendDataManagement
 using Test
 
-using StructArrays, PropertyFunctions
+using StructArrays, PropertyFunctions, TypedTables
 
 include("testing_utils.jl")
 
@@ -24,7 +24,7 @@ include("testing_utils.jl")
     @test l200.metadata == LegendDataManagement.AnyProps(props_base_path)
 
     # ToDo: Make type-stable:
-    @test (channelinfo(l200, filekey)) isa StructArray
+    @test (channelinfo(l200, filekey)) isa TypedTables.Table
     chinfo = channelinfo(l200, filekey)
     @test all(filterby(@pf $processable && $usability == :on)(chinfo).processable)
     @test all(filterby(@pf $processable && $usability == :on)(chinfo).usability .== :on)

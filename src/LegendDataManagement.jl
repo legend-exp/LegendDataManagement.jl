@@ -28,12 +28,14 @@ using PropertyFunctions: PropertyFunction, @pf, filterby, props2varsyms
 using StaticStrings: StaticString
 import Tables
 using Tables: columns
+using TypedTables
 import Markdown
 using MIMEs: mime_from_extension
 
 include("legend_report.jl")
 include("status_types.jl")
 include("atomic_fcreate.jl")
+include("calfunc.jl")
 include("filekey.jl")
 include("dataset.jl")
 include("data_config.jl")
@@ -46,6 +48,7 @@ include("lpy_expressions.jl")
 include("dataprod_config.jl")
 include("calibration_functions.jl")
 include("lprops.jl")
+include("utils/utils.jl")
 
 
 end # module

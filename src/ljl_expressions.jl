@@ -133,7 +133,7 @@ end
 
 function _propfrom_from_expr(pf_body)
     props, args, args_body = props2varsyms(pf_body)
-     args_body_hash = _expr_hash(args_body)
+    args_body_hash = _expr_hash(args_body)
     get!(_argexpr_dict, args_body_hash, (args = args, body = args_body))
 
     sel_prop_func = _ExprFunction{args_body_hash}()
@@ -192,7 +192,7 @@ function ljl_propfunc(@nospecialize(expr_map::AbstractDict{Symbol,<:LJlExprLike}
 end
 
 function ljl_propfunc(@nospecialize(expr_map::AbstractDict{Symbol,<:AbstractString}))
-    ljl_propfunc(Dict([(k, parse_ljlexpr(v)) for (k, v) in expr_map]))
+    ljl_propfunc(Dict([(k, parse_ljlexpr(string(v))) for (k, v) in expr_map]))
 end
 
 ljl_propfunc(@nospecialize(expr_map::PropDict)) = ljl_propfunc(Dict{Symbol,String}(expr_map))

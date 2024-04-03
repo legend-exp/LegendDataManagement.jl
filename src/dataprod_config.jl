@@ -46,7 +46,7 @@ dataprod_config(l200)
 ```
 """
 function dataprod_parameters(data::LegendData)
-    data.jlpar
+    data.par
 end
 export dataprod_parameters
 
@@ -212,6 +212,7 @@ function runinfo(data::LegendData, runsel::RunCategorySelLike)::NamedTuple
         )
     end
 end
+runinfo(data, fk::FileKey) = runinfo(data, (fk.period, fk.run, fk.category))
 export runinfo
 
 

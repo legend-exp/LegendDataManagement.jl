@@ -12,6 +12,8 @@ abstract type DataSelector end
 
 # make DataSelector compatible with PropDicts
 Base.getindex(p::PropDicts.PropDict, datasel::DataSelector) = p[Symbol(datasel)]
+Base.get(p::PropDicts.PropDict, datasel::DataSelector, default) = get(p, Symbol(datasel), default)
+Base.get!(p::PropDicts.PropDict, datasel::DataSelector, default) = get!(p, Symbol(datasel), default)
 Base.setindex!(p::PropDict, value, datasel::DataSelector) = setindex!(p, value, Symbol(datasel))
 Base.haskey(p::PropDicts.PropDict, datasel::DataSelector) = haskey(p, Symbol(datasel))
 
