@@ -21,6 +21,6 @@ Order = [:macro, :function]
 # Documentation
 
 ```@autodocs
-Modules = [LegendDataManagement]
+Modules = [LegendDataManagement, LegendDataManagement.LDMUtils]
 Order = [:module, :type, :constant, :macro, :function]
 ```
