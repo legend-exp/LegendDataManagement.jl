@@ -20,7 +20,7 @@ DocMeta.setdocmeta!(
 
 makedocs(
     sitename = "LegendDataManagement",
-    modules = [LegendDataManagement],
+    modules = [LegendDataManagement, LegendDataManagement.LDMUtils],
     format = Documenter.HTML(
         prettyurls = !("local" in ARGS),
         canonical = "https://legend-exp.github.io/LegendDataManagement.jl/stable/"
