@@ -28,6 +28,7 @@ using PropertyFunctions: PropertyFunction, @pf, filterby, props2varsyms
 using StaticStrings: StaticString
 import Tables
 using Tables: columns
+using TypedTables
 import Markdown
 using MIMEs: mime_from_extension
 
