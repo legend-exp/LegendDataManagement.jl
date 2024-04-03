@@ -212,6 +212,7 @@ function runinfo(data::LegendData, runsel::RunCategorySelLike)::NamedTuple
         )
     end
 end
+runinfo(data, fk::FileKey) = runinfo(data, (fk.period, fk.run, fk.category))
 export runinfo
 
 
