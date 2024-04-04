@@ -217,3 +217,23 @@ function get_partitionfilekeys(data::LegendData, part::DataPartitionLike, tier::
     found_filekeys
 end
 export get_partitionfilekeys
+
+
+"""
+    get_partition_firstRunPeriod(data::LegendData, part::DataPartitionLike)
+Get the first run and period for a given partition.
+    # Returns 
+- `partinfo::Table`: partition info
+- `run::DataRun`: first run
+- `period::DataPeriod`: first period
+"""
+function get_partition_firstRunPeriod(data::LegendData, part::DataPartitionLike)
+    part = DataPartition(part)
+    # get partition info
+    partinfo = partitioninfo(data)[part]
+    period = filter(row -> row.period == minimum(partinfo.period), partinfo).period[1]
+    partition_period = partinfo[[p == period for p in partinfo.period]]
+    run = filter(row -> row.run == minimum(partition_period.run), partition_period).run[1]
+    partinfo, run, period
+end
+export get_partition_firstRunPeriod
