@@ -64,6 +64,9 @@ Load data for a channel from a list of filekeys in a given tier.
 - `ch::ChannelIdLike`: channel to load data for
 - `check_filekeys::Bool=true`: check if filekeys are valid
 """
+function load_runch end
+export load_runch
+
 function load_runch(open_func::Function, flatten_func::Function, data::LegendData, filekeys::Vector{FileKey}, tier::DataTierLike, ch::ChannelIdLike; check_filekeys::Bool=true)
     ch_filekeys = if check_filekeys
         @info "Check Filekeys"
@@ -102,8 +105,11 @@ function load_runch(open_func::Function, flatten_func::Function, data::LegendDat
             ) for fk in ch_filekeys
         ])
 end
-export load_runch
-
+function load_runch(open_func::Function, flatten_func::Function, data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, tier::DataTierLike, ch::ChannelIdLike; kwargs...)
+    filekeys = search_disk(FileKey, data.tier[tier, category, period, run])
+    load_runch(open_func, flatten_func, data, filekeys, tier, ch; kwargs...)
+end
+load_runch(open_func::Function, flatten_func::Function, data::LegendData, start_filekey::FileKey, tier::DataTierLike, ch::ChannelIdLike; kwargs...) = load_runch(open_func, flatten_func, data, start_filekey.period, start_filekey.period, start_filekey.category, tier, ch; kwargs...)
 
 """
     load_hitchfile(open_func::Function, data::LegendData, (period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike), ch::ChannelIdLike; append_filekeys::Bool=true, calibrate_energy::Bool=false, load_level::String="dataQC")
