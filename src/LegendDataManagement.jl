@@ -47,6 +47,7 @@ include("ljl_expressions.jl")
 include("lpy_expressions.jl")
 include("dataprod_config.jl")
 include("calibration_functions.jl")
+include("evt_functions.jl")
 include("lprops.jl")
 include("utils/utils.jl")
 
