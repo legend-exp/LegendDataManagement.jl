@@ -54,5 +54,6 @@ include("calibration_functions.jl")
 include("lprops.jl")
 include("utils/utils.jl")
 
+include("slurm.jl")
 
 end # module
