@@ -2,7 +2,7 @@
 
 
 const _always_everywhere_code::Expr = quote
-    import Distributed, ThreadPinning, LinearAlgebra, LegendDataManagement
+    import LegendDataManagement
 end
 
 """
@@ -89,22 +89,25 @@ end
 
 
 """
-    LegendDataManagement.distributed_resources
+    LegendDataManagement.worker_resources
 
 Get the distributed Julia process resources currently available.
 """
-function distributed_resources()
-    resources = Distributed.remotecall_fetch.(
-        () -> (
-            workerid = Distributed.myid(),
-            hostname = Base.gethostname(),
-            nthreads = Base.Threads.nthreads(),
-            blas_nthreads = LinearAlgebra.BLAS.get_num_threads(),
-            cpuids = ThreadPinning.getcpuids()
-        ),
-        Distributed.workers()
+function worker_resources()
+    resources_ft = Distributed.remotecall.(LegendDataManagement._current_process_resources, Distributed.workers())
+    resources = fetch.(resources_ft)
+    sorted_resources = sort(resources, by = x -> x.workerid)
+    StructArray(sorted_resources)
+end
+
+function _current_process_resources()
+    return (
+        workerid = Distributed.myid(),
+        hostname = Base.gethostname(),
+        nthreads = Base.Threads.nthreads(),
+        blas_nthreads = LinearAlgebra.BLAS.get_num_threads(),
+        cpuids = ThreadPinning.getcpuids()
     )
-    StructArray(resources)
 end
 
 
@@ -144,7 +147,7 @@ legend_addprocs()
 remotecall_fetch(get_global_value, last(workers()))
 ```
 
-See also [`LegendDataManagement.distributed_resources()`](@ref) and
+See also [`LegendDataManagement.worker_resources()`](@ref) and
 [`LegendDataManagement.shutdown_workers_atexit()`](@ref).
 """
 function legend_addprocs end
