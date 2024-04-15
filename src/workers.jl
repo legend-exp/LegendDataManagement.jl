@@ -1,17 +1,36 @@
 # This file is a part of LegendDataManagement.jl, licensed under the MIT License (MIT).
 
 
-"""
-    LegendDataManagement.legend_distributed_imports(procs::AbstractVector{<:Integer})
+const _always_everywhere_code::Expr = quote
+    import Distributed, ThreadPinning, LinearAlgebra, LegendDataManagement
+end
 
-Import required packages for internal operations on processes `procs`.
 """
-function legend_distributed_imports(@nospecialize(procs::AbstractVector{<:Integer}))
-    Distributed.remotecall_eval(Main, procs,
-        quote
-            import Distributed, ThreadPinning, LinearAlgebra, LegendDataManagement
-        end
-    )
+    always_everywhere(expr)
+
+Runs `expr` on all current Julia processes, but also all future Julia
+processes added via [`legend_addprocs`](@ref)).
+
+Similar to `Distributed.everywhere`, but also stores `expr` so that
+`legend_addprocs` can execute it automatically on new worker processes.
+"""
+macro always_everywhere(expr)
+    return quote
+        expr = $(esc(Expr(:quote, expr)))
+        push!(_always_everywhere_code.args, expr)
+        _run_on_procs(expr, Distributed.procs())
+    end
+end
+export @always_everywhere
+
+
+function _run_on_procs(expr, procs::AbstractVector{<:Integer})
+    mod_expr = Expr(:toplevel, :(task_local_storage()[:SOURCE_PATH] = $(get(task_local_storage(), :SOURCE_PATH, nothing))), expr)
+    Distributed.remotecall_eval(Main, procs, mod_expr)
+end
+
+function _run_always_everywhere_code(@nospecialize(procs::AbstractVector{<:Integer}))
+    _run_on_procs(_always_everywhere_code, procs)
 end
 
 
@@ -104,6 +123,27 @@ Ensures that all workers processes use the same Julia project environment as
 the current process. Requires that file systems paths are consistenst
 across compute hosts.
 
+Use [`@always_everywhere`](@ref) to run initialization code on all current
+processes and all future processes added via `legend_addprocs`:
+
+```julia
+using Distributed, LegendDataManagement
+
+@always_everywhere begin
+    using SomePackage
+    import SomeOtherPackage
+
+    get_global_value() = 42
+end
+
+# ... some code ...
+
+legend_addprocs()
+
+# `get_global_value` is available even though workers were added later:
+remotecall_fetch(get_global_value, last(workers()))
+```
+
 See also [`LegendDataManagement.distributed_resources()`](@ref) and
 [`LegendDataManagement.shutdown_workers_atexit()`](@ref).
 """
@@ -141,7 +181,7 @@ function _addprocs_localhost(nprocs::Int)
 
     @info "Configuring $nprocs new Julia worker processes"
 
-    legend_distributed_imports(new_workers)
+    _run_always_everywhere_code(new_workers)
 
     # Sanity check:
     worker_ids = Distributed.remotecall_fetch.(Ref(Distributed.myid), Distributed.workers())
@@ -184,7 +224,7 @@ function _addprocs_slurm(
 
     @info "Configuring $nprocs new Julia worker processes"
 
-    legend_distributed_imports(new_workers)
+    _run_always_everywhere_code(new_workers)
     legend_distributed_pinthreads(new_workers)
 
     @info "Added $(length(new_workers)) Julia worker processes via SLURM"
