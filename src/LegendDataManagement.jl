@@ -8,6 +8,7 @@ using Dates
 using UUIDs
 
 import Distributed
+import LinearAlgebra
 import Pkg
 
 using Glob
@@ -32,6 +33,9 @@ using TypedTables
 import Markdown
 using MIMEs: mime_from_extension
 
+import ThreadPinning
+import ClusterManagers
+
 include("legend_report.jl")
 include("status_types.jl")
 include("atomic_fcreate.jl")
@@ -51,5 +55,6 @@ include("evt_functions.jl")
 include("lprops.jl")
 include("utils/utils.jl")
 
+include("slurm.jl")
 
 end # module
