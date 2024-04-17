@@ -155,6 +155,7 @@ export legend_addprocs
 
 legend_addprocs(; kwargs...) = _default_addprocs()(; kwargs...)
 legend_addprocs(@nospecialize(nprocs::Integer); kwargs...) = _default_addprocs()(Int(nprocs); kwargs...)
+legend_addprocs(remote_procs::Vector{<:Tuple}; kwargs...) = _addprocs_localhost(remote_procs; kwargs...)
 
 function _default_addprocs()
     if haskey(ENV, "SLURM_JOB_ID") && !haskey(ENV, "SLURM_STEP_ID")
@@ -168,18 +169,28 @@ end
 
 _addprocs_localhost(; kwargs...) = _addprocs_localhost(1; kwargs...)
 
-function _addprocs_localhost(nprocs::Int)
+function _addprocs_localhost(nprocs; env_args::Vector{Pair{String, String}}=Pair{String, String}[])
     @info "Adding $nprocs Julia processes on current host"
 
     # Maybe wait for shared/distributed file system to get in sync?
     # sleep(5)
 
     julia_project = dirname(Pkg.project().path)
-    worker_nthreads = Base.Threads.nthreads()
+    worker_nthreads = if hakey(ENV, "JULIA_NUM_THREADS")
+            parse(Int, ENV["JULIA_NUM_THREADS"])
+        else
+            Base.Threads.nthreads()
+        end
+    heapsize_hint = if haskey(ENV, "JULIA_HEAP_SIZE_HINT")
+            "--heap-size-hint=$(ENV["JULIA_HEAP_SIZE_HINT"])"
+        else
+            ""
+        end
 
     new_workers = Distributed.addprocs(
         nprocs,
-        exeflags = `--project=$julia_project --threads=$worker_nthreads`
+        exeflags = `--project=$julia_project --threads=$worker_nthreads $heapsize_hint`,
+        topology = :master_worker, env = env_args
     )
 
     @info "Configuring $nprocs new Julia worker processes"
@@ -203,7 +214,8 @@ end
 function _addprocs_slurm(
     nprocs::Int;
     job_file_loc::AbstractString = joinpath(homedir(), "slurm-julia-output"),
-    retry_delays::AbstractVector{<:Real} = [1, 1, 2, 2, 4, 5, 5, 10, 10, 10, 10, 20, 20, 20]
+    retry_delays::AbstractVector{<:Real} = [1, 1, 2, 2, 4, 5, 5, 10, 10, 10, 10, 20, 20, 20],
+    env_args::Vector{Pair{String, String}}=Pair{String, String}[]
 )
     @info "Adding $nprocs Julia processes via SLURM"
 
@@ -222,7 +234,7 @@ function _addprocs_slurm(
         cluster_manager, job_file_loc = job_file_loc,
         exeflags = `--project=$julia_project --threads=$slurm_nthreads --heap-size-hint=$(slurm_mem_per_task÷2)`,
         cpus_per_task = "$slurm_nthreads", mem_per_cpu="$(slurm_mem_per_cpu >> 30)G", # time="0:10:00",
-        mem_bind = "local", cpu_bind="cores",
+        mem_bind = "local", cpu_bind="cores", env=env_args
     )
 
     @info "Configuring $nprocs new Julia worker processes"
