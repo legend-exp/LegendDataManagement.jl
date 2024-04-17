@@ -31,3 +31,35 @@ function create_metadatatbl end
 export create_metadatatbl
 create_metadatatbl(filekey::FileKey) = StructArray(Setup = [filekey.setup], Period = [filekey.period], Run = [filekey.run], Category = [filekey.category])
 create_metadatatbl(filekey::FileKey, part::DataPartitionLike) = StructArray(Setup = [filekey.setup], Partition = [part], Category = [filekey.category])
+
+"""
+    create_logtbl(result)
+Create a log table for a given result which can be added in a report.
+"""
+function create_logtbl(result)
+    tbl = vcat([collect(values(res.log)) for (itr, res) in result if res.log isa Dict]...)
+    append!(tbl, [res.log for (itr, res) in result if !(res.log isa Dict)])
+    unique_keys = unique(reduce(vcat, collect.(keys.(tbl))))
+    StructArray([NamedTuple{Tuple(unique_keys)}([get(nt, k, "-") for k in unique_keys]...) for nt in tbl])
+end
+export create_logtbl
+
+
+"""
+    get_totalTimer(result::Vector)
+Get the total timer from a result vector.
+"""
+function get_totalTimer(result::Vector)
+    totalTimer = nothing
+    for (itr, res) in result
+        if haskey(res, :timer)
+            if isnothing(totalTimer)
+                totalTimer = res.timer
+            else
+                merge!(totalTimer, res.timer)
+            end
+        end
+    end
+    totalTimer
+end
+export get_totalTimer
