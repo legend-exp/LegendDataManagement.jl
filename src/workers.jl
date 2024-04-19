@@ -169,7 +169,12 @@ end
 
 _addprocs_localhost(; kwargs...) = _addprocs_localhost(1; kwargs...)
 
-function _addprocs_localhost(nprocs; env_args::Vector{Pair{String, String}}=Pair{String, String}[])
+function _addprocs_localhost(
+    nprocs; 
+    job_file_loc::AbstractString = joinpath(homedir(), "slurm-julia-output"),
+    retry_delays::AbstractVector{<:Real} = [1, 1, 2, 2, 4, 5, 5, 10, 10, 10, 10, 20, 20, 20],
+    env_args::Vector{Pair{String, String}}=Pair{String, String}[]
+)
     @info "Adding $nprocs Julia processes on current host"
 
     # Maybe wait for shared/distributed file system to get in sync?
