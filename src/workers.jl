@@ -227,7 +227,7 @@ function _addprocs_slurm(
     julia_project = dirname(Pkg.project().path)
     slurm_ntasks = nprocs
     slurm_nthreads = parse(Int, ENV["SLURM_CPUS_PER_TASK"])
-    slurm_mem_per_cpu = ENV["SLURM_MEM_PER_CPU"]
+    slurm_mem_per_cpu = _parse_bytes(ENV["SLURM_MEM_PER_CPU"])
     slurm_mem_per_task = slurm_nthreads * slurm_mem_per_cpu
 
     cluster_manager = LegendDataManagement.SlurmManager(slurm_ntasks, retry_delays)
@@ -238,7 +238,7 @@ function _addprocs_slurm(
     new_workers = Distributed.addprocs(
         cluster_manager, job_file_loc = job_file_loc,
         exeflags = `--project=$julia_project --threads=$slurm_nthreads --heap-size-hint=$(slurm_mem_per_task÷2)`,
-        cpus_per_task = "$slurm_nthreads", mem_per_cpu=slurm_mem_per_cpu, # time="0:10:00",
+        cpus_per_task = "$slurm_nthreads", mem_per_cpu="$slurm_mem_per_cpu", # time="0:10:00",
         mem_bind = "local", cpu_bind="cores", env=env_args
     )
 
@@ -248,4 +248,19 @@ function _addprocs_slurm(
     legend_distributed_pinthreads(new_workers)
 
     @info "Added $(length(new_workers)) Julia worker processes via SLURM"
+end
+
+
+function _parse_bytes(bytes_str::String; round_to::String="MB")
+    # assume string is in convert_to unit when it doesn't have a unit
+    if !isnothing(tryparse(Int, bytes_str))
+        return parse(Int, bytes_str)
+    end
+    # otherwise convert to conert_to unit
+    k = 1024
+    sizes = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
+    bytes = parse(Int, match(r"(\d+)", bytes_str).match)
+    bytes_unit = match(r"([A-Za-z]+)", bytes_str).match
+    i = findfirst(occursin.(sizes, bytes_unit)) - findfirst(occursin.(sizes, round_to))
+    return convert(Int, round(bytes * k^i, digits=0))
 end
