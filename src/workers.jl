@@ -227,7 +227,7 @@ function _addprocs_slurm(
     julia_project = dirname(Pkg.project().path)
     slurm_ntasks = nprocs
     slurm_nthreads = parse(Int, ENV["SLURM_CPUS_PER_TASK"])
-    slurm_mem_per_cpu = parse(Int, ENV["SLURM_MEM_PER_CPU"]) * 1024^2
+    slurm_mem_per_cpu = ENV["SLURM_MEM_PER_CPU"]
     slurm_mem_per_task = slurm_nthreads * slurm_mem_per_cpu
 
     cluster_manager = LegendDataManagement.SlurmManager(slurm_ntasks, retry_delays)
@@ -238,7 +238,7 @@ function _addprocs_slurm(
     new_workers = Distributed.addprocs(
         cluster_manager, job_file_loc = job_file_loc,
         exeflags = `--project=$julia_project --threads=$slurm_nthreads --heap-size-hint=$(slurm_mem_per_task÷2)`,
-        cpus_per_task = "$slurm_nthreads", mem_per_cpu="$(slurm_mem_per_cpu >> 30)G", # time="0:10:00",
+        cpus_per_task = "$slurm_nthreads", mem_per_cpu=slurm_mem_per_cpu, # time="0:10:00",
         mem_bind = "local", cpu_bind="cores", env=env_args
     )
 
