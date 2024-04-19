@@ -22,6 +22,8 @@ using Measurements: ±
 
 using Printf: @printf
 
+using Base.Threads: nthreads, Atomic, atomic_add!
+
 using IntervalSets: AbstractInterval, ClosedInterval, leftendpoint, rightendpoint
 using LRUCache: LRU
 using ProgressMeter: @showprogress

@@ -1,9 +1,11 @@
 # This file is a part of LegendDataManagement.jl, licensed under the MIT License (MIT).
 
+const _g_processops_lock = ReentrantLock()
 
-const _always_everywhere_code::Expr = quote
+const _g_always_everywhere_code::Expr = quote
     import LegendDataManagement
 end
+
 
 """
     always_everywhere(expr)
@@ -16,9 +18,14 @@ Similar to `Distributed.everywhere`, but also stores `expr` so that
 """
 macro always_everywhere(expr)
     return quote
-        expr = $(esc(Expr(:quote, expr)))
-        push!(_always_everywhere_code.args, expr)
-        _run_on_procs(expr, Distributed.procs())
+        try
+            lock(_g_processops_lock)
+            expr = $(esc(Expr(:quote, expr)))
+            push!(_g_always_everywhere_code.args, expr)
+            _run_on_procs(expr, Distributed.procs())
+        finally
+            unlock(_g_processops_lock)
+        end
     end
 end
 export @always_everywhere
@@ -29,8 +36,13 @@ function _run_on_procs(expr, procs::AbstractVector{<:Integer})
     Distributed.remotecall_eval(Main, procs, mod_expr)
 end
 
-function _run_always_everywhere_code(@nospecialize(procs::AbstractVector{<:Integer}))
-    _run_on_procs(_always_everywhere_code, procs)
+function _run_always_everywhere_code(@nospecialize(procs::AbstractVector{<:Integer}); pre_always::Expr = :())
+    code = quote
+        $pre_always
+        $_g_always_everywhere_code
+    end
+
+    _run_on_procs(code, procs)
 end
 
 
@@ -41,7 +53,7 @@ Use default thread-pinning strategy.
 """
 function legend_pinthreads()
     if Distributed.myid() == 1
-        let n_juliathreads = Base.Threads.nthreads()
+        let n_juliathreads = nthreads()
             if n_juliathreads > 1
                 LinearAlgebra.BLAS.set_num_threads(n_juliathreads)
             end
@@ -104,7 +116,7 @@ function _current_process_resources()
     return (
         workerid = Distributed.myid(),
         hostname = Base.gethostname(),
-        nthreads = Base.Threads.nthreads(),
+        nthreads = nthreads(),
         blas_nthreads = LinearAlgebra.BLAS.get_num_threads(),
         cpuids = ThreadPinning.getcpuids()
     )
@@ -112,7 +124,35 @@ end
 
 
 """
+    abstract type LegendDataManagement.AddProcsMode
+
+Abstract supertype for worker process addition modes.
+
+Subtypes must implement:
+
+* [`LegendDataManagement.legend_addprocs(mode::SomeAddProcsMode)`](@ref)
+
+and may want to specialize:
+
+* [`LegendDataManagement.worker_init_code(mode::SomeAddProcsMode)`](@ref)
+"""
+abstract type AddProcsMode end
+
+
+"""
+    LegendDataManagement.worker_init_code(::AddProcsMode)::Expr
+
+Get a Julia code expression to run on new worker processes even before
+running [`@always_everywhere`](@ref) code on them.
+"""
+function worker_init_code end
+worker_init_code(::AddProcsMode) = :()
+
+
+
+"""
     legend_addprocs()
+    legend_addprocs(mode::LegendDataManagement.AddProcsMode)
     legend_addprocs(nprocs::Integer)
 
 Add Julia worker processes for LEGEND data processing.
@@ -153,82 +193,283 @@ See also [`LegendDataManagement.worker_resources()`](@ref) and
 function legend_addprocs end
 export legend_addprocs
 
-legend_addprocs(; kwargs...) = _default_addprocs()(; kwargs...)
-legend_addprocs(@nospecialize(nprocs::Integer); kwargs...) = _default_addprocs()(Int(nprocs); kwargs...)
+# In salloc- or sbatch-spawned environment, but not within srun:
+_in_slurm_alloc() = haskey(ENV, "SLURM_JOB_ID") && !haskey(ENV, "SLURM_STEP_ID")
 
-function _default_addprocs()
-    if haskey(ENV, "SLURM_JOB_ID") && !haskey(ENV, "SLURM_STEP_ID")
-        # In salloc- or sbatch-spawned environment, but not within srun:
-        return _addprocs_slurm
+@noinline function legend_addprocs()
+    if _in_slurm_alloc()
+        return legend_addprocs(SlurmRun())
     else
-        return _addprocs_localhost
+        return legend_addprocs(AddProcsLocalhost())
+    end
+end
+
+@noinline function legend_addprocs(nprocs::Integer)
+    if _in_slurm_alloc()
+        return legend_addprocs(SlurmRun(slurm_flags = `--ntasks=$nprocs`))
+    else
+        return legend_addprocs(AddProcsLocalhost())
     end
 end
 
 
-_addprocs_localhost(; kwargs...) = _addprocs_localhost(1; kwargs...)
 
-function _addprocs_localhost(nprocs::Int)
-    @info "Adding $nprocs Julia processes on current host"
-
-    # Maybe wait for shared/distributed file system to get in sync?
-    # sleep(5)
-
-    julia_project = dirname(Pkg.project().path)
-    worker_nthreads = Base.Threads.nthreads()
-
-    new_workers = Distributed.addprocs(
-        nprocs,
-        exeflags = `--project=$julia_project --threads=$worker_nthreads`
+"""
+    LegendDataManagement.AddProcsLocalhost(;
+        nprocs::Integer = 1
     )
 
-    @info "Configuring $nprocs new Julia worker processes"
-
-    _run_always_everywhere_code(new_workers)
-
-    # Sanity check:
-    worker_ids = Distributed.remotecall_fetch.(Ref(Distributed.myid), Distributed.workers())
-    @assert length(worker_ids) == Distributed.nworkers()
-
-    @info "Added $(length(new_workers)) Julia worker processes on current host"
+Mode to add `nprocs` worker processes on the current host.
+"""
+@kwdef struct AddProcsLocalhost <: AddProcsMode
+    nprocs::Int = 1
 end
 
 
-function _addprocs_slurm(; kwargs...)
-    slurm_ntasks = parse(Int, ENV["SLURM_NTASKS"])
-    slurm_ntasks > 1 || throw(ErrorException("Invalid nprocs=$slurm_ntasks inferred from SLURM environment"))
-    _addprocs_slurm(slurm_ntasks; kwargs...)
+function legend_addprocs(mode::AddProcsLocalhost)
+    n_workers = mode.nprocs
+    try
+        lock(_g_processops_lock)
+
+        @info "Adding $n_workers Julia processes on current host"
+
+        # Maybe wait for shared/distributed file system to get in sync?
+        # sleep(5)
+
+        julia_project = dirname(Pkg.project().path)
+        worker_nthreads = nthreads()
+
+        new_workers = Distributed.addprocs(
+            n_workers,
+            exeflags = `--project=$julia_project --threads=$worker_nthreads`
+        )
+
+        @info "Configuring $n_workers new Julia worker processes"
+
+        _run_always_everywhere_code(new_workers, pre_always = worker_init_code(mode))
+
+        # Sanity check:
+        worker_ids = Distributed.remotecall_fetch.(Ref(Distributed.myid), Distributed.workers())
+        @assert length(worker_ids) == Distributed.nworkers()
+
+        @info "Added $(length(new_workers)) Julia worker processes on current host"
+    finally
+        unlock(_g_processops_lock)
+    end
 end
 
-function _addprocs_slurm(
-    nprocs::Int;
-    job_file_loc::AbstractString = joinpath(homedir(), "slurm-julia-output"),
-    retry_delays::AbstractVector{<:Real} = [1, 1, 2, 2, 4, 5, 5, 10, 10, 10, 10, 20, 20, 20]
-)
-    @info "Adding $nprocs Julia processes via SLURM"
 
-    julia_project = dirname(Pkg.project().path)
-    slurm_ntasks = nprocs
-    slurm_nthreads = parse(Int, ENV["SLURM_CPUS_PER_TASK"])
-    slurm_mem_per_cpu = parse(Int, ENV["SLURM_MEM_PER_CPU"]) * 1024^2
-    slurm_mem_per_task = slurm_nthreads * slurm_mem_per_cpu
 
-    cluster_manager = ClusterManagers.SlurmManager(slurm_ntasks, retry_delays)
-    worker_timeout = round(Int, max(sum(cluster_manager.retry_delays), 60))
-    ENV["JULIA_WORKER_TIMEOUT"] = "$worker_timeout"
+"""
+    LegendDataManagement.default_elastic_manager()
+    LegendDataManagement.default_elastic_manager(manager::ClusterManagers.ElasticManager)
+
+Get or set the default elastic cluster manager.
+"""
+function default_elastic_manager end
+
+_g_elastic_manager::Union{Nothing, ClusterManagers.ElasticManager} = nothing
+
+function default_elastic_manager()
+    global _g_elastic_manager
+    if isnothing(_g_elastic_manager)
+        _g_elastic_manager = ClusterManagers.ElasticManager(addr=:auto, port=0, topology=:master_worker)
+    end
+    return _g_elastic_manager
+end
     
-    mkpath(job_file_loc)
-    new_workers = Distributed.addprocs(
-        cluster_manager, job_file_loc = job_file_loc,
-        exeflags = `--project=$julia_project --threads=$slurm_nthreads --heap-size-hint=$(slurm_mem_per_task÷2)`,
-        cpus_per_task = "$slurm_nthreads", mem_per_cpu="$(slurm_mem_per_cpu >> 30)G", # time="0:10:00",
-        mem_bind = "local", cpu_bind="cores",
+function default_elastic_manager(manager::ClusterManagers.ElasticManager)
+    global _g_elastic_manager
+    _g_elastic_manager = manager
+    return _g_elastic_manager
+end
+
+
+
+"""
+    abstract type LegendDataManagement.ElasticAddProcsMode <: LegendDataManagement.AddProcsMode
+
+Abstract supertype for worker process addition modes that use the
+elastic cluster manager.
+
+Subtypes must implement:
+
+* [`LegendDataManagement.worker_start_command(mode::SomeElasticAddProcsMode, manager::ClusterManagers.ElasticManager)`](@ref)
+* [`LegendDataManagement.start_elastic_workers(mode::SomeElasticAddProcsMode, manager::ClusterManagers.ElasticManager)`](@ref)
+
+and may want to specialize:
+
+* [`LegendDataManagement.elastic_addprocs_timeout(mode::SomeElasticAddProcsMode)`](@ref)
+"""
+abstract type ElasticAddProcsMode <: AddProcsMode end
+
+"""
+    LegendDataManagement.worker_start_command(
+        mode::ElasticAddProcsMode,
+        manager::ClusterManagers.ElasticManager = LegendDataManagement.default_elastic_manager()
+    )::Tuple{Cmd,Integer}
+
+Return the system command to start worker processes as well as the number of
+workers to start.
+"""
+function worker_start_command end
+worker_start_command(mode::ElasticAddProcsMode) = worker_start_command(mode, default_elastic_manager())
+
+
+function _elastic_worker_startjl(manager::ClusterManagers.ElasticManager)
+    cookie = Distributed.cluster_cookie()
+    socket_name = manager.sockname
+    address = string(socket_name[1])
+    port = convert(Int, socket_name[2])
+    """using ClusterManagers; ClusterManagers.elastic_worker("$cookie", "$address", $port)"""
+end
+
+const _default_addprocs_params = Distributed.default_addprocs_params()
+
+_default_julia_cmd() = `$(_default_addprocs_params[:exename]) $(_default_addprocs_params[:exeflags])`
+_default_julia_flags() = ``
+_default_julia_project() = Pkg.project().path
+
+
+"""
+    LegendDataManagement.elastic_localworker_startcmd(
+        manager::Distributed.ClusterManager;
+        julia_cmd::Cmd = _default_julia_cmd(),
+        julia_flags::Cmd = _default_julia_flags(),
+        julia_project::AbstractString = _default_julia_project()
+    )::Cmd
+
+Return the system command required to start a Julia worker process, that will
+connect to `manager`, on the current host.
+"""
+function elastic_localworker_startcmd(
+    manager::Distributed.ClusterManager;
+    julia_cmd::Cmd = _default_julia_cmd(),
+    julia_flags::Cmd = _default_julia_flags(),
+    julia_project::AbstractString = _default_julia_project()
+)
+    julia_code = _elastic_worker_startjl(manager)
+
+    `$julia_cmd --project=$julia_project $julia_flags -e $julia_code`
+end
+
+
+
+"""
+    LegendDataManagement.elastic_addprocs_timeout(mode::ElasticAddProcsMode)
+
+Get the timeout in seconds for waiting for worker processes to connect.
+"""
+function elastic_addprocs_timeout end
+
+elastic_addprocs_timeout(mode::ElasticAddProcsMode) = 60
+
+
+"""
+    LegendDataManagement.start_elastic_workers(mode::ElasticAddProcsMode, manager::ClusterManagers.ElasticManager)::Int
+
+Spawn worker processes as specified by `mode` and return the number of
+expected additional workers.
+"""
+function start_elastic_workers end
+
+
+function legend_addprocs(mode::ElasticAddProcsMode)
+    try
+        lock(_g_processops_lock)
+
+        manager = default_elastic_manager()
+
+        old_procs = Distributed.procs()
+        n_previous = length(old_procs)
+        n_to_add = start_elastic_workers(mode, manager)
+
+        @info "Waiting for $n_to_add workers to connect..."
+    
+        sleep(1)
+
+        # ToDo: Add timeout and either prevent workers from connecting after
+        # or somehow make sure that init and @always everywhere code is still
+        # run on them before user code is executed on them.
+
+        timeout = elastic_addprocs_timeout(mode)
+
+        t_start = time()
+        t_waited = zero(t_start)
+        n_added_last = 0
+        while true
+            t_waited = time() - t_start
+            if t_waited > timeout
+                @error "Timeout after waiting for workers to connect for $t_waited seconds"
+                break
+            end
+            n_added = Distributed.nprocs() - n_previous
+            if n_added > n_added_last
+                @info "$n_added of $n_to_add additional workers have connected"
+            end
+            if n_added == n_to_add
+                break
+            elseif n_added > n_to_add
+                @warn "More workers connected than expected: $n_added > $n_to_add"
+                break
+            end
+
+            n_added_last = n_added
+            sleep(1)
+        end
+
+        new_workers = setdiff(Distributed.workers(), old_procs)
+        n_new = length(new_workers)
+
+        @info "Initializing $n_new new Julia worker processes"
+        _run_always_everywhere_code(new_workers, pre_always = worker_init_code(mode))
+
+        @info "Added $n_new new Julia worker processes"
+
+        if n_new != n_to_add
+            throw(ErrorException("Tried to add $n_to_add new workers, but added $n_new"))
+        end
+    finally
+        unlock(_g_processops_lock)
+    end
+end
+
+
+"""
+    LegendDataManagement.ExternalProcs(;
+        nprocs::Integer = ...
     )
 
-    @info "Configuring $nprocs new Julia worker processes"
+Add worker processes by starting them externally.
 
-    _run_always_everywhere_code(new_workers)
-    legend_distributed_pinthreads(new_workers)
+Will log (via `@info`) a worker start command and then wait for the workers to
+connect. The user is responsible for starting the specified number of workers
+externally using that start command.
 
-    @info "Added $(length(new_workers)) Julia worker processes via SLURM"
+Example:
+
+```julia
+mode = ExternalProcs(nprocs = 4)
+legend_addprocs(mode)
+```
+
+The user now has to start 4 Julia worker processes externally using the logged
+start command. This start command can also be retrieved via
+[`worker_start_command(mode)](@ref).
+"""
+@kwdef struct ExternalProcs <: ElasticAddProcsMode
+    nprocs::Int = 1
+end
+
+
+function worker_start_command(mode::ExternalProcs, manager::ClusterManagers.ElasticManager)
+    worker_nthreads = nthreads()
+    julia_flags = `$(_default_julia_flags()) --threads=$worker_nthreads`
+    elastic_localworker_startcmd(manager, julia_flags = julia_flags), mode.nprocs
+end
+
+function start_elastic_workers(mode::ExternalProcs, manager::ClusterManagers.ElasticManager)
+    start_cmd, n_workers = worker_start_command(mode, manager)
+    @info "To add Julia worker processes, run ($n_workers times in parallel, I'll wait for them): $start_cmd"
+    return n_workers
 end
