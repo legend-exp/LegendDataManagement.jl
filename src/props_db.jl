@@ -150,6 +150,7 @@ function PropDicts.writeprops(@nospecialize(missing_props::NoSuchPropsDBEntry), 
     nothing
 end
 
+PropDicts.PropDict(@nospecialize(missing_props::NoSuchPropsDBEntry)) = PropDicts.PropDict()
 
 
 """
@@ -236,6 +237,7 @@ _needs_vsel(@nospecialize(pd::PropsDB)) = getfield(pd, :_needs_vsel)
 Return the path to the data directory that contains `pd`.
 """
 data_path(@nospecialize(pd::PropsDB)) = joinpath(_base_path(pd), _rel_path(pd)...)
+data_path(@nospecialize(pd::NoSuchPropsDBEntry)) = joinpath(_base_path(pd), _rel_path(pd)...)
 
 
 function _check_propery_access(pd)
