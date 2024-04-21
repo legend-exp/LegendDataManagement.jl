@@ -238,7 +238,7 @@ function _addprocs_slurm(
     new_workers = Distributed.addprocs(
         cluster_manager, job_file_loc = job_file_loc,
         exeflags = `--project=$julia_project --threads=$slurm_nthreads --heap-size-hint=$(slurm_mem_per_task÷2)`,
-        cpus_per_task = "$slurm_nthreads", mem_per_cpu="$slurm_mem_per_cpu", # time="0:10:00",
+        cpus_per_task = "$slurm_nthreads", mem_per_cpu="$slurm_mem_per_cpu", unbuffered="",
         mem_bind = "local", cpu_bind="cores", env=env_args
     )
 
