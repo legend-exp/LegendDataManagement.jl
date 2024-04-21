@@ -213,7 +213,7 @@ function _addprocs_slurm(
     slurm_mem_per_cpu = parse(Int, ENV["SLURM_MEM_PER_CPU"]) * 1024^2
     slurm_mem_per_task = slurm_nthreads * slurm_mem_per_cpu
 
-    cluster_manager = LegendDataManagement.SlurmManager(slurm_ntasks, retry_delays)
+    cluster_manager = ClusterManagers.SlurmManager(slurm_ntasks, retry_delays)
     worker_timeout = round(Int, max(sum(cluster_manager.retry_delays), 60))
     ENV["JULIA_WORKER_TIMEOUT"] = "$worker_timeout"
     

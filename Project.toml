@@ -39,7 +39,7 @@ LegendDataManagementRecipesBaseExt = "RecipesBase"
 LegendDataManagementSolidStateDetectorsExt = "SolidStateDetectors"
 
 [compat]
-ClusterManagers = "0.4.5"
+ClusterManagers = "0.4.6"
 Dates = "1"
 Distributed = "1"
 Format = "1"
