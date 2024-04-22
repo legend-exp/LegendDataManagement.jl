@@ -158,7 +158,7 @@ legend_addprocs(@nospecialize(nprocs::Integer); kwargs...) = _default_addprocs()
 legend_addprocs(remote_procs::Vector{<:Tuple}; kwargs...) = _addprocs_localhost(remote_procs; kwargs...)
 
 function _default_addprocs()
-    if haskey(ENV, "SLURM_JOB_ID") && !haskey(ENV, "SLURM_STEP_ID")
+    if haskey(ENV, "SLURM_JOB_ID")
         # In salloc- or sbatch-spawned environment, but not within srun:
         return _addprocs_slurm
     else
@@ -181,7 +181,7 @@ function _addprocs_localhost(
     # sleep(5)
 
     julia_project = dirname(Pkg.project().path)
-    worker_nthreads = if hakey(ENV, "JULIA_NUM_THREADS")
+    worker_nthreads = if haskey(ENV, "JULIA_NUM_THREADS")
             parse(Int, ENV["JULIA_NUM_THREADS"])
         else
             Base.Threads.nthreads()
