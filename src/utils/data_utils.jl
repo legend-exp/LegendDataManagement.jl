@@ -99,7 +99,7 @@ function load_runch(open_func::Function, flatten_func::Function, data::LegendDat
             open_func(
                 ds -> begin
                     # @debug "Reading from \"$(basename(data.tier[tier, fk]))\""
-                    ds["$ch"][:]
+                    ds[ch, tier][:]
                 end,
                 data.tier[tier, fk]
             ) for fk in ch_filekeys
