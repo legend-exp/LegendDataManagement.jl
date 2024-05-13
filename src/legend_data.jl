@@ -297,7 +297,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
         chinfo = chinfo |> filterby(@pf $system .== system)
     end
     if only_processable
-        chinfo = chinfo |> filterby(@pf $processable .== true)
+        chinfo = chinfo |> filterby(@pf $processable .== true && $is_blinded .== true)
     end
     return Table(chinfo)
 end
