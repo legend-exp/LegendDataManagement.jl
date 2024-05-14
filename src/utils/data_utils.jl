@@ -67,7 +67,7 @@ Load data for a channel from a list of filekeys in a given tier.
 function load_runch end
 export load_runch
 
-function load_runch(open_func::Function, flatten_func::Function, data::LegendData, filekeys::Vector{FileKey}, tier::DataTierLike, ch::ChannelIdLike; check_filekeys::Bool=true)
+function load_runch(open_func::Function, flatten_func::Function, data::LegendData, filekeys::Vector{FileKey}, tier::DataTierLike, ch::ChannelIdLike; check_filekeys::Bool=true, keys::Tuple=())
     ch_filekeys = if check_filekeys
         @info "Check Filekeys"
         ch_filekeys = Vector{FileKey}()
@@ -93,23 +93,37 @@ function load_runch(open_func::Function, flatten_func::Function, data::LegendDat
         throw(LoadError("FileKeys", 154,"No filekeys found for channel"))
     end
 
-    @info "Read data for channel $ch from $(length(ch_filekeys)) files"
-    # return fast-flattened data
-    flatten_func([
-            open_func(
-                ds -> begin
-                    # @debug "Reading from \"$(basename(data.tier[tier, fk]))\""
-                    ds[ch, tier][:]
-                end,
-                data.tier[tier, fk]
-            ) for fk in ch_filekeys
-        ])
+    if isempty(keys)
+        @info "Read data for channel $ch from $(length(ch_filekeys)) files"
+        # return fast-flattened data
+        flatten_func([
+                open_func(
+                    ds -> begin
+                        # @debug "Reading from \"$(basename(data.tier[tier, fk]))\""
+                        ds[ch, tier][:]
+                    end,
+                    data.tier[tier, fk]
+                ) for fk in ch_filekeys
+            ])
+    else
+        @info "Read $keys for channel $ch from $(length(ch_filekeys)) files"
+        # return fast-flattened data
+        flatten_func([
+                open_func(
+                    ds -> begin
+                        # @debug "Reading from \"$(basename(data.tier[tier, fk]))\""
+                        Table(NamedTuple{keys}(map(k -> ds[ch, tier, k][:], keys)))
+                    end,
+                    data.tier[tier, fk]
+                ) for fk in ch_filekeys
+            ])
+    end
 end
 function load_runch(open_func::Function, flatten_func::Function, data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, tier::DataTierLike, ch::ChannelIdLike; kwargs...)
     filekeys = search_disk(FileKey, data.tier[tier, category, period, run])
     load_runch(open_func, flatten_func, data, filekeys, tier, ch; kwargs...)
 end
-load_runch(open_func::Function, flatten_func::Function, data::LegendData, start_filekey::FileKey, tier::DataTierLike, ch::ChannelIdLike; kwargs...) = load_runch(open_func, flatten_func, data, start_filekey.period, start_filekey.period, start_filekey.category, tier, ch; kwargs...)
+load_runch(open_func::Function, flatten_func::Function, data::LegendData, start_filekey::FileKey, tier::DataTierLike, ch::ChannelIdLike; kwargs...) = load_runch(open_func, flatten_func, data, start_filekey.period, start_filekey.run, start_filekey.category, tier, ch; kwargs...)
 
 """
     load_hitchfile(open_func::Function, data::LegendData, (period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike), ch::ChannelIdLike; append_filekeys::Bool=true, calibrate_energy::Bool=false, load_level::String="dataQC")
