@@ -273,9 +273,11 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
         processable::Bool = get(dpcfg[k], :processable, false)
         usability::Symbol = Symbol(get(dpcfg[k], :usability, :unkown))
         is_blinded::Bool = get(dpcfg[k], :is_blinded, false)
-        low_aoe_status::Symbol = Symbol(get(get(dpcfg[k], :psd_status, PropDict()), Symbol("low_AoE"), :unkown))
-        high_aoe_status::Symbol = Symbol(get(get(dpcfg[k], :psd_status, PropDict()), Symbol("high_AoE"), :unkown))
-        lq_status::Symbol = Symbol(get(get(dpcfg[k], :psd_status, PropDict()), Symbol("LQ"), :unkown))
+        low_aoe_status::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("low_aoe"), :unknown))
+        high_aoe_status::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("high_aoe"), :unknown))
+        lq_status::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("lq"), :unkown))
+        batch5_dt_cut::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("batch5_dt_cut"), :unkown))
+        is_bb_like::String = replace(get(get(dpcfg[k], :psd, PropDict()), :is_bb_like, ""), "&" => "&&") 
 
         location::Symbol, detstring::Int, position::Union{Int,Symbol}, fiber::StaticString{8} = _convert_location(chmap[k].location)
 
@@ -287,7 +289,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
         hvch::Int = get(chmap[k].voltage, :channel, -1)
 
         return (;
-            detector, channel, fcid, rawid, system, processable, usability, is_blinded, low_aoe_status, high_aoe_status, lq_status, det_type,
+            detector, channel, fcid, rawid, system, processable, usability, is_blinded, low_aoe_status, high_aoe_status, lq_status, batch5_dt_cut, is_bb_like, det_type,
             location, detstring, fiber, position, cc4, cc4ch, daqcrate, daqcard, hvcard, hvch, enrichment, mass
         )
     end
