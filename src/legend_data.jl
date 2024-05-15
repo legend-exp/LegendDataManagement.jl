@@ -255,7 +255,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
         )
     end
 
-    _convert_location(l::PropDicts.MissingProperty) = (location = :unkown, detstring = -1, position = -1, fiber = "")
+    _convert_location(l::PropDicts.MissingProperty) = (location = :unknown, detstring = -1, position = -1, fiber = "")
 
     _convert_pos(p::Integer) = Int(p)
     _convert_pos(p::AbstractString) = Symbol(p)
@@ -271,12 +271,12 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
         mass::Unitful.Mass{<:Float64} = ifelse(haskey(diodmap, k) && haskey(diodmap[k].production, :mass_in_g), diodmap[k].production.mass_in_g, Float64(NaN))*1e-3*u"kg"
         local system::Symbol = Symbol(chmap[k].system)
         processable::Bool = get(dpcfg[k], :processable, false)
-        usability::Symbol = Symbol(get(dpcfg[k], :usability, :unkown))
+        usability::Symbol = Symbol(get(dpcfg[k], :usability, :unknown))
         is_blinded::Bool = get(dpcfg[k], :is_blinded, false)
         low_aoe_status::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("low_aoe"), :unknown))
         high_aoe_status::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("high_aoe"), :unknown))
-        lq_status::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("lq"), :unkown))
-        batch5_dt_cut::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("batch5_dt_cut"), :unkown))
+        lq_status::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("lq"), :unknown))
+        batch5_dt_cut::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("batch5_dt_cut"), :unknown))
         is_bb_like::String = replace(get(get(dpcfg[k], :psd, PropDict()), :is_bb_like, ""), "&" => "&&") 
 
         location::Symbol, detstring::Int, position::Union{Int,Symbol}, fiber::StaticString{8} = _convert_location(chmap[k].location)
@@ -298,8 +298,10 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
     if !(system == :all)
         chinfo = chinfo |> filterby(@pf $system .== system)
     end
-    if only_processable
+    if only_processable && system == :geds
         chinfo = chinfo |> filterby(@pf $processable .== true && $is_blinded .== true)
+    elseif only_processable
+        chinfo = chinfo |> filterby(@pf $processable .== true)
     end
     return Table(chinfo)
 end
