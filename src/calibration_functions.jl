@@ -23,7 +23,7 @@ const _cached_get_aoecal_props = LRU{Tuple{UInt, AnyValiditySelection}, Union{Pr
 function _get_aoecal_props(data::LegendData, sel::AnyValiditySelection)
     key = (objectid(data), sel)
     get!(_cached_get_aoecal_props, key) do
-        get_values(dataprod_parameters(data).rpars.aoecal(sel))
+        get_values(dataprod_parameters(data).ppars.aoe(sel))
     end
 end
 
