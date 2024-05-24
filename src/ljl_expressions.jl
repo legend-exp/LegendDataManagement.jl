@@ -41,7 +41,8 @@ const ljl_expr_allowed_funcs = Set([
     :abs, :abs2, :normalize, :norm,
     :exp, exp2, :exp10, :log, :log2, :log10,
     :sin, :cos, :tan, :asin, :acos, :atan,
-    :isnan, :isinf,
+    :isnan, :isinf, :isfinite,
+    :all, :any, :broadcast, 
     :±
 ])
 

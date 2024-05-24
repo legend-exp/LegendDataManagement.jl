@@ -45,15 +45,13 @@ include("dataset.jl")
 include("data_config.jl")
 include("props_db.jl")
 include("legend_data.jl")
-include("workers.jl")
 include("map_datafiles.jl")
 include("ljl_expressions.jl")
 include("lpy_expressions.jl")
 include("dataprod_config.jl")
 include("calibration_functions.jl")
+include("evt_functions.jl")
 include("lprops.jl")
 include("utils/utils.jl")
-
-include("slurm.jl")
 
 end # module

@@ -60,11 +60,11 @@ object if on-disk configuration/calibration data may have changed.
 """
 function get_ged_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
     let energies = Symbol.(_dataprod_ged_cal(data, sel, detector).energies)
-        energies_cal = Symbol.(_dataprod_ged_cal(data, sel, detector).energies) .* "_cal"
+        energies_cal = Symbol.(_dataprod_ged_cal(data, sel, detector).energies .* "_cal")
 
         ljl_propfunc(Dict{Symbol, String}(
-            append!(energies_cal, [:aoe_classifier]),
-            append!(_get_e_cal_propsfunc_str.(Ref(data), Ref(sel), Ref(detector), energies), [_get_aoe_cal_propfunc_str(data, sel, detector)])
+            append!(energies_cal, [:aoe_classifier]) .=>
+                append!(_get_e_cal_propsfunc_str.(Ref(data), Ref(sel), Ref(detector), energies), [_get_aoe_cal_propfunc_str(data, sel, detector)])
         ))
     end
 end
@@ -149,6 +149,21 @@ function get_ged_qc_is_baseline_propfunc(data::LegendData, sel::AnyValiditySelec
 end
 export get_ged_qc_is_baseline_propfunc
 
+
+const _cached_dataprod_pars_p_psd = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
+
+function _dataprod_pars_p_psd(data::LegendData, sel::AnyValiditySelection)
+    data_id = objectid(data)
+    key = (objectid(data), sel)
+    get!(_cached_dataprod_pars_p_psd, key) do
+        get_values(dataprod_parameters(data).ppars.aoe(sel))
+    end
+end
+
+function _dataprod_pars_p_psd(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    _dataprod_pars_p_psd(data, sel)[Symbol(detector)]
+end
+
 """
     LegendDataManagement.dataprod_pars_aoe_window(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
 
@@ -197,20 +212,3 @@ function get_spm_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detec
     end
 end
 export get_spm_cal_propfunc
-
-
-"""
-    get_pulser_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-
-Get the pulser calibration function for the given data, validity selection
-and the pulser channel referred to by `detector`.
-"""
-function get_pulser_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    # ToDo: Make pulser threashold configurable:
-    let pulser_threshold = 100
-        @pf (
-            puls_trig = $e_10410 > pulser_threshold,
-        )
-    end
-end
-export get_pulser_cal_propfunc
