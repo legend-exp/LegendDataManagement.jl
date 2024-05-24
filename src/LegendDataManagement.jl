@@ -34,7 +34,6 @@ import Markdown
 using MIMEs: mime_from_extension
 
 import ThreadPinning
-import ClusterManagers
 
 include("legend_report.jl")
 include("status_types.jl")

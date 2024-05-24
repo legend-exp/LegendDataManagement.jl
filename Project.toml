@@ -3,7 +3,6 @@ uuid = "9feedd95-f0e0-423f-a8dc-de0970eae6b3"
 version = "0.2.8"
 
 [deps]
-ClusterManagers = "34f1f09b-3a8b-5176-ab39-66d58a4d544e"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 Format = "1fa38f19-a742-5d3f-a2b9-30dd87b9d5f8"
@@ -39,7 +38,6 @@ LegendDataManagementRecipesBaseExt = "RecipesBase"
 LegendDataManagementSolidStateDetectorsExt = "SolidStateDetectors"
 
 [compat]
-ClusterManagers = "0.4.6"
 Dates = "1"
 Distributed = "1"
 Format = "1"
