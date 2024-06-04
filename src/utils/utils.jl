@@ -2,6 +2,7 @@ module LDMUtils
 
 using ..LegendDataManagement
 using ..LegendDataManagement: RunCategorySelLike
+using ..LegendDataManagement: DataSelector
 
 using PropDicts
 using PropertyDicts
