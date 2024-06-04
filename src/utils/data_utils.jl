@@ -143,11 +143,11 @@ Load data from a hitch file for a given channel.
 # Return
 - `Table`: data table for given hit file
 """
-function load_hitchfile(open_func::Function, data::LegendData, runsel::RunCategorySelLike, ch::ChannelIdLike; append_filekeys::Bool=true, calibrate_energy::Bool=false, load_level::String="dataQC")
+function load_hitchfile(open_func::Function, data::LegendData, runsel::RunCategorySelLike, ch::ChannelIdLike; append_filekeys::Bool=true, calibrate_energy::Bool=false, load_level::Symbol=:dataQC)
     # unpack runsel
     period, run, category = runsel
     # load hit file at DataQC level
-    data_ch_hit = open_func(data.tier[:jlhitch, category, period, run, ch])["$ch/$load_level"][:]
+    data_ch_hit = open_func(data.tier[:jlhitch, category, period, run, ch])[ch, load_level][:]
     # append filekeys to data for each event
     data_ch_hit = if append_filekeys
         fks = search_disk(FileKey, data.tier[:jldsp, category, period, run])
@@ -213,6 +213,80 @@ end
 
 
 """
+    load_partitionch(open_func::Function, flatten_func::Function, data::LegendData, partinfo::StructVector, tier::DataTierLike, cat::DataCategoryLike, ch::ChannelIdLike; data_keys::Tuple=(), n_evts::Int=-1, select_random::Bool=false)
+
+Load data for a channel from a partition. 
+# Arguments
+- `open_func::Function`: function to open a file
+- `flatten_func::Function`: function to flatten data
+- `data::LegendData`: data object
+- `partinfo::StructVector`: partition info
+- `tier::DataTierLike`: tier
+- `cat::DataCategoryLike`: category
+- `ch::ChannelIdLike`: channel
+- `data_keys::Tuple=()`: data keys, empty tuple selects all keys
+- `n_evts::Int=-1`: number of events, -1 selects all events
+- `select_random::Bool=false`: select events randomly
+# Return
+- `Table`: data table with flattened events
+"""
+function load_partitionch(open_func::Function, flatten_func::Function, data::LegendData, partinfo::StructVector, tier::DataTierLike, cat::DataCategoryLike, ch::ChannelIdLike; data_keys::Tuple=(), n_evts::Int=-1, select_random::Bool=false)
+    @assert !isempty(partinfo) "No partition info found"
+    @assert n_evts > 0 || n_evts == -1 "Number of events must be positive"
+    if isempty(data_keys)
+        data_keys = keys(open_func(data.tier[tier, cat, partinfo.period[1], partinfo.run[1], ch])[ch, tier])
+    end
+    # check length of partinfo files
+    run_length = Dict([
+        open_func(
+            ds -> begin
+                @debug "Reading n-events from \"$(basename(data.tier[tier, cat, period, run, ch]))\""
+                (period, run) => NamedTuple{data_keys}(map(k -> length(first(ds[ch, tier, k])), data_keys))
+            end,
+            data.tier[tier, cat, period, run, ch]
+        ) for (period, run) in partinfo
+    ])
+
+    # function to select range for a given run length rl
+    function get_key_evt_range(rl::Int)
+        if n_evts == -1 || n_evts > rl
+            1:rl
+        elseif select_random
+            rand(1:rl, n_evts)
+        else
+            1:n_evts
+        end
+    end
+    
+    # load event range to read
+    evt_range = Dict([ 
+        (period, run) => NamedTuple{data_keys}(map(k -> get_key_evt_range(run_length[(period, run)][k]), data_keys))
+        for (period, run) in partinfo
+    ])
+    
+    function get_key_evt_tbl(ds, period, run, k)
+        if select_random
+            t = Table(ds[ch, tier, k])[:]
+            t[evt_range[(period, run)][k]]
+        else
+            Table(ds[ch, tier, k])[evt_range[(period, run)][k]]
+        end
+    end
+    # load data with given range
+    flatten_func([
+            open_func(
+                ds -> begin
+                    @debug "Reading from \"$(basename(data.tier[tier, cat, period, run, ch]))\""
+                    Table(NamedTuple{data_keys}(map(k -> get_key_evt_tbl(ds, period, run, k), data_keys)))
+                end,
+                data.tier[tier, cat, period, run, ch]
+            ) for (period, run) in partinfo
+        ])
+end
+export load_partitionch
+
+
+"""
     get_partitionfilekeys(data::LegendData, part::DataPartitionLike, tier::DataTierLike, category::DataCategoryLike; only_good::Bool=true)
 Get filekeys for a given partition.
 # Arguments
@@ -247,10 +321,10 @@ Get the first run and period for a given partition.
 - `run::DataRun`: first run
 - `period::DataPeriod`: first period
 """
-function get_partition_firstRunPeriod(data::LegendData, part::DataPartitionLike)
+function get_partition_firstRunPeriod(data::LegendData, part::DataPartitionLike, label::Union{Symbol, DataSelector}=:default)
     part = DataPartition(part)
     # get partition info
-    partinfo = partitioninfo(data)[part]
+    partinfo = partitioninfo(data, label)[part]
     period = filter(row -> row.period == minimum(partinfo.period), partinfo).period[1]
     partition_period = partinfo[[p == period for p in partinfo.period]]
     run = filter(row -> row.run == minimum(partition_period.run), partition_period).run[1]
