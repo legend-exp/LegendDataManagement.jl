@@ -102,37 +102,42 @@ end
 export pydataprod_parameters
 
 
+const _cached_partinfo = LRU{Tuple{UInt, Symbol}, IdDict{DataPartition, StructVector{@NamedTuple{period::DataPeriod, run::DataRun}, @NamedTuple{period::Vector{DataPeriod}, run::Vector{DataRun}}, Int}}}(maxsize = 300)
+
 """
     partitioninfo(data::LegendData, label::Symbol = :default)
 
 Return cross-period data partitions.
 """
 function partitioninfo(data::LegendData, label::Symbol = :default)
-    parts = pydataprod_config(data).partitions[label]
-    pidxs = Int.(keys(parts))
-    result::IdDict{
-        DataPartition,
-        StructVector{
-            @NamedTuple{period::DataPeriod, run::DataRun},
-            @NamedTuple{period::Vector{DataPeriod}, run::Vector{DataRun}},
-            Int
-        }
-    } = IdDict([
-        let
-            periods_and_runs = [
-                let period = DataPeriod(string(p))
-                    map(run -> (period = period, run = run), _resolve_partition_runs(data, period, rs))
-                end
-                for (p,rs) in part
-            ]
-            flat_pr = vcat(periods_and_runs...)::Vector{@NamedTuple{period::DataPeriod, run::DataRun}}
-            DataPartition(pidx)::DataPartition => StructArray(flat_pr)
-        end
-        for (pidx, part) in parts
-    ])
+    get!(_cached_partinfo, (objectid(data), label)) do
+        parts = merge(pydataprod_config(data).partitions.default, get(pydataprod_config(data).partitions, label, PropDict()))
+        pidxs = Int.(keys(parts))
+        result::IdDict{
+            DataPartition,
+            StructVector{
+                @NamedTuple{period::DataPeriod, run::DataRun},
+                @NamedTuple{period::Vector{DataPeriod}, run::Vector{DataRun}},
+                Int
+            }
+        } = IdDict([
+            let
+                periods_and_runs = [
+                    let period = DataPeriod(string(p))
+                        map(run -> (period = period, run = run), _resolve_partition_runs(data, period, rs))
+                    end
+                    for (p,rs) in part
+                ]
+                flat_pr = vcat(periods_and_runs...)::Vector{@NamedTuple{period::DataPeriod, run::DataRun}}
+                DataPartition(pidx)::DataPartition => sort(StructArray(flat_pr))
+            end
+            for (pidx, part) in parts
+        ])
 
-    return result
+        result
+    end
 end
+partitioninfo(data::LegendData, label::DataSelector) = partitioninfo(data, Symbol(label))
 export partitioninfo
 
 
