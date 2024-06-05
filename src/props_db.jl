@@ -240,10 +240,14 @@ data_path(@nospecialize(pd::PropsDB)) = joinpath(_base_path(pd), _rel_path(pd)..
 data_path(@nospecialize(pd::NoSuchPropsDBEntry)) = joinpath(_base_path(pd), _rel_path(pd)...)
 
 
-function _check_propery_access(pd)
+function _check_propery_access(pd, filename::String="")
     if _needs_vsel(pd) && isempty(_prop_names(pd))
         full_path = joinpath(_base_path(pd), _rel_path(pd)...)
-        throw(ArgumentError("Content access not available for PropsDB at \"$full_path\" without validity selection"))
+        if isfile(filename)
+            @warn "Content access not available for PropsDB at \"$full_path\", but \"$(basename(filename))\" exists."
+        else
+            throw(ArgumentError("Content access not available for PropsDB at \"$full_path\" without validity selection"))
+        end
     end
 end
 
@@ -310,7 +314,7 @@ end
 function _get_md_property(@nospecialize(pd::PropsDB), s::Symbol)
     new_relpath = push!(copy(_rel_path(pd)), string(s))
     json_filename = joinpath(data_path(pd), "$s.json")
-    _check_propery_access(pd)
+    _check_propery_access(pd, json_filename)
 
     if isdir(joinpath(_base_path(pd), new_relpath...))
         _any_props(_base_path(pd), new_relpath, _validity_sel(pd))
