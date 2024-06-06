@@ -592,6 +592,13 @@ ChannelId("ch1083204") == ch
 """
 struct ChannelId <: DataSelector
     no::Int
+    function ChannelId(no::Int)
+        m = match(ch_expr, "ch$(no)")
+        if (m == nothing)
+            throw(ArgumentError("\"$no\" does not look like a valid file LEGEND data channel name"))
+        end
+        new(no)
+    end
 end
 export ChannelId
 
@@ -633,7 +640,7 @@ Base.convert(::Type{Int}, ch::ChannelId) = ch.no
 Anything that can represent a data channel, like `ChannelId(1083204)` or
 "ch1083204".
 """
-ChannelIdLike = Union{ChannelId, AbstractString}
+ChannelIdLike = Union{ChannelId, Int, AbstractString}
 export ChannelIdLike
 
 
