@@ -313,36 +313,29 @@ end
 
 
 """
-    channelinfo(data::LegendData, sel::AnyValiditySelection, channel::ChannelIdLike)
+    channelinfo(data::LegendData, sel::AnyValiditySelection, channel::Union{ChannelIdLike, DetectorIdLike})
     channelinfo(data::LegendData, sel::AnyValiditySelection, detector::DetectorIdLike)
 
 Get channel information validitiy selection and [`DetectorId`](@ref) resp.
 [`ChannelId`](@ref).
 """
-function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, channel::ChannelIdLike; kwargs...)
+function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, channel::Union{ChannelIdLike, DetectorIdLike}; kwargs...)
     chinfo = channelinfo(data, sel; kwargs...)
-    idxs = findall(x -> ChannelId(x) == ChannelId(channel), chinfo.channel)
+    if _can_convert_to(ChannelId, channel)
+        idxs = findall(x -> ChannelId(x) == ChannelId(channel), chinfo.channel)
+    elseif _can_convert_to(DetectorId, channel)
+        idxs = findall(x -> DetectorId(x) == DetectorId(channel), chinfo.detector)
+    else
+        throw(ArgumentError("Invalid channel: $channel"))
+    end
     if isempty(idxs)
-        throw(ArgumentError("No channel information found for channel $channel"))
+        throw(ArgumentError("No channel information found for $channel"))
     elseif length(idxs) > 1
-        throw(ArgumentError("Multiple channel information entries for channel $channel"))
+        throw(ArgumentError("Multiple channel information entries for $channel"))
     else
         return chinfo[only(idxs)]
     end
 end
-
-function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, detector::DetectorIdLike; kwargs...)
-    chinfo = channelinfo(data, sel; kwargs...)
-    idxs = findall(x -> DetectorId(x) == DetectorId(detector), chinfo.detector)
-    if isempty(idxs)
-        throw(ArgumentError("No channel information found for detector $detector"))
-    elseif length(idxs) > 1
-        throw(ArgumentError("Multiple channel information entries for detector $detector"))
-    else
-        return chinfo[only(idxs)]
-    end
-end
-
 
 function channel_info(data::LegendData, sel::AnyValiditySelection)
     Base.depwarn(
