@@ -48,6 +48,9 @@ Base.isless(a::ExpSetup, b::ExpSetup) = isless(a.label, b.label)
 const _setup_expr = r"^([a-z][a-z0-9]*)$"
 
 _can_convert_to(::Type{ExpSetup}, s::AbstractString) = !isnothing(match(_setup_expr, s))
+_can_convert_to(::Type{ExpSetup}, s::Symbol) = _can_convert_to(ExpSetup, string(s))
+_can_convert_to(::Type{ExpSetup}, s::ExpSetup) = true
+_can_convert_to(::Type{ExpSetup}, s) = false
 
 function ExpSetup(s::AbstractString)
     _can_convert_to(ExpSetup, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND setup name"))
@@ -101,6 +104,9 @@ Base.isless(a::DataTier, b::DataTier) = isless(a.label, b.label)
 const tier_expr = r"^([a-z]+)$"
 
 _can_convert_to(::Type{DataTier}, s::AbstractString) = !isnothing(match(tier_expr, s))
+_can_convert_to(::Type{DataTier}, s::Symbol) = _can_convert_to(DataTier, string(s))
+_can_convert_to(::Type{DataTier}, s::DataTier) = true
+_can_convert_to(::Type{DataTier}, s) = false
 
 function DataTier(s::AbstractString)
     _can_convert_to(DataTier, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data tier"))
@@ -156,6 +162,9 @@ Base.print(io::IO, partition::DataPartition) = print(io, "part$(lpad(string(part
 const partition_expr = r"^part([0-9]{2})$"
 
 _can_convert_to(::Type{DataPartition}, s::AbstractString) = !isnothing(match(partition_expr, s))
+_can_convert_to(::Type{DataPartition}, s::Symbol) = _can_convert_to(DataPartition, string(s))
+_can_convert_to(::Type{DataPartition}, s::DataPartition) = true
+_can_convert_to(::Type{DataPartition}, s) = false
 
 function DataPartition(s::AbstractString)
     m = match(partition_expr, s)
@@ -214,6 +223,9 @@ Base.print(io::IO, period::DataPeriod) = print(io, "p$(lpad(string(period.no), 2
 const period_expr = r"^p([0-9]{2})$"
 
 _can_convert_to(::Type{DataPeriod}, s::AbstractString) = !isnothing(match(period_expr, s))
+_can_convert_to(::Type{DataPeriod}, s::Symbol) = _can_convert_to(DataPeriod, string(s))
+_can_convert_to(::Type{DataPeriod}, s::DataPeriod) = true
+_can_convert_to(::Type{DataPeriod}, s) = false
 
 function DataPeriod(s::AbstractString)
     m = match(period_expr, s)
@@ -272,6 +284,9 @@ Base.print(io::IO, run::DataRun) = print(io, "r$(lpad(string(run.no), 3, string(
 const run_expr = r"^r([0-9]{3})$"
 
 _can_convert_to(::Type{DataRun}, s::AbstractString) = !isnothing(match(run_expr, s))
+_can_convert_to(::Type{DataRun}, s::Symbol) = _can_convert_to(DataRun, string(s))
+_can_convert_to(::Type{DataRun}, s::DataRun) = true
+_can_convert_to(::Type{DataRun}, s) = false
 
 function DataRun(s::AbstractString)
     m = match(run_expr, s)
@@ -325,6 +340,9 @@ Base.isless(a::DataCategory, b::DataCategory) = isless(a.label, b.label)
 const category_expr = r"^([a-z]+)$"
 
 _can_convert_to(::Type{DataCategory}, s::AbstractString) = !isnothing(match(category_expr, s))
+_can_convert_to(::Type{DataCategory}, s::Symbol) = _can_convert_to(DataCategory, string(s))
+_can_convert_to(::Type{DataCategory}, s::DataCategory) = true
+_can_convert_to(::Type{DataCategory}, s) = false
 
 function DataCategory(s::AbstractString)
     _can_convert_to(DataCategory, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data category"))
@@ -388,6 +406,9 @@ Dates.DateTime(timestamp::Timestamp) = Dates.unix2datetime(timestamp.unixtime)
 Timestamp(datetime::Dates.DateTime) = Timestamp(round(Int, Dates.datetime2unix(datetime)))
 
 _can_convert_to(::Type{Timestamp}, s::AbstractString) = _is_timestamp_string(s) || _is_filekey_string(s)
+_can_convert_to(::Type{Timestamp}, s::Integer) = true
+_can_convert_to(::Type{Timestamp}, s::Timestamp) = true
+_can_convert_to(::Type{Timestamp}, s) = false
 
 function Timestamp(s::AbstractString)
     if _is_timestamp_string(s)
@@ -489,6 +510,8 @@ _is_filekey_string(s::AbstractString) = occursin(_filekey_expr, s)
 @inline FileKey(filekey::FileKey) = filekey
 
 _can_convert_to(::Type{FileKey}, s::AbstractString) = !isnothing(match(_filekey_relaxed_expr, basename(s)))
+_can_convert_to(::Type{FileKey}, s::FileKey) = true
+_can_convert_to(::Type{FileKey}, s) = false
 
 function FileKey(s::AbstractString)
     m = match(_filekey_relaxed_expr, basename(s))
