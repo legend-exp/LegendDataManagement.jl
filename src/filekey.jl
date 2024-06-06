@@ -618,6 +618,9 @@ end
 const ch_expr = r"^ch([0-9]{3}|[0-9]{7})$"
 
 _can_convert_to(::Type{ChannelId}, s::AbstractString) = !isnothing(match(ch_expr, s))
+_can_convert_to(::Type{ChannelId}, s::Int) = _can_convert_to(ChannelId, "ch$s")
+_can_convert_to(::Type{ChannelId}, s::ChannelId) = true
+_can_convert_to(::Type{ChannelId}, s) = false
 
 function ChannelId(s::AbstractString)
     m = match(ch_expr, s)
@@ -672,6 +675,9 @@ Base.isless(a::DetectorId, b::DetectorId) = isless(a.label, b.label)
 const detectorid_expr = r"^([A-Z][A-Z0-9]+)$"
 
 _can_convert_to(::Type{DetectorId}, s::AbstractString) = !isnothing(match(detectorid_expr, s))
+_can_convert_to(::Type{DetectorId}, s::Symbol) = _can_convert_to(DetectorId, string(s))
+_can_convert_to(::Type{DetectorId}, s::DetectorId) = true
+_can_convert_to(::Type{DetectorId}, s) = false
 
 function DetectorId(s::AbstractString)
     _can_convert_to(DetectorId, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND detector id"))
