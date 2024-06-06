@@ -376,6 +376,13 @@ Represents a LEGEND run selection.
 const RunSelLike = Tuple{<:DataPeriodLike, <:DataRunLike}
 
 """
+    struct PeriodSelLike = Tuple{<:DataPeriodLike, <:DataCategoryLike}
+
+Represents a LEGEND period selection for a specific `category`.
+"""
+const PeriodSelLike = Tuple{<:DataPeriodLike, <:DataCategoryLike}
+
+"""
     struct RunCategorySelLike = Tuple{<:DataPeriodLike, <:DataRunLike}  
 
 Represents a LEGEND run selection for a specific `category`.
