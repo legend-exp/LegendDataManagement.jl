@@ -228,7 +228,6 @@ function search_disk(::Type{DT}, path::AbstractString) where DT<:DataSelector
     return unique(sort(DT.(valid_files)))
 end
 
-
 """
     channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false)
     channelinfo(data::LegendData, sel::RunCategorySelLike; system::Symbol = :all, only_processable::Bool = false)
@@ -241,7 +240,6 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
     diodmap = data.metadata.hardware.detectors.germanium.diodes
     dpcfg = data.metadata(sel).dataprod.config.analysis
     
-    #filtered_keys = Array{Symbol}(filter(k -> haskey(chmap, k), collect(keys(dpcfg))))
     channel_keys = collect(keys(chmap))
 
     _convert_location(l::AbstractString) = (location = Symbol(l), detstring = -1, position = -1, fiber = "")
@@ -258,7 +256,15 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
     _convert_location(l::PropDicts.MissingProperty) = (location = :unknown, detstring = -1, position = -1, fiber = "")
 
     _convert_pos(p::Integer) = Int(p)
-    _convert_pos(p::AbstractString) = Symbol(p)
+    function _convert_pos(p::AbstractString)
+        if p == "top"
+            1
+        elseif p == "bottom"
+            0
+        else
+            -1
+        end
+    end
 
     function make_row(k::Symbol)
         fcid::Int = get(chmap[k].daq, :fcid, -1)
@@ -279,7 +285,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
         batch5_dt_cut::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("batch5_dt_cut"), :unknown))
         is_bb_like::String = replace(get(get(dpcfg[k], :psd, PropDict()), :is_bb_like, ""), "&" => "&&") 
 
-        location::Symbol, detstring::Int, position::Union{Int,Symbol}, fiber::StaticString{8} = _convert_location(chmap[k].location)
+        location::Symbol, detstring::Int, position::Int, fiber::StaticString{8} = _convert_location(chmap[k].location)
 
         cc4::StaticString{8} = get(chmap[k].electronics.cc4, :id, "")
         cc4ch::Int = get(chmap[k].electronics.cc4, :channel, -1)
@@ -294,7 +300,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
         )
     end
 
-    chinfo = StructArray(make_row.(channel_keys)) 
+    chinfo = StructVector(make_row.(channel_keys))
     if !(system == :all)
         chinfo = chinfo |> filterby(@pf $system .== system)
     end
