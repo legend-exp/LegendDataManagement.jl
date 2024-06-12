@@ -102,16 +102,25 @@ end
 export pydataprod_parameters
 
 
-const _cached_partitioninfo = LRU{Tuple{UInt, Symbol}, IdDict{DataPartition, Table}}(maxsize = 300)
+const _cached_partitioninfo = LRU{Tuple{UInt, ChannelIdLike}, IdDict{DataPartition, Table}}(maxsize = 300)
 
 """
-    partitioninfo(data::LegendData, label::Symbol = :default)
+    partitioninfo(data::LegendData, s::ChannelIdLike)
 
 Return cross-period data partitions.
 """
-function partitioninfo(data::LegendData, label::Symbol = :default)
-    get!(_cached_partitioninfo, (objectid(data), label)) do
-        parts = merge(pydataprod_config(data).partitions.default, get(pydataprod_config(data).partitions, label, PropDict()))
+function partitioninfo(data::LegendData, ch::ChannelIdLike)
+    ch = if !(ch == :default)
+        ChannelId(ch)
+    else
+        ch
+    end
+    get!(_cached_partitioninfo, (objectid(data), ch)) do
+        parts = pydataprod_config(data).partitions.default
+        parts_label = get(pydataprod_config(data).partitions, ch, PropDict())
+        for k in keys(parts_label)
+            parts[k] = parts_label[k]
+        end
         # type for live time
         rinfo_type = typeof(first(runinfo(data)))
         result::IdDict{
@@ -135,13 +144,14 @@ function partitioninfo(data::LegendData, label::Symbol = :default)
         IdDict{DataPartition, typeof(Table(result[first(keys(result))]))}(keys(result) .=> Table.(values(result)))
     end
 end
-partitioninfo(data::LegendData, s::DataSelector) = partitioninfo(data, Symbol(s))
+partitioninfo(data, ch, part::DataPartition) = partitioninfo(data, ch)[part]
+partitioninfo(data, ch, period::DataPeriod) = sort(Vector{DataPartition}([p for (p, pinfo) in partitioninfo(data, ch) if period in pinfo.period]))
 export partitioninfo
 
 
-@deprecate data_partitions(data::LegendData, label::Symbol = :default) IdDict([k.no => v for (k, v) in partitioninfo(data, label)])
-export data_partitions
-
+Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, ch::ChannelId, p::Vector{<:DataPeriod}) = unique(vcat(f.(Ref(data), Ref(ch), p)...))
+Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, ch::ChannelId, p::Vector{<:DataPartition}) = vcat(f.(Ref(data), Ref(ch), p)...)
+Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, ch::Vector{Any}, p::DataPeriod) = f.(Ref(data), ch, Ref(p))
 
 _resolve_partition_runs(data::LegendData, period::DataPeriod, runs::AbstractVector) = Vector{DataRun}(runs)
 function _resolve_partition_runs(data::LegendData, period::DataPeriod, runs::AbstractString)
@@ -151,6 +161,9 @@ function _resolve_partition_runs(data::LegendData, period::DataPeriod, runs::Abs
         throw(ArgumentError("Invalid specification \"$runs\" for runs in data partition"))
     end
 end
+
+@deprecate data_partitions(data::LegendData, label::Symbol = :default) IdDict([k.no => v for (k, v) in partitioninfo(data, label)])
+export data_partitions
 
 const _cached_analysis_runs = LRU{UInt, StructVector{@NamedTuple{period::DataPeriod, run::DataRun}}}(maxsize = 10)
 
