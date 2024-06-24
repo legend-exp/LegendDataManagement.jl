@@ -3,55 +3,6 @@
 ###################
 
 """
-    get_peaksfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike)
-    get_peaksfilename(data::LegendData, filekey::FileKey, ch::ChannelIdLike) 
-Get the filename for the peaks data for a given channel.
-"""
-function get_peaksfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike)
-    Base.depwarn(
-        "`get_peaksfilename(data, setup, period, run, category, ch)` is deprecated, use `l200.tier[:peaks, category, period, run, ch]` instead`.",
-        ((Base.Core).Typeof(get_peaksfilename)).name.mt.name, force=true
-    )
-    # joinpath(data.tier[:peaks, :cal, period, run], format("{}-{}-{}-{}-{}-tier_peaks.lh5", string(setup), string(period), string(run), string(category), string(ch)))
-    data.tier[:peaks, category, period, run, ch]
-end
-export get_peaksfilename
-get_peaksfilename(data::LegendData, filekey::FileKey, ch::ChannelIdLike) = get_peaksfilename(data, filekey.setup, filekey.period, filekey.run, filekey.category, ch)
-
-"""
-    get_hitchfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike)
-    get_hitchfilename(data::LegendData, filekey::FileKey, ch::ChannelIdLike)
-Get the filename for the hitch data for a given channel.
-"""
-function get_hitchfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike)
-    Base.depwarn(
-        "`get_hitchfilename(data, setup, period, run, category, ch)` is deprecated, use `l200.tier[:jlhitch, category, period, run, ch]` instead`.",
-        ((Base.Core).Typeof(get_hitchfilename)).name.mt.name, force=true
-    )
-    # joinpath(data.tier[:jlhitch, category, period, run], format("{}-{}-{}-{}-{}-tier_jlhit.lh5", string(setup), string(period), string(run), string(category), string(ch)))
-    data.tier[:jlhitch, category, period, run, ch]
-end
-export get_hitchfilename
-
-get_hitchfilename(data::LegendData, filekey::FileKey, ch::ChannelIdLike) = get_hitchfilename(data, filekey.setup, filekey.period, filekey.run, filekey.category, ch)
-
-"""
-    get_mltrainfilename(data::LegendData, period::DataPeriodLike, category::DataCategoryLike)
-    get_mltrainfilename(data::LegendData, filekey::FileKey)
-Get the filename for the machine learning training data.
-"""
-function get_mltrainfilename end
-export get_mltrainfilename
-function get_mltrainfilename(data::LegendData, period::DataPeriodLike, category::DataCategoryLike)
-    first_run = first(sort(filter(x -> x.period == DataPeriod(3), analysis_runs(data)).run, by=x->x.no))
-    fk = start_filekey(data, (period, first_run, category))
-    data.tier[:jlml, fk]
-end
-get_mltrainfilename(data::LegendData, filekey::FileKey) = get_mltrainfilename(data, filekey.period, filekey.category)
-
-
-
-"""
     load_runch(open_func::Function, flatten_func::Function, data::LegendData, filekeys::Vector{FileKey}, tier::DataTierLike, ch::ChannelIdLike; check_filekeys::Bool=true)
 
 Load data for a channel from a list of filekeys in a given tier.
@@ -301,7 +252,7 @@ Get filekeys for a given partition.
 function get_partitionfilekeys(data::LegendData, part::DataPartitionLike, tier::DataTierLike, category::DataCategoryLike; only_good::Bool=true)
     part = DataPartition(part)
     # get partition info
-    partinfo = partitioninfo(data)[part]
+    partinfo = partitioninfo(data, :default)[part]
     found_filekeys = [filekey for (period, run) in partinfo if is_analysis_run(data, period, DataRun(run.no +1)) for filekey in search_disk(FileKey, data.tier[tier, category, period, run])]
     found_filekeys = if only_good
         filter(Base.Fix2(!in, bad_filekeys(data)), found_filekeys)
