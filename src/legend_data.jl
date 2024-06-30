@@ -273,8 +273,8 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
 
         detector::DetectorId = DetectorId(k)
         det_type::Symbol = Symbol(ifelse(haskey(diodmap, k), diodmap[k].type, :unknown))
-        enrichment::Float64 = ifelse(haskey(diodmap, k) && haskey(diodmap[k].production, :enrichment), diodmap[k].production.enrichment, Float64(NaN))
-        mass::Unitful.Mass{<:Float64} = ifelse(haskey(diodmap, k) && haskey(diodmap[k].production, :mass_in_g), diodmap[k].production.mass_in_g, Float64(NaN))*1e-3*u"kg"
+        enrichment::Unitful.Quantity{<:Measurement{<:Float64}} = if haskey(diodmap, k) && haskey(diodmap[k].production, :enrichment) measurement(diodmap[k].production.enrichment.val, diodmap[k].production.enrichment.unc) else measurement(Float64(NaN), Float64(NaN)) end *100u"percent"
+        mass::Unitful.Mass{<:Float64} = if haskey(diodmap, k) && haskey(diodmap[k].production, :mass_in_g) diodmap[k].production.mass_in_g else Float64(NaN) end *1e-3*u"kg"
         local system::Symbol = Symbol(chmap[k].system)
         processable::Bool = get(dpcfg[k], :processable, false)
         usability::Symbol = Symbol(get(dpcfg[k], :usability, :unknown))
