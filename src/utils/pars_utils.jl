@@ -37,7 +37,7 @@ Write validity for a given filekey.
 """
 function writevalidity end
 export writevalidity
-function writevalidity(props_db::LegendDataManagement.PropsDB, filekey::FileKey; apply_to::Symbol=:all)
+function writevalidity(props_db::LegendDataManagement.MaybePropsDB, filekey::FileKey; apply_to::Symbol=:all)
     # write validity
     # get timestamp from filekey
     pars_validTimeStamp = string(filekey.time)
@@ -58,7 +58,7 @@ function writevalidity(props_db::LegendDataManagement.PropsDB, filekey::FileKey;
     end
 end
 
-function writevalidity(props_db::LegendDataManagement.PropsDB, filekey::FileKey, part::DataPartitionLike; apply_to::Symbol=:all)
+function writevalidity(props_db::LegendDataManagement.MaybePropsDB, partinfo::StructArray, result::Vector; apply_to::Symbol=:all)
     # write validity
     # get timestamp from filekey
     pars_validTimeStamp = string(filekey.time)
