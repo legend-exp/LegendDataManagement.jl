@@ -8,7 +8,7 @@ using Statistics
 using TypedTables
 using Unitful
 using Format
-using Measurements: value, uncertainty
+using Measurements: value, uncertainty, weightedmean
 
 @recipe function f(
     chinfo::Table,
