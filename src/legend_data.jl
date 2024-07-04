@@ -269,7 +269,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
     function make_row(k::Symbol)
         fcid::Int = get(chmap[k].daq, :fcid, -1)
         rawid::Int = chmap[k].daq.rawid
-        channel::ChannelId = ChannelId(fcid >= 0 ? fcid : rawid)
+        channel::ChannelId = ChannelId(rawid)
 
         detector::DetectorId = DetectorId(k)
         det_type::Symbol = Symbol(ifelse(haskey(diodmap, k), diodmap[k].type, :unknown))
