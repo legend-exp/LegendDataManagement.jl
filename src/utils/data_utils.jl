@@ -98,7 +98,7 @@ function load_hitchfile(open_func::Function, data::LegendData, runsel::RunCatego
     # unpack runsel
     period, run, category = runsel
     # load hit file at DataQC level
-    data_ch_hit = open_func(data.tier[:jlhitch, category, period, run, ch])[ch, load_level][:]
+    data_ch_hit = open_func(data.tier[:jlhitch, category, period, run, ch])[ch, :jlhit, load_level][:]
     # append filekeys to data for each event
     data_ch_hit = if append_filekeys
         fks = search_disk(FileKey, data.tier[:jldsp, category, period, run])
@@ -165,7 +165,7 @@ end
 
 """
     load_partitionch(open_func::Function, flatten_func::Function, data::LegendData, partinfo::StructVector, tier::DataTierLike, cat::DataCategoryLike, ch::ChannelIdLike; data_keys::Tuple=(), n_evts::Int=-1, select_random::Bool=false)
-
+    load_partitionch(open_func::Function, flatten_func::Function, data::LegendData, part::DataPartition, tier::DataTierLike, cat::DataCategoryLike, ch::ChannelIdLike; kwargs...)
 Load data for a channel from a partition. 
 # Arguments
 - `open_func::Function`: function to open a file
@@ -181,7 +181,7 @@ Load data for a channel from a partition.
 # Return
 - `Table`: data table with flattened events
 """
-function load_partitionch(open_func::Function, flatten_func::Function, data::LegendData, partinfo::StructVector, tier::DataTierLike, cat::DataCategoryLike, ch::ChannelIdLike; data_keys::Tuple=(), n_evts::Int=-1, select_random::Bool=false)
+function load_partitionch(open_func::Function, flatten_func::Function, data::LegendData, partinfo::Table, tier::DataTierLike, cat::DataCategoryLike, ch::ChannelIdLike; data_keys::Tuple=(), n_evts::Int=-1, select_random::Bool=false)
     @assert !isempty(partinfo) "No partition info found"
     @assert n_evts > 0 || n_evts == -1 "Number of events must be positive"
     if isempty(data_keys)
@@ -234,6 +234,7 @@ function load_partitionch(open_func::Function, flatten_func::Function, data::Leg
             ) for (period, run) in partinfo
         ])
 end
+load_partitionch(open_func::Function, flatten_func::Function, data::LegendData, part::DataPartition, tier::DataTierLike, cat::DataCategoryLike, ch::ChannelIdLike; kwargs...) = load_partitionch(open_func, flatten_func, data, partitioninfo(data, ch, part), tier, cat, ch; kwargs...)
 export load_partitionch
 
 
