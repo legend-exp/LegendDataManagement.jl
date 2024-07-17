@@ -78,3 +78,34 @@ function writevalidity(props_db::LegendDataManagement.PropsDB, filekey::FileKey,
         @info "Validity for $pars_validTimeStamp already written"
     end
 end
+
+"""
+    det2ch(data::LegendData, det::DetectorIdLike; period::DataPeriodLike = DataPeriod(3), run::DataRunLike = DataRun(0))
+Get the channelID for a given detectorID.
+input: 
+* data, e.g. LegendData(:l200)
+* det: detectorID, e.g. DetectorId(:P00573A)
+output:
+* channelID
+"""
+function det2ch(data::LegendData, det::DetectorIdLike; period::DataPeriodLike = DataPeriod(3), run::DataRunLike = DataRun(0))
+    filekey = start_filekey(data, (period, run , :cal)) 
+    chinfo =  channelinfo(data, filekey; system = :geds)
+    chidx = findfirst(map(x-> x == det, chinfo.detector))
+    return chinfo.channel[chidx]
+end
+
+"""
+    get_det_type(data::LegendData, det::DetectorIdLike)
+Looks up the detector type for a given DetectorID.
+"""
+function get_det_type(data::LegendData, det::DetectorIdLike)
+    det_type = Symbol(data.metadata.hardware.detectors.germanium.diodes[det].type)
+    return det_type
+end
+
+function get_starttime(data::LegendData; period::DataPeriodLike = DataPeriod(3), run::DataRunLike = DataRun(0))
+    filekey = start_filekey(data, (period, run, :cal))
+    startdate = DateTime(filekey.time)
+    return startdate
+end
