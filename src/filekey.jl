@@ -623,9 +623,9 @@ ChannelId("ch1083204") == ch
 struct ChannelId <: DataSelector
     no::Int
     function ChannelId(no::Int)
-        m = match(ch_expr, "ch$(no)")
+        m = match(ch_expr, "ch$(lpad(no, no < 1000 ? 3 : 7, '0'))")
         if (m == nothing)
-            throw(ArgumentError("\"$no\" does not look like a valid file LEGEND data channel name"))
+            throw(ArgumentError("\"$(no)\" does not look like a valid file LEGEND data channel name"))
         end
         new(no)
     end
@@ -641,14 +641,15 @@ function Base.print(io::IO, ch::ChannelId)
     if ch.no < 1000
         @printf(io, "ch%03d", ch.no)
     else
-        @printf(io, "ch%03d", ch.no)
+        @printf(io, "ch%07d", ch.no)
     end
 end
 
-const ch_expr = r"^ch([0-9]{3}|[0-9]{7})$"
+# In 7-digit numbers, the first two numbers cannot be BOTH zero
+const ch_expr = r"^ch([0-9]{3}|(?:0[1-9]|[1-9][0-9])[0-9]{5})$"
 
 _can_convert_to(::Type{ChannelId}, s::AbstractString) = !isnothing(match(ch_expr, s))
-_can_convert_to(::Type{ChannelId}, s::Int) = _can_convert_to(ChannelId, "ch$s")
+_can_convert_to(::Type{ChannelId}, s::Int) = _can_convert_to(ChannelId, lpad(0, no < 1000 ? 3 : 7, '0'))
 _can_convert_to(::Type{ChannelId}, s::ChannelId) = true
 _can_convert_to(::Type{ChannelId}, s) = false
 

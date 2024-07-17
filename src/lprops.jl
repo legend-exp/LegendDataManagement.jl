@@ -23,6 +23,7 @@ end
 _props2lprops(x) = x
 _props2lprops(A::AbstractArray) = _props2lprops.(A)
 _props2lprops(d::Dict) = _props2lprops(PropDict(d))
+_props2lprops(nt::NamedTuple) = _props2lprops(PropDict(pairs(nt)))
 
 function _lprops2props(pd::PropDict)
     PropDict(Dict([key => _lprops2props(val) for (key, val) in pd]))
@@ -34,6 +35,7 @@ _lprops2props(x::Unitful.Quantity{<:Real}) = PropDict(:val => x.val, :unit => st
 _lprops2props(x::Unitful.Quantity{<:Measurements.Measurement{<:Real}}) = PropDict(:val => Measurements.value(ustrip(x)), :err => Measurements.uncertainty(ustrip(x)), :unit => string(unit(x)))
 _lprops2props(x::Measurements.Measurement) = PropDict(:val => Measurements.value(x), :err => Measurements.uncertainty(x))
 _lprops2props(d::Dict) = _lprops2props(PropDict(d))
+_lprops2props(nt::NamedTuple) = _lprops2props(PropDict(pairs(nt)))
 
 """
     readlprops(filename::AbstractString)
