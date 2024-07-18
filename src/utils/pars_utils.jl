@@ -117,9 +117,6 @@ output:
 * if `channel` is of type `DetectorID`, then out returns the corresponding `ChannelID`
 """
 function detector2channel(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike}, channel::Union{ChannelIdLike, DetectorIdLike}; kwargs...)
-    # to do channelinfo()
-    # unstann .channel bzw .detecor 
-     # chidx = findfirst(map(x-> x == det, chinfo.detector))
     chinfo = channelinfo(data, runsel; kwargs...)
     if isa(channel, DetectorId)
         idx = findfirst(map(x-> x == channel, chinfo.detector))  
