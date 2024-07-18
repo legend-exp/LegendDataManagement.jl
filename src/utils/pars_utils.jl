@@ -106,32 +106,49 @@ end
 export get_partitionvalidity
 
 """
-    det2ch(data::LegendData, det::DetectorIdLike; period::DataPeriodLike = DataPeriod(3), run::DataRunLike = DataRun(0))
-Get the channelID for a given detectorID.
+    detector2channel(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, channel::Union{ChannelIdLike, DetectorIdLike}; kwargs...)
+Get the channelID for a given detectorID or vice versa.
 input: 
-* data, e.g. LegendData(:l200)
-* det: detectorID, e.g. DetectorId(:P00573A)
+* `data``, e.g. `LegendData(:l200)``
+* `runsel``: runselection, e.g. `(DataPeriod(3), DataRun(0), :cal)`
+* `channel``: can be DetectorID e.g. `DetectorId(:P00573A)`` OR ChannelID e.g. `ChannelId(1080005)``
 output:
-* channelID
+* if `channel` is of type `ChannelID`, then out returns the corresponding `DetectorID`
+* if `channel` is of type `DetectorID`, then out returns the corresponding `ChannelID`
 """
-function det2ch(data::LegendData, det::DetectorIdLike; period::DataPeriodLike = DataPeriod(3), run::DataRunLike = DataRun(0))
-    filekey = start_filekey(data, (period, run , :cal)) 
-    chinfo =  channelinfo(data, filekey; system = :geds)
-    chidx = findfirst(map(x-> x == det, chinfo.detector))
-    return chinfo.channel[chidx]
+function detector2channel(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike}, channel::Union{ChannelIdLike, DetectorIdLike}; kwargs...)
+    # to do channelinfo()
+    # unstann .channel bzw .detecor 
+     # chidx = findfirst(map(x-> x == det, chinfo.detector))
+    chinfo = channelinfo(data, runsel; kwargs...)
+    if isa(channel, DetectorId)
+        idx = findfirst(map(x-> x == channel, chinfo.detector))  
+        return chinfo.channel[idx]  
+    elseif isa(channel, ChannelId) 
+        idx = findfirst(map(x-> x == channel, chinfo.channel))
+        return chinfo.detector[idx]
+    end
 end
 
 """
     get_det_type(data::LegendData, det::DetectorIdLike)
 Looks up the detector type for a given DetectorID.
 """
-function get_det_type(data::LegendData, det::DetectorIdLike)
+function detector_type(data::LegendData, det::DetectorIdLike)
     det_type = Symbol(data.metadata.hardware.detectors.germanium.diodes[det].type)
     return det_type
 end
 
-function get_starttime(data::LegendData; period::DataPeriodLike = DataPeriod(3), run::DataRunLike = DataRun(0))
-    filekey = start_filekey(data, (period, run, :cal))
+"""
+    data_starttime(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike})
+Extract startime as DateTime from file for a given run selection
+    Input:
+    * data: LegendData, e.g. LegendData(:l200)
+    * runsel: runselection, e.g. (DataPeriod(3), DataRun(0), :cal)
+ """
+function data_starttime(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike})
+    (period, run, category) = runsel
+    filekey = start_filekey(data, (period, run, category))
     startdate = DateTime(filekey.time)
     return startdate
 end
