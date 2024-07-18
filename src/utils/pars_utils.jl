@@ -18,9 +18,9 @@ end
 export create_pars
 
 # convert NamedTuple to PropDict
-function nt2pd(pd::PropDict, nt::Union{NamedTuple, Dict})
+function nt2pd(pd::PropDict, nt::Union{NamedTuple, Dict, PropDict})
     for k in keys(nt)
-        if nt[k] isa NamedTuple || nt[k] isa Dict
+        if nt[k] isa NamedTuple || nt[k] isa Dict || nt[k] isa PropDict
             pd[k] = if !(haskey(pd, k)) || isnothing(pd[k]) PropDict() else pd[k] end
             nt2pd(pd[k], nt[k])
         else
@@ -83,6 +83,7 @@ Create a StructArray from a result of the parallel processing
 function create_validity(result)
     validity_all = Vector{@NamedTuple{period::DataPeriod, run::DataRun, filekey::FileKey, validity::String}}()
     for (_, res_ch) in result
+        @info res_ch
         if haskey(res_ch, :validity)
             append!(validity_all, res_ch.validity)
         end
