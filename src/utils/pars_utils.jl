@@ -116,16 +116,10 @@ output:
 * if `channel` is of type `ChannelID`, then out returns the corresponding `DetectorID`
 * if `channel` is of type `DetectorID`, then out returns the corresponding `ChannelID`
 """
-function detector2channel(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike}, channel::Union{ChannelIdLike, DetectorIdLike}; kwargs...)
-    chinfo = channelinfo(data, runsel; kwargs...)
-    if isa(channel, DetectorId)
-        idx = findfirst(map(x-> x == channel, chinfo.detector))  
-        return chinfo.channel[idx]  
-    elseif isa(channel, ChannelId) 
-        idx = findfirst(map(x-> x == channel, chinfo.channel))
-        return chinfo.detector[idx]
-    end
-end
+function detector2channel end
+export detector2channel
+detector2channel(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike}, channel::ChannelIdLike) = channelinfo(data, runsel, channel).detector
+detector2channel(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike}, detector::DetectorIdLike) = channelinfo(data, runsel, detector).channel
 
 """
     get_det_type(data::LegendData, det::DetectorIdLike)
@@ -135,6 +129,7 @@ function detector_type(data::LegendData, det::DetectorIdLike)
     det_type = Symbol(data.metadata.hardware.detectors.germanium.diodes[det].type)
     return det_type
 end
+export detector_type
 
 """
     data_starttime(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike})
@@ -148,3 +143,4 @@ function data_starttime(data::LegendData, runsel::Union{AnyValiditySelection, Ru
     startdate = DateTime(filekey.time)
     return startdate
 end
+export data_starttime
