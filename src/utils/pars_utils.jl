@@ -105,3 +105,43 @@ function get_partitionvalidity(data::LegendData, ch::ChannelIdLike, det::Detecto
     Vector{@NamedTuple{period::DataPeriod, run::DataRun, filekey::FileKey, validity::String}}([(period = pinf.period, run = pinf.run, filekey = start_filekey(data, (pinf.period, pinf.run, cat)), validity = "$det/$(part).json") for pinf in partinfo])
 end
 export get_partitionvalidity
+
+"""
+    detector2channel(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, channel::Union{ChannelIdLike, DetectorIdLike}; kwargs...)
+Get the channelID for a given detectorID or vice versa.
+input: 
+* `data``, e.g. `LegendData(:l200)``
+* `runsel``: runselection, e.g. `(DataPeriod(3), DataRun(0), :cal)`
+* `channel``: can be DetectorID e.g. `DetectorId(:P00573A)`` OR ChannelID e.g. `ChannelId(1080005)``
+output:
+* if `channel` is of type `ChannelID`, then out returns the corresponding `DetectorID`
+* if `channel` is of type `DetectorID`, then out returns the corresponding `ChannelID`
+"""
+function detector2channel end
+export detector2channel
+detector2channel(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike}, channel::ChannelIdLike) = channelinfo(data, runsel, channel).detector
+detector2channel(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike}, detector::DetectorIdLike) = channelinfo(data, runsel, detector).channel
+
+"""
+    get_det_type(data::LegendData, det::DetectorIdLike)
+Looks up the detector type for a given DetectorID.
+"""
+function detector_type(data::LegendData, det::DetectorIdLike)
+    det_type = Symbol(data.metadata.hardware.detectors.germanium.diodes[det].type)
+    return det_type
+end
+export detector_type
+
+"""
+    data_starttime(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike})
+Extract startime as DateTime from file for a given run selection
+    Input:
+    * data: LegendData, e.g. LegendData(:l200)
+    * runsel: runselection, e.g. (DataPeriod(3), DataRun(0), :cal)
+ """
+function data_starttime(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike})
+    filekey = start_filekey(data, runsel)
+    startdate = DateTime(filekey.time)
+    return startdate
+end
+export data_starttime
