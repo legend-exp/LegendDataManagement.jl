@@ -144,8 +144,7 @@ Extract startime as DateTime from file for a given run selection
     * runsel: runselection, e.g. (DataPeriod(3), DataRun(0), :cal)
  """
 function data_starttime(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike})
-    (period, run, category) = runsel
-    filekey = start_filekey(data, (period, run, category))
+    filekey = start_filekey(data, runsel)
     startdate = DateTime(filekey.time)
     return startdate
 end
