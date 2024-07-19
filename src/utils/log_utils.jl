@@ -3,24 +3,41 @@
 ##############################
 
 """
-    get_reportfolder(data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike)
-Get the folder for the log files for a given period, run and category.
+    get_rreportfolder(data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike)
+Get the `rreport` folder for the log files for a given period, run and category.
 """
-function get_reportfolder end
-export get_reportfolder
-get_reportfolder(data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike) = mkpath(joinpath(data.tier[:jlreport], "rreport", string(category), string(period), string(run)))
-get_reportfolder(data::LegendData, filekey::FileKey) = get_reportfolder(data, filekey.period, filekey.run, filekey.category)
-get_reportfolder(data::LegendData, partition::DataPartitionLike, category::DataCategoryLike) = mkpath(joinpath(data.tier[:jlreport], "preport", string(partition), string(category)))
+function get_rreportfolder end
+export get_rreportfolder
+get_rreportfolder(data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike) = mkpath(joinpath(data.tier[:jlreport], "rreport", string(category), string(period), string(run)))
+get_rreportfolder(data::LegendData, filekey::FileKey) = get_rreportfolder(data, filekey.period, filekey.run, filekey.category)
+
 
 """
-    get_reportfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, process::Symbol)
+    get_preportfolder(data::LegendData, period::DataPeriodLike, category::DataCategoryLike)
+Get the `preport` folder for the log files for a given period and category.
+"""
+function get_preportfolder end
+export get_preportfolder
+get_preportfolder(data::LegendData, period::DataPeriodLike, category::DataCategoryLike) = mkpath(joinpath(data.tier[:jlreport], "preport", string(period), string(category)))
+
+"""
+    get_rreportfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, process::Symbol)
+    get_rreportfilename(data::LegendData, filekey::FileKey, process::Symbol) 
 Get the filename for the log file for a given setup, period, run, category and process.
 """
-function get_reportfilename end
-export get_reportfilename
-get_reportfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, process::Symbol) = joinpath(get_reportfolder(data, period, run, category), format("{}-{}-{}-{}-{}.md", string(setup), string(period), string(run), string(category), string(process)))
-get_reportfilename(data::LegendData, filekey::FileKey, process::Symbol) = get_reportfilename(data, filekey.setup, filekey.period, filekey.run, filekey.category, process)
-get_reportfilename(data::LegendData, setup::ExpSetupLike, partition::DataPartitionLike, category::DataCategoryLike, process::Symbol) = joinpath(get_reportfolder(data, partition, category), format("{}-{}-{}-{}.md", string(setup), string(partition), string(category), string(process)))
+function get_rreportfilename end
+export get_rreportfilename
+get_rreportfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, process::Symbol) = joinpath(get_rreportfolder(data, period, run, category), format("{}-{}-{}-{}-{}.md", string(setup), string(period), string(run), string(category), string(process)))
+get_rreportfilename(data::LegendData, filekey::FileKey, process::Symbol) = get_rreportfilename(data, filekey.setup, filekey.period, filekey.run, filekey.category, process)
+
+"""
+    get_preportfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, category::DataCategoryLike, process::Symbol)
+Get the filename for the log file for a given setup, period, category and process.
+"""
+function get_preportfilename end
+export get_preportfilename
+get_preportfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, category::DataCategoryLike, process::Symbol) = joinpath(get_preportfolder(data, period, category), format("{}-{}-{}-{}.md", string(setup), string(period), string(category), string(process)))
+get_preportfilename(data::LegendData, filekey::FileKey, process::Symbol) = get_preportfilename(data, filekey.setup, filekey.period, filekey.category, process)
 
 """
     create_metadatatbl(filekey::FileKey)
