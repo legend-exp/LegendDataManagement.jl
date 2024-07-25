@@ -98,7 +98,7 @@ function load_hitchfile(open_func::Function, data::LegendData, runsel::RunCatego
     # unpack runsel
     period, run, category = runsel
     # load hit file at DataQC level
-    data_ch_hit = open_func(data.tier[:jlhitch, category, period, run, ch])[ch, :jlhit, load_level][:]
+    data_ch_hit = open_func(data.tier[:jlhitch, category, period, run, ch])[ch, load_level][:]
     # append filekeys to data for each event
     data_ch_hit = if append_filekeys
         fks = search_disk(FileKey, data.tier[:jldsp, category, period, run])

@@ -107,20 +107,34 @@ end
 export get_partitionvalidity
 
 """
-    detector2channel(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, channel::Union{ChannelIdLike, DetectorIdLike}; kwargs...)
-Get the channelID for a given detectorID or vice versa.
+    detector2channel(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, detector::DetectorIdLike)
+Get the ChannelId for a given detectorId 
 input: 
-* `data``, e.g. `LegendData(:l200)``
-* `runsel``: runselection, e.g. `(DataPeriod(3), DataRun(0), :cal)`
-* `channel``: can be DetectorID e.g. `DetectorId(:P00573A)`` OR ChannelID e.g. `ChannelId(1080005)``
+* `data`, e.g. `LegendData(:l200)``
+* `runsel`: runselection, e.g. `(DataPeriod(3), DataRun(0), :cal)`
+* `detector`: DetectorID e.g. `DetectorId(:P00573A)`` OR ChannelID e.g. `ChannelId(1080005)``
 output:
-* if `channel` is of type `ChannelID`, then out returns the corresponding `DetectorID`
-* if `channel` is of type `DetectorID`, then out returns the corresponding `ChannelID`
+* `ChannelId` of corresponding detector
 """
-function detector2channel end
+function detector2channel(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike}, detector::DetectorIdLike)
+    return channelinfo(data, runsel, detector).channel
+end
 export detector2channel
-detector2channel(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike}, channel::ChannelIdLike) = channelinfo(data, runsel, channel).detector
-detector2channel(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike}, detector::DetectorIdLike) = channelinfo(data, runsel, detector).channel
+
+"""
+    channel2detector(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, channel::ChannelIdLike)
+Get the DetectorId for a given ChannelId
+input: 
+* `data`, e.g. `LegendData(:l200)``
+* `runsel`: runselection, e.g. `(DataPeriod(3), DataRun(0), :cal)`
+* `channel`: ChannelId e.g. `ChannelId(1080005)``
+output:
+* `DetectorId` of corresponding channel
+"""
+function channel2detector(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike}, channel::ChannelIdLike)
+    return channelinfo(data, runsel, channel).detector
+end
+export channel2detector
 
 """
     get_det_type(data::LegendData, det::DetectorIdLike)
