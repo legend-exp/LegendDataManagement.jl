@@ -3,7 +3,7 @@
 ###################
 
 """
-    load_runch(open_func::Function, flatten_func::Function, data::LegendData, filekeys::Vector{FileKey}, tier::DataTierLike, ch::ChannelIdLike; check_filekeys::Bool=true)
+    load_run_ch(open_func::Function, flatten_func::Function, data::LegendData, filekeys::Vector{FileKey}, tier::DataTierLike, ch::ChannelIdLike; check_filekeys::Bool=true)
 
 Load data for a channel from a list of filekeys in a given tier.
 # Arguments
@@ -15,10 +15,10 @@ Load data for a channel from a list of filekeys in a given tier.
 - `ch::ChannelIdLike`: channel to load data for
 - `check_filekeys::Bool=true`: check if filekeys are valid
 """
-function load_runch end
-export load_runch
+function load_run_ch end
+export load_run_ch
 
-function load_runch(open_func::Function, flatten_func::Function, data::LegendData, filekeys::Vector{FileKey}, tier::DataTierLike, ch::ChannelIdLike; check_filekeys::Bool=true, keys::Tuple=())
+function load_run_ch(open_func::Function, flatten_func::Function, data::LegendData, filekeys::Vector{FileKey}, tier::DataTierLike, ch::ChannelIdLike; check_filekeys::Bool=true, keys::Tuple=())
     ch_filekeys = if check_filekeys
         @info "Check Filekeys"
         ch_filekeys = Vector{FileKey}()
@@ -70,11 +70,11 @@ function load_runch(open_func::Function, flatten_func::Function, data::LegendDat
             ])
     end
 end
-function load_runch(open_func::Function, flatten_func::Function, data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, tier::DataTierLike, ch::ChannelIdLike; kwargs...)
+function load_run_ch(open_func::Function, flatten_func::Function, data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, tier::DataTierLike, ch::ChannelIdLike; kwargs...)
     filekeys = search_disk(FileKey, data.tier[tier, category, period, run])
-    load_runch(open_func, flatten_func, data, filekeys, tier, ch; kwargs...)
+    load_run_ch(open_func, flatten_func, data, filekeys, tier, ch; kwargs...)
 end
-load_runch(open_func::Function, flatten_func::Function, data::LegendData, start_filekey::FileKey, tier::DataTierLike, ch::ChannelIdLike; kwargs...) = load_runch(open_func, flatten_func, data, start_filekey.period, start_filekey.run, start_filekey.category, tier, ch; kwargs...)
+load_run_ch(open_func::Function, flatten_func::Function, data::LegendData, start_filekey::FileKey, tier::DataTierLike, ch::ChannelIdLike; kwargs...) = load_run_ch(open_func, flatten_func, data, start_filekey.period, start_filekey.run, start_filekey.category, tier, ch; kwargs...)
 
 """
     load_hitchfile(open_func::Function, data::LegendData, (period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike), ch::ChannelIdLike; append_filekeys::Bool=true, calibrate_energy::Bool=false, load_level::String=:dataQC)
@@ -131,8 +131,8 @@ export load_hitchfile
 
 
 """
-    load_rawevt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::Int)
-    load_rawevt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::UnitRange{Int})
+    load_raw_evt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::Int)
+    load_raw_evt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::UnitRange{Int})
 Load data for a channel from a hitch file for a given selected event index or index range.
 # Arguments
 - `open_func::Function`: function to open a file
@@ -143,15 +143,15 @@ Load data for a channel from a hitch file for a given selected event index or in
 # Return
 - `Table`: data table of raw events
 """
-function load_rawevt end
-export load_rawevt
+function load_raw_evt end
+export load_raw_evt
 
-function load_rawevt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::Int)
+function load_raw_evt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::Int)
     data_ch_evtIDs = open_func(data.tier[:raw, data_hit.filekey[sel_evt]])[ch].raw.eventnumber[:]
     open_func(data.tier[:raw, data_hit.filekey[sel_evt]])[ch].raw[findall(data_hit.eventID_fadc[sel_evt] .== data_ch_evtIDs)]
 end
 
-function load_rawevt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::Union{UnitRange{Int}, Vector{Int}})
+function load_raw_evt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::Union{UnitRange{Int}, Vector{Int}})
     tbl_vec = map(unique(data_hit.filekey[sel_evt])) do fk
         data_ch_evtIDs = open_func(data.tier[:raw, fk])[ch].raw.eventnumber[:]
         idxs = reduce(vcat, broadcast(data_hit.eventID_fadc[sel_evt]) do x
@@ -164,8 +164,8 @@ end
 
 
 """
-    load_partitionch(open_func::Function, flatten_func::Function, data::LegendData, partinfo::StructVector, tier::DataTierLike, cat::DataCategoryLike, ch::ChannelIdLike; data_keys::Tuple=(), n_evts::Int=-1, select_random::Bool=false)
-    load_partitionch(open_func::Function, flatten_func::Function, data::LegendData, part::DataPartition, tier::DataTierLike, cat::DataCategoryLike, ch::ChannelIdLike; kwargs...)
+    load_partition_ch(open_func::Function, flatten_func::Function, data::LegendData, partinfo::StructVector, tier::DataTierLike, cat::DataCategoryLike, ch::ChannelIdLike; data_keys::Tuple=(), n_evts::Int=-1, select_random::Bool=false)
+    load_partition_ch(open_func::Function, flatten_func::Function, data::LegendData, part::DataPartition, tier::DataTierLike, cat::DataCategoryLike, ch::ChannelIdLike; kwargs...)
 Load data for a channel from a partition. 
 # Arguments
 - `open_func::Function`: function to open a file
@@ -181,7 +181,7 @@ Load data for a channel from a partition.
 # Return
 - `Table`: data table with flattened events
 """
-function load_partitionch(open_func::Function, flatten_func::Function, data::LegendData, partinfo::Table, tier::DataTierLike, cat::DataCategoryLike, ch::ChannelIdLike; data_keys::Tuple=(), n_evts::Int=-1, select_random::Bool=false)
+function load_partition_ch(open_func::Function, flatten_func::Function, data::LegendData, partinfo::Table, tier::DataTierLike, cat::DataCategoryLike, ch::ChannelIdLike; data_keys::Tuple=(), n_evts::Int=-1, select_random::Bool=false)
     @assert !isempty(partinfo) "No partition info found"
     @assert n_evts > 0 || n_evts == -1 "Number of events must be positive"
     if isempty(data_keys)
@@ -234,8 +234,8 @@ function load_partitionch(open_func::Function, flatten_func::Function, data::Leg
             ) for (period, run) in partinfo
         ])
 end
-load_partitionch(open_func::Function, flatten_func::Function, data::LegendData, part::DataPartition, tier::DataTierLike, cat::DataCategoryLike, ch::ChannelIdLike; kwargs...) = load_partitionch(open_func, flatten_func, data, partitioninfo(data, ch, part), tier, cat, ch; kwargs...)
-export load_partitionch
+load_partition_ch(open_func::Function, flatten_func::Function, data::LegendData, part::DataPartition, tier::DataTierLike, cat::DataCategoryLike, ch::ChannelIdLike; kwargs...) = load_partition_ch(open_func, flatten_func, data, partitioninfo(data, ch, part), tier, cat, ch; kwargs...)
+export load_partition_ch
 
 
 """
@@ -263,23 +263,3 @@ function get_partitionfilekeys(data::LegendData, part::DataPartitionLike, tier::
     found_filekeys
 end
 export get_partitionfilekeys
-
-
-"""
-    get_partition_firstRunPeriod(data::LegendData, part::DataPartitionLike)
-Get the first run and period for a given partition.
-    # Returns 
-- `partinfo::Table`: partition info
-- `run::DataRun`: first run
-- `period::DataPeriod`: first period
-"""
-function get_partition_firstRunPeriod(data::LegendData, part::DataPartitionLike, label::Union{Symbol, DataSelector}=:default)
-    part = DataPartition(part)
-    # get partition info
-    partinfo = partitioninfo(data, label)[part]
-    period = filter(row -> row.period == minimum(partinfo.period), partinfo).period[1]
-    partition_period = partinfo[[p == period for p in partinfo.period]]
-    run = filter(row -> row.run == minimum(partition_period.run), partition_period).run[1]
-    partinfo, run, period
-end
-export get_partition_firstRunPeriod
