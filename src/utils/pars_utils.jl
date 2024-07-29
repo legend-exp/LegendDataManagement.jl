@@ -83,8 +83,7 @@ Create a StructArray from a result of the parallel processing
 function create_validity(result)
     validity_all = Vector{@NamedTuple{period::DataPeriod, run::DataRun, filekey::FileKey, validity::String}}()
     for (_, res_ch) in result
-        @info res_ch
-        if haskey(res_ch, :validity)
+        if haskey(res_ch, :validity) && !get(res_ch, :skipped, false)
             append!(validity_all, res_ch.validity)
         end
     end
@@ -152,7 +151,7 @@ Extract startime as DateTime from file for a given run selection
     Input:
     * data: LegendData, e.g. LegendData(:l200)
     * runsel: runselection, e.g. (DataPeriod(3), DataRun(0), :cal)
- """
+"""
 function data_starttime(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike})
     filekey = start_filekey(data, runsel)
     startdate = DateTime(filekey.time)
