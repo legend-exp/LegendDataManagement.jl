@@ -202,6 +202,7 @@ function runinfo(data::LegendData)
     get!(_cached_runinfo, objectid(data)) do
         # load runinfo
         rinfo = PropDict(data.metadata.dataprod.runinfo)
+        parts_default = merge(values(pydataprod_config(data).partitions.default)...)
         nttype = @NamedTuple{startkey::MaybeFileKey, livetime::typeof(1.0u"s")}
         function make_row(p, r, ri)
             period::DataPeriod = DataPeriod(p)
@@ -215,10 +216,11 @@ function runinfo(data::LegendData)
                 end
             end
             is_ana_phy_run = (; period, run) in analysis_runs(data) && !ismissing(get_cat_entry(:phy).startkey)
-            @NamedTuple{period::DataPeriod, run::DataRun, is_analysis_phy_run::Bool, cal::nttype, phy::nttype, fft::nttype}((period, run, Bool(is_ana_phy_run), get_cat_entry(:cal), get_cat_entry(:phy), get_cat_entry(:fft)))
+            is_ana_cal_run = "$run" in get(parts_default, period, [])
+            @NamedTuple{period::DataPeriod, run::DataRun, is_analysis_cal_run::Bool, is_analysis_phy_run::Bool, cal::nttype, phy::nttype, fft::nttype}((period, run, Bool(is_ana_cal_run), Bool(is_ana_phy_run), get_cat_entry(:cal), get_cat_entry(:phy), get_cat_entry(:fft)))
         end
         periods_and_runs = [[make_row(p, r, ri) for (r, ri) in rs] for (p, rs) in rinfo]
-        flat_pr = vcat(periods_and_runs...)::Vector{@NamedTuple{period::DataPeriod, run::DataRun, is_analysis_phy_run::Bool, cal::nttype, phy::nttype, fft::nttype}}
+        flat_pr = vcat(periods_and_runs...)::Vector{@NamedTuple{period::DataPeriod, run::DataRun, is_analysis_cal_run::Bool, is_analysis_phy_run::Bool, cal::nttype, phy::nttype, fft::nttype}}
         Table(sort(StructArray(flat_pr)))
     end
 end
@@ -280,13 +282,43 @@ end
 export is_lrun
 
 """
-    is_analysis_phy_run(data::LegendData, period::DataPeriod, run::DataRun)
+    is_analysis_phy_run(data::LegendData, (period::DataPeriodLike, run::DataRunLike))
 
 Return `true` if `run` is an analysis run for `data` in `period`. 
 # ATTENTION: This is only valid for `phy` runs.
 """
 is_analysis_phy_run(data::LegendData, runsel::RunSelLike) = runinfo(data, runsel).is_analysis_phy_run
-export is_analysis_phy_run
+
+"""
+    is_analysis_cal_run(data::LegendData, (period::DataPeriodLike, run::DataRunLike))
+
+Return `true` if `run` is an analysis run for `data` in `period`. 
+# ATTENTION: This is only valid for `cal` runs.
+"""
+is_analysis_cal_run(data::LegendData, runsel::RunSelLike) = runinfo(data, runsel).is_analysis_cal_run
+
+"""
+    is_analysis_run(data::LegendData, (period::DataPeriodLike, run::DataRunLike, cat::DataCategoryLike))
+
+Return `true` if `run` is an `cat` analysis run for `data` in `period`.
+"""
+function is_analysis_run(data::LegendData, runsel::RunCategorySelLike)
+    # first check if it is a legend run at all
+    if !is_lrun(data, runsel)
+        return false
+    end
+    # unpack runsel
+    period, run, category = runsel
+    period, run, category = DataPeriod(period), DataRun(run), DataCategory(category)
+    if category == DataCategory(:cal)
+        is_analysis_cal_run(data, (period, run))
+    elseif category == DataCategory(:phy)
+        is_analysis_phy_run(data, (period, run))
+    else
+        throw(ArgumentError("Invalid category $(runs.category) for analysis run"))
+    end
+end
+export is_analysis_run
 
 const _cached_bad_filekeys = LRU{UInt, Set{FileKey}}(maxsize = 10)
 
