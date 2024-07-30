@@ -161,6 +161,30 @@ Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, ch::Chann
 Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, ch::ChannelId, p::Vector{<:DataPartition}) = vcat(f.(Ref(data), Ref(ch), p)...)
 Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, ch::Vector{ChannelId}, p::DataPeriod) = f.(Ref(data), ch, Ref(p))
 
+const _cached_combined_partitions2 = LRU{Tuple{UInt, Symbol, Vector{Symbol}}, Vector{DataPeriod}}(maxsize = 300)
+
+"""
+    get_partition_combined_periods(data::LegendData, period::DataPeriodLike; chs::Vector{ChannelIdLike}=ChannelIdLike[])
+
+Get a list periods which are combined in any partition for the given period and list of channels.
+"""
+function get_partition_combined_periods(data::LegendData, period::DataPeriodLike; chs::Vector{ChannelIdLike}=ChannelIdLike[])
+    period, chs = Symbol(DataPeriod(period)), Symbol.(ChannelId.(chs))
+    get!(_cached_combined_partitions2, (objectid(data), period, chs)) do
+        # load partition information
+        parts = pydataprod_config(data).partitions
+        # if chs is empty, check for all keys
+        if isempty(chs)
+            chs = collect(keys(parts))
+        end
+        # add default
+        push!(chs, :default)
+        # get all combined periods
+        result::Vector{DataPeriod} = unique([DataPeriod(p) for (ch, ch_parts) in parts if ch in chs for (_, chp) in ch_parts if period in keys(chp) for p in keys(chp) if period != p])
+        result
+    end
+end
+export get_partition_combined_periods
 
 @deprecate data_partitions(data::LegendData, label::Symbol = :default) IdDict([k.no => v for (k, v) in partitioninfo(data, label)])
 export data_partitions
