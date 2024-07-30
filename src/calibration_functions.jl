@@ -1,16 +1,19 @@
 # This file is a part of LegendDataManagement.jl, licensed under the MIT License (MIT).
 
+_get_cal_values(pd::PropsDB, sel::AnyValiditySelection) = get_values(pd(sel))
+_get_cal_values(pd::NoSuchPropsDBEntry, sel::AnyValiditySelection) = PropDicts.PropDict()
+
 const _cached_get_ecal_props = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
 
 function _get_ecal_props(data::LegendData, sel::AnyValiditySelection)
     key = (objectid(data), sel)
     get!(_cached_get_ecal_props, key) do
-        get_values(dataprod_parameters(data).rpars.ecal(sel))
+        _get_cal_values(dataprod_parameters(data).rpars.ecal, sel)
     end
 end
 
 function _get_ecal_props(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    _get_ecal_props(data, sel)[Symbol(detector)]
+    get(_get_ecal_props(data, sel), Symbol(detector), PropDict())
 end
 
 function _get_e_cal_propsfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol)
@@ -23,12 +26,12 @@ const _cached_get_aoecal_props = LRU{Tuple{UInt, AnyValiditySelection}, Union{Pr
 function _get_aoecal_props(data::LegendData, sel::AnyValiditySelection)
     key = (objectid(data), sel)
     get!(_cached_get_aoecal_props, key) do
-        get_values(dataprod_parameters(data).ppars.aoe(sel))
+        _get_cal_values(dataprod_parameters(data).ppars.aoe, sel)
     end
 end
 
 function _get_aoecal_props(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    _get_aoecal_props(data, sel)[Symbol(detector)]
+    get(_get_aoecal_props(data, sel), Symbol(detector), PropDict())
 end
 
 function _get_aoe_cal_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
@@ -59,8 +62,7 @@ Note: Caches configuration/calibration data internally, use a fresh `data`
 object if on-disk configuration/calibration data may have changed.
 """
 function get_ged_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    let energies = Symbol.(_dataprod_ged_cal(data, sel, detector).energies)
-        energies_cal = Symbol.(_dataprod_ged_cal(data, sel, detector).energies .* "_cal")
+    let energies = Symbol.(_dataprod_ged_cal(data, sel, detector).energy_types), energies_cal = Symbol.(_dataprod_ged_cal(data, sel, detector).energy_types .* "_cal")
 
         ljl_propfunc(Dict{Symbol, String}(
             append!(energies_cal, [:aoe_classifier]) .=>
@@ -156,12 +158,12 @@ function _dataprod_pars_p_psd(data::LegendData, sel::AnyValiditySelection)
     data_id = objectid(data)
     key = (objectid(data), sel)
     get!(_cached_dataprod_pars_p_psd, key) do
-        get_values(dataprod_parameters(data).ppars.aoe(sel))
+        _get_cal_values(dataprod_parameters(data).ppars.aoe, sel)
     end
 end
 
 function _dataprod_pars_p_psd(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    _dataprod_pars_p_psd(data, sel)[Symbol(detector)]
+    get(_dataprod_pars_p_psd(data, sel), Symbol(detector), PropDict())
 end
 
 """
