@@ -77,60 +77,6 @@ end
 load_run_ch(open_func::Function, flatten_func::Function, data::LegendData, start_filekey::FileKey, tier::DataTierLike, ch::ChannelIdLike; kwargs...) = load_run_ch(open_func, flatten_func, data, start_filekey.period, start_filekey.run, start_filekey.category, tier, ch; kwargs...)
 
 """
-    load_hitchfile(open_func::Function, data::LegendData, (period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike), ch::ChannelIdLike; append_filekeys::Bool=true, calibrate_energy::Bool=false, load_level::String=:dataQC)
-    load_hitchfile(open_func::Function, data::LegendData, filekey::FileKey, ch::ChannelIdLike; kwargs...)
-Load data from a hitch file for a given channel.
-# Arguments
-- `open_func::Function`: function to open a file
-- `data::LegendData`: data object
-- `setup::ExpSetupLike`: setup
-- `period::DataPeriodLike`: period
-- `run::DataRunLike`: run
-- `category::DataCategoryLike`: category
-- `ch::ChannelIdLike`: channel
-- `append_filekeys::Bool=true`: append filekey to data for each event
-- `calibrate_energy::Bool=false`: calibrate energy with given energy calibration parameters
-- `load_level::String="dataQC"`: load level
-# Return
-- `Table`: data table for given hit file
-"""
-function load_hitchfile(open_func::Function, data::LegendData, runsel::RunCategorySelLike, ch::ChannelIdLike; append_filekeys::Bool=true, calibrate_energy::Bool=false, load_level::Symbol=:dataQC)
-    # unpack runsel
-    period, run, category = runsel
-    # load hit file at DataQC level
-    data_ch_hit = open_func(data.tier[:jlhitch, category, period, run, ch])[ch, load_level][:]
-    # append filekeys to data for each event
-    data_ch_hit = if append_filekeys
-        fks = search_disk(FileKey, data.tier[:jldsp, category, period, run])
-        fk_timestamps = [f.time.unixtime*u"s" for f in fks]
-        data_ch_hit_fks = broadcast(data_ch_hit.timestamp) do ts
-            idx_fk = findfirst(x -> x > ts, fk_timestamps)
-            if isnothing(idx_fk)
-                fks[end]
-            else
-                fks[idx_fk-1]
-            end
-        end
-        Table(StructVector(merge((filekey = data_ch_hit_fks,), columns(data_ch_hit))))
-    else
-        data_ch_hit
-    end
-    if calibrate_energy
-        # get detector name 
-        det = channelinfo(data, (period, run, category), ch).detector
-        ecal_pars = data.par.rpars.ecal[period, run][det]
-        # calibrate energy
-        e_names = Symbol.(["$(string(k))_cal" for k in keys(ecal_pars)])
-        Table(StructVector(merge(columns(data_ch_hit), columns(ljl_propfunc(Dict{Symbol, String}(
-            e_names .=> [ecal_pars[k].cal.func for k in keys(ecal_pars)]
-        )).(data_ch_hit)))))
-    end
-end
-load_hitchfile(open_func::Function, data::LegendData, filekey::FileKey, ch::ChannelIdLike; kwargs...) = load_hitchfile(open_func, data, (filekey.period, filekey.run, filekey.category), ch; kwargs...)
-export load_hitchfile
-
-
-"""
     load_raw_evt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::Int)
     load_raw_evt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::UnitRange{Int})
 Load data for a channel from a hitch file for a given selected event index or index range.
