@@ -21,11 +21,11 @@ Get the filename for the hitch data for a given channel.
 """
 function get_hitchfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike)
     Base.depwarn(
-        "`get_hitchfilename(data, setup, period, run, category, ch)` is deprecated, use `l200.tier[:jlhitch, category, period, run, ch]` instead`.",
+        "`get_hitchfilename(data, setup, period, run, category, ch)` is deprecated, use `l200.tier[:jlhit, category, period, run, ch]` instead`.",
         ((Base.Core).Typeof(get_hitchfilename)).name.mt.name, force=true
     )
-    # joinpath(data.tier[:jlhitch, category, period, run], format("{}-{}-{}-{}-{}-tier_jlhit.lh5", string(setup), string(period), string(run), string(category), string(ch)))
-    data.tier[:jlhitch, category, period, run, ch]
+    # joinpath(data.tier[:jlhit, category, period, run], format("{}-{}-{}-{}-{}-tier_jlhit.lh5", string(setup), string(period), string(run), string(category), string(ch)))
+    data.tier[:jlhit, category, period, run, ch]
 end
 export get_hitchfilename
 
