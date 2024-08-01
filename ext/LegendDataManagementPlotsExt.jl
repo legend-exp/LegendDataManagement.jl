@@ -1,8 +1,9 @@
 # This file is a part of LegendSpecFits.jl, licensed under the MIT License (MIT).
 
-module LegendDataManagementRecipesBaseExt
+module LegendDataManagementPlotsExt
 
 using RecipesBase
+import Plots
 using PropDicts
 using Statistics
 using TypedTables
@@ -98,7 +99,7 @@ using Measurements: value, uncertainty, weightedmean
             y0 = @. zero(xticks) + yl[1] - 0.02*(yl[2] - yl[1])
             # TODO: if text/font definitions get moved from Plots to RecipesBase,
             # replace the following line with something Plots-independent
-            series_annotations := [Main.Plots.text(xlabels[i], 8, labelcolors[i], :right, rotation=90) for i in eachindex(xlabels)]
+            series_annotations := [Plots.text(xlabels[i], 8, labelcolors[i], :right, rotation=90) for i in eachindex(xlabels)]
             xticks, y0
         end
     end
@@ -134,4 +135,4 @@ using Measurements: value, uncertainty, weightedmean
 end
 
 
-end # module LegendDataManagementRecipesBaseExt
+end # module LegendDataManagementPlotsExt
