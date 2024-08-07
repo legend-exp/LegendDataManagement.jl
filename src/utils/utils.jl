@@ -2,6 +2,8 @@ module LDMUtils
 
 using ..LegendDataManagement
 using ..LegendDataManagement: RunCategorySelLike
+using ..LegendDataManagement: DataSelector
+using ..LegendDataManagement: RunSelLike, RunCategorySelLike
 
 using PropDicts
 using PropertyDicts
@@ -23,6 +25,7 @@ include("data_utils.jl")
 include("log_utils.jl")
 include("pars_utils.jl")
 include("plot_utils.jl")
+include("management_utils.jl")
 
 
 end # module

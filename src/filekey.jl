@@ -48,6 +48,9 @@ Base.isless(a::ExpSetup, b::ExpSetup) = isless(a.label, b.label)
 const _setup_expr = r"^([a-z][a-z0-9]*)$"
 
 _can_convert_to(::Type{ExpSetup}, s::AbstractString) = !isnothing(match(_setup_expr, s))
+_can_convert_to(::Type{ExpSetup}, s::Symbol) = _can_convert_to(ExpSetup, string(s))
+_can_convert_to(::Type{ExpSetup}, s::ExpSetup) = true
+_can_convert_to(::Type{ExpSetup}, s) = false
 
 function ExpSetup(s::AbstractString)
     _can_convert_to(ExpSetup, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND setup name"))
@@ -101,6 +104,9 @@ Base.isless(a::DataTier, b::DataTier) = isless(a.label, b.label)
 const tier_expr = r"^([a-z]+)$"
 
 _can_convert_to(::Type{DataTier}, s::AbstractString) = !isnothing(match(tier_expr, s))
+_can_convert_to(::Type{DataTier}, s::Symbol) = _can_convert_to(DataTier, string(s))
+_can_convert_to(::Type{DataTier}, s::DataTier) = true
+_can_convert_to(::Type{DataTier}, s) = false
 
 function DataTier(s::AbstractString)
     _can_convert_to(DataTier, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data tier"))
@@ -156,6 +162,9 @@ Base.print(io::IO, partition::DataPartition) = print(io, "part$(lpad(string(part
 const partition_expr = r"^part([0-9]{2})$"
 
 _can_convert_to(::Type{DataPartition}, s::AbstractString) = !isnothing(match(partition_expr, s))
+_can_convert_to(::Type{DataPartition}, s::Symbol) = _can_convert_to(DataPartition, string(s))
+_can_convert_to(::Type{DataPartition}, s::DataPartition) = true
+_can_convert_to(::Type{DataPartition}, s) = false
 
 function DataPartition(s::AbstractString)
     m = match(partition_expr, s)
@@ -214,6 +223,9 @@ Base.print(io::IO, period::DataPeriod) = print(io, "p$(lpad(string(period.no), 2
 const period_expr = r"^p([0-9]{2})$"
 
 _can_convert_to(::Type{DataPeriod}, s::AbstractString) = !isnothing(match(period_expr, s))
+_can_convert_to(::Type{DataPeriod}, s::Symbol) = _can_convert_to(DataPeriod, string(s))
+_can_convert_to(::Type{DataPeriod}, s::DataPeriod) = true
+_can_convert_to(::Type{DataPeriod}, s) = false
 
 function DataPeriod(s::AbstractString)
     m = match(period_expr, s)
@@ -272,6 +284,9 @@ Base.print(io::IO, run::DataRun) = print(io, "r$(lpad(string(run.no), 3, string(
 const run_expr = r"^r([0-9]{3})$"
 
 _can_convert_to(::Type{DataRun}, s::AbstractString) = !isnothing(match(run_expr, s))
+_can_convert_to(::Type{DataRun}, s::Symbol) = _can_convert_to(DataRun, string(s))
+_can_convert_to(::Type{DataRun}, s::DataRun) = true
+_can_convert_to(::Type{DataRun}, s) = false
 
 function DataRun(s::AbstractString)
     m = match(run_expr, s)
@@ -325,6 +340,9 @@ Base.isless(a::DataCategory, b::DataCategory) = isless(a.label, b.label)
 const category_expr = r"^([a-z]+)$"
 
 _can_convert_to(::Type{DataCategory}, s::AbstractString) = !isnothing(match(category_expr, s))
+_can_convert_to(::Type{DataCategory}, s::Symbol) = _can_convert_to(DataCategory, string(s))
+_can_convert_to(::Type{DataCategory}, s::DataCategory) = true
+_can_convert_to(::Type{DataCategory}, s) = false
 
 function DataCategory(s::AbstractString)
     _can_convert_to(DataCategory, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data category"))
@@ -358,6 +376,13 @@ Represents a LEGEND run selection.
 const RunSelLike = Tuple{<:DataPeriodLike, <:DataRunLike}
 
 """
+    struct PeriodSelLike = Tuple{<:DataPeriodLike, <:DataCategoryLike}
+
+Represents a LEGEND period selection for a specific `category`.
+"""
+const PeriodSelLike = Tuple{<:DataPeriodLike, <:DataCategoryLike}
+
+"""
     struct RunCategorySelLike = Tuple{<:DataPeriodLike, <:DataRunLike}  
 
 Represents a LEGEND run selection for a specific `category`.
@@ -388,6 +413,9 @@ Dates.DateTime(timestamp::Timestamp) = Dates.unix2datetime(timestamp.unixtime)
 Timestamp(datetime::Dates.DateTime) = Timestamp(round(Int, Dates.datetime2unix(datetime)))
 
 _can_convert_to(::Type{Timestamp}, s::AbstractString) = _is_timestamp_string(s) || _is_filekey_string(s)
+_can_convert_to(::Type{Timestamp}, s::Integer) = true
+_can_convert_to(::Type{Timestamp}, s::Timestamp) = true
+_can_convert_to(::Type{Timestamp}, s) = false
 
 function Timestamp(s::AbstractString)
     if _is_timestamp_string(s)
@@ -489,6 +517,8 @@ _is_filekey_string(s::AbstractString) = occursin(_filekey_expr, s)
 @inline FileKey(filekey::FileKey) = filekey
 
 _can_convert_to(::Type{FileKey}, s::AbstractString) = !isnothing(match(_filekey_relaxed_expr, basename(s)))
+_can_convert_to(::Type{FileKey}, s::FileKey) = true
+_can_convert_to(::Type{FileKey}, s) = false
 
 function FileKey(s::AbstractString)
     m = match(_filekey_relaxed_expr, basename(s))
@@ -592,6 +622,13 @@ ChannelId("ch1083204") == ch
 """
 struct ChannelId <: DataSelector
     no::Int
+    function ChannelId(no::Int)
+        m = match(ch_expr, "ch$(lpad(no, no < 1000 ? 3 : 7, '0'))")
+        if (m == nothing)
+            throw(ArgumentError("\"$(no)\" does not look like a valid file LEGEND data channel name"))
+        end
+        new(no)
+    end
 end
 export ChannelId
 
@@ -604,13 +641,17 @@ function Base.print(io::IO, ch::ChannelId)
     if ch.no < 1000
         @printf(io, "ch%03d", ch.no)
     else
-        @printf(io, "ch%03d", ch.no)
+        @printf(io, "ch%07d", ch.no)
     end
 end
 
-const ch_expr = r"^ch([0-9]{3}|[0-9]{7})$"
+# In 7-digit numbers, the first two numbers cannot be BOTH zero
+const ch_expr = r"^ch([0-9]{3}|(?:0[1-9]|[1-9][0-9])[0-9]{5})$"
 
 _can_convert_to(::Type{ChannelId}, s::AbstractString) = !isnothing(match(ch_expr, s))
+_can_convert_to(::Type{ChannelId}, s::Int) = _can_convert_to(ChannelId, lpad(0, no < 1000 ? 3 : 7, '0'))
+_can_convert_to(::Type{ChannelId}, s::ChannelId) = true
+_can_convert_to(::Type{ChannelId}, s) = false
 
 function ChannelId(s::AbstractString)
     m = match(ch_expr, s)
@@ -633,7 +674,7 @@ Base.convert(::Type{Int}, ch::ChannelId) = ch.no
 Anything that can represent a data channel, like `ChannelId(1083204)` or
 "ch1083204".
 """
-ChannelIdLike = Union{ChannelId, AbstractString}
+ChannelIdLike = Union{ChannelId, Int, AbstractString}
 export ChannelIdLike
 
 
@@ -665,6 +706,9 @@ Base.isless(a::DetectorId, b::DetectorId) = isless(a.label, b.label)
 const detectorid_expr = r"^([A-Z][A-Z0-9]+)$"
 
 _can_convert_to(::Type{DetectorId}, s::AbstractString) = !isnothing(match(detectorid_expr, s))
+_can_convert_to(::Type{DetectorId}, s::Symbol) = _can_convert_to(DetectorId, string(s))
+_can_convert_to(::Type{DetectorId}, s::DetectorId) = true
+_can_convert_to(::Type{DetectorId}, s) = false
 
 function DetectorId(s::AbstractString)
     _can_convert_to(DetectorId, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND detector id"))

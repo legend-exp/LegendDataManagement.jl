@@ -35,10 +35,10 @@ histogram(data_dsp[ch_ged[1]].blmean) # look at distribution
 Table(data_dsp[ch_ged[1]]) #overview of all parameters of 1 channel
 
 # 3. hitch files: 1 file per run per channel 
-get_hitchfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike) = joinpath(data.tier[:jlhitch, category, period, run], format("{}-{}-{}-{}-{}-tier_jlhit.lh5", string(setup), string(period), string(run), string(category), string(ch)))
+get_hitchfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike) = joinpath(data.tier[:jlhit, category, period, run], format("{}-{}-{}-{}-{}-tier_jlhit.lh5", string(setup), string(period), string(run), string(category), string(ch)))
 get_hitchfilename(data::LegendData, filekey::FileKey, ch::ChannelIdLike) = get_hitchfilename(data, filekey.setup, filekey.period, filekey.run, filekey.category, ch)
 file_hitch = get_hitchfilename(l200,filekey_start,ch_ged[1]) # get file name
-#path_hitch = l200.tier[:jlhitch,:cal,periods[1],runs[1]] 
+#path_hitch = l200.tier[:jlhit,:cal,periods[1],runs[1]] 
 data_hitch = lh5open(file_hitch,"r")["$(ch_geds[1])/dataQC"] # read hitch data for 1 channel 
 
 # 4. event files
