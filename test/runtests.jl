@@ -14,9 +14,10 @@ Test.@testset "Package LegendDataManagement" begin
     include("test_ljl_expressions.jl")
     include("test_lpy_expressions.jl")
     include("test_dataprod_config.jl")
-    include("test_ext_ssd.jl")
     include("test_lprops.jl")
-
+    include("test_ext_ssd.jl")
+    include("test_ext_plots.jl")
+    include("test_ext_legendhdf5io.jl")
     include("test_docs.jl")
     isempty(Test.detect_ambiguities(LegendDataManagement))
 end # testset
