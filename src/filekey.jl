@@ -230,7 +230,7 @@ _can_convert_to(::Type{DataPeriod}, s) = false
 function DataPeriod(s::AbstractString)
     m = match(period_expr, s)
     if (m == nothing)
-        throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data-run name"))
+        throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data-period name"))
     else
         DataPeriod(parse(Int, (m::RegexMatch).captures[1]))
     end
