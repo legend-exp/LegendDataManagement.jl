@@ -29,7 +29,11 @@ In additon, it is possible to load a random selection of `n_evts` events randoml
 ```julia
 dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, ch; n_evts=1000)
 ```
-
+For simplicity, the ch can also be given as a `DetectorID` which will be converted internally to a `ChannelId`:
+```julia
+det = chinfo[1].detector
+dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, det)
+```
 ## `SolidStateDetectors` extension
 
 LegendDataManagment provides an extension for [SolidStateDetectors](https://github.com/JuliaPhysics/SolidStateDetectors.jl). This makes it possible to create `SolidStateDetector` instances from LEGEND metadata.
