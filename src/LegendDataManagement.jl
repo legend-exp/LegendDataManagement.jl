@@ -36,7 +36,6 @@ using MIMEs: mime_from_extension
 include("legend_report.jl")
 include("status_types.jl")
 include("atomic_fcreate.jl")
-include("calfunc.jl")
 include("filekey.jl")
 include("dataset.jl")
 include("data_config.jl")
