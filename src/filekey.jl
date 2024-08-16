@@ -649,7 +649,7 @@ end
 const ch_expr = r"^ch([0-9]{3}|(?:0[1-9]|[1-9][0-9])[0-9]{5})$"
 
 _can_convert_to(::Type{ChannelId}, s::AbstractString) = !isnothing(match(ch_expr, s))
-_can_convert_to(::Type{ChannelId}, s::Int) = _can_convert_to(ChannelId, lpad(0, no < 1000 ? 3 : 7, '0'))
+_can_convert_to(::Type{ChannelId}, s::Int) = _can_convert_to(ChannelId, "ch$s")
 _can_convert_to(::Type{ChannelId}, s::ChannelId) = true
 _can_convert_to(::Type{ChannelId}, s) = false
 
