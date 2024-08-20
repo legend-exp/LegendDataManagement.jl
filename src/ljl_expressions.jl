@@ -36,6 +36,7 @@ const ljl_expr_allowed_funcs = Set([
     :!,
     :(==), :<, :>, :>=, :<=, :!=,
     :isapprox, :≈, :≈,
+    :in, :∈, :..,
     :+, :-, :*, :/,
     :^, :sqrt,
     :abs, :abs2, :normalize, :norm,
