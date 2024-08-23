@@ -4,12 +4,12 @@ function _props2lprops(pd::PropDict)
     if haskey(pd, :val) && length(keys(pd)) <= 3 && (haskey(pd, :unit) || haskey(pd, :err))
         if haskey(pd, :unit)
             if haskey(pd, :err)
-                Unitful.Quantity.(measurement.(pd.val, pd.err), Unitful.uparse(pd.unit))
+                Unitful.Quantity.(measurement.(pd.val, ifelse(isnothing(pd.err), NaN, pd.err)), Unitful.uparse(pd.unit))
             else
                 Unitful.Quantity.(pd.val, Unitful.uparse(pd.unit))
             end
         elseif haskey(pd, :err)
-            measurement.(pd.val, pd.err)
+            measurement.(pd.val, ifelse(isnothing(pd.err), NaN, pd.err))
         else
             throw(ArgumentError("_props2lprops can't handle PropDict $pd"))
         end
