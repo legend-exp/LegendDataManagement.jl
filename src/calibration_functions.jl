@@ -202,20 +202,20 @@ export get_ged_qc_is_baseline_propfunc
 
 Get the A/E cut window for the given data, validity selection and detector.
 """
-function dataprod_pars_aoe_window(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, aoe_type::Symbol; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
-    aoecut_lo::Float64 = get(_get_aoecal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat)[aoe_type].cut, :lowcut, -Inf)
-    aoecut_hi::Float64 = get(_get_aoecal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat)[aoe_type].cut, :highcut, Inf)
+function dataprod_pars_aoe_window(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, aoe_classifier::Symbol; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
+    aoecut_lo::Float64 = get(_get_aoecal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat)[aoe_classifier], :lowcut, -Inf)
+    aoecut_hi::Float64 = get(_get_aoecal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat)[aoe_classifier], :highcut, Inf)
     ClosedInterval(aoecut_lo, aoecut_hi)
 end
 export dataprod_pars_aoe_window
 
 
-function _get_ged_aoe_lowcut_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, aoe_type::Symbol; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
-    "$(aoe_type)_classifier > $(leftendpoint(dataprod_pars_aoe_window(data, sel, detector, aoe_type; pars_type=pars_type, pars_cat=pars_cat)))"
+function _get_ged_aoe_lowcut_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, aoe_classifier::Symbol; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
+    "$(aoe_classifier) > $(leftendpoint(dataprod_pars_aoe_window(data, sel, detector, aoe_classifier; pars_type=pars_type, pars_cat=pars_cat)))"
 end
 
-function _get_ged_aoe_dscut_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, aoe_type::Symbol; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
-    "$(aoe_type)_classifier > $(leftendpoint(dataprod_pars_aoe_window(data, sel, detector, aoe_type; pars_type=pars_type, pars_cat=pars_cat))) && $(aoe_type)_classifier < $(rightendpoint(dataprod_pars_aoe_window(data, sel, detector, aoe_type; pars_type=pars_type, pars_cat=pars_cat)))"
+function _get_ged_aoe_dscut_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, aoe_classifier::Symbol; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
+    "$(aoe_classifier) > $(leftendpoint(dataprod_pars_aoe_window(data, sel, detector, aoe_classifier; pars_type=pars_type, pars_cat=pars_cat))) && $(aoe_classifier) < $(rightendpoint(dataprod_pars_aoe_window(data, sel, detector, aoe_classifier; pars_type=pars_type, pars_cat=pars_cat)))"
 end
 
 """
@@ -224,16 +224,16 @@ end
 Get the A/E cut propfuncs for the given data, validity selection and detector.
 """
 function get_ged_aoe_cut_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
-    let aoe_types = collect(keys(_dataprod_aoe(data, sel, detector; pars_type=pars_type).aoe_funcs)), aeo_low_cut = Symbol.(string.(keys(_dataprod_aoe(data, sel, detector; pars_type=pars_type).aoe_funcs)) .* "_low_cut"),
-        aoe_ds_cut = Symbol.(string.(keys(_dataprod_aoe(data, sel, detector; pars_type=pars_type).aoe_funcs)) .* "_ds_cut")
+    let aoe_classifiers = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=pars_type).aoe_classifiers), aeo_low_cut = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=pars_type).aoe_classifiers .* "_low_cut"),
+        aoe_ds_cut = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=pars_type).aoe_classifiers .* "_ds_cut")
 
         ljl_propfunc(
             merge(
                 Dict{Symbol, String}(
-                    aeo_low_cut .=> _get_ged_aoe_lowcut_propfunc_str.(Ref(data), Ref(sel), Ref(detector), aoe_types; pars_type=pars_type, pars_cat=pars_cat)
+                    aeo_low_cut .=> _get_ged_aoe_lowcut_propfunc_str.(Ref(data), Ref(sel), Ref(detector), aoe_classifiers; pars_type=pars_type, pars_cat=pars_cat)
                 ),
                 Dict{Symbol, String}(
-                    aoe_ds_cut .=> _get_ged_aoe_dscut_propfunc_str.(Ref(data), Ref(sel), Ref(detector), aoe_types; pars_type=pars_type, pars_cat=pars_cat)
+                    aoe_ds_cut .=> _get_ged_aoe_dscut_propfunc_str.(Ref(data), Ref(sel), Ref(detector), aoe_classifiers; pars_type=pars_type, pars_cat=pars_cat)
                 )
             )
         )
