@@ -87,8 +87,10 @@ function _lh5_data_open(f::Function, data::LegendData, tier::DataTierLike, filek
     ch_filename = data.tier[DataTier(tier), filekey, ch]
     filename = data.tier[DataTier(tier), filekey]
     if isfile(ch_filename)
+        @debug "Read from $(basename(ch_filename))"
         LegendHDF5IO.lh5open(f, ch_filename, mode)
     elseif isfile(filename)
+        @debug "Read from $(basename(filename))"
         LegendHDF5IO.lh5open(f, filename, mode)
     else
         throw(ArgumentError("Neither $(basename(filename)) nor $(basename(ch_filename)) found"))
@@ -106,7 +108,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     tier, filekey, ch = DataTier(rsel[1]), rsel[2], _get_channelid(data, rsel[2], rsel[3])
     _lh5_data_open(data, tier, filekey, ch) do h
         if !haskey(h, "$ch")
-            throw(Argument("Channel $ch not found in $(basename(filename))"))
+            throw(ArgumentError("Channel $ch not found in $(basename(string(h.data_store)))"))
         end
         if f == identity
             _load_all_keys(h[ch, tier], n_evts)
