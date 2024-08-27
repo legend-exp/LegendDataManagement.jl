@@ -31,13 +31,13 @@ function nt2pd(pd::PropDict, nt::Union{NamedTuple, Dict, PropDict})
 end
 
 """
-    writevalidity(props_db::LegendDataManagement.PropsDB, filekey::FileKey; apply_to::Symbol=:all)
-    writevalidity(props_db::LegendDataManagement.PropsDB, filekey::FileKey, part::DataPartitionLike; apply_to::Symbol=:all)
+    writevalidity(props_db::LegendDataManagement.PropsDB, filekey::FileKey; category::Symbol=:all)
+    writevalidity(props_db::LegendDataManagement.PropsDB, filekey::FileKey, part::DataPartitionLike; category::Symbol=:all)
 Write validity for a given filekey.
 """
 function writevalidity end
 export writevalidity
-function writevalidity(props_db::LegendDataManagement.MaybePropsDB, filekey::FileKey, apply::String; apply_to::DataCategoryLike=:all)
+function writevalidity(props_db::LegendDataManagement.MaybePropsDB, filekey::FileKey, apply::Vector{String}; category::DataCategoryLike=:all)
     # write validity
     # get timestamp from filekey
     pars_validTimeStamp = string(filekey.time)
@@ -46,33 +46,34 @@ function writevalidity(props_db::LegendDataManagement.MaybePropsDB, filekey::Fil
     mkpath(dirname(validity_filename))
     touch(validity_filename)
     # check if validity already written
-    validity_entry = "{\"valid_from\":\"$pars_validTimeStamp\", \"category\":\"$(string(apply_to))\", \"apply\":[\"$(apply)\"]}"
     validity_lines = readlines(validity_filename)
-    is_validity = findfirst(x -> contains(x, "$pars_validTimeStamp"), validity_lines)
-    if isnothing(is_validity)
-        @info "Write validity for $pars_validTimeStamp"
-        open(validity_filename, "a") do io
-            println(io, validity_entry)
-        end
-    else
-        @info "Delete old $pars_validTimeStamp validity entry"
-        validity_lines[is_validity] = validity_entry
-        open(validity_filename, "w") do io
-            for line in sort(validity_lines)
-                println(io, line)
-            end
+    # check if given validity already exists
+    is_validity = findall(x -> contains(x, "$pars_validTimeStamp") && contains(x, "$(string(category))"), validity_lines)
+    if isempty(is_validity)
+        @info "Write new validity for $pars_validTimeStamp"
+        push!(validity_lines, "{\"valid_from\":\"$pars_validTimeStamp\", \"category\":\"$(string(category))\", \"apply\":[\"$(join(sort(apply), "\", \""))\"]}")
+    elseif length(is_validity) == 1
+        @info "Merge old $pars_validTimeStamp $(string(category)) validity entry"
+        apply = unique(append!(Vector{String}(JSON.parse(validity_lines[first(is_validity)])["apply"]), apply))
+        validity_lines[first(is_validity)] = "{\"valid_from\":\"$pars_validTimeStamp\", \"category\":\"$(string(category))\", \"apply\":[\"$(join(sort(apply), "\", \""))\"]}"
+    end
+    # write validity
+    open(validity_filename, "w") do io
+        for line in sort(validity_lines)
+            println(io, line)
         end
     end
 end
-writevalidity(props_db, filekey, rsel::RunSelLike; kwargs...) = writevalidity(props_db, filekey, "$(first(rsel))/$(last(rsel)).json"; kwargs...)
-writevalidity(props_db, filekey, part::DataPartitionLike; kwargs...) = writevalidity(props_db, filekey, "$(part).json"; kwargs...)
+writevalidity(props_db, filekey, apply::String; kwargs...) = writevalidity(props_db, filekey, [apply]; kwargs...)
+writevalidity(props_db, filekey, rsel::Tuple{DataPeriod, DataRun}; kwargs...) = writevalidity(props_db, filekey, "$(first(rsel))/$(last(rsel)).json"; kwargs...)
+writevalidity(props_db, filekey, part::DataPartition; kwargs...) = writevalidity(props_db, filekey, "$(part).json"; kwargs...)
 function writevalidity(props_db::LegendDataManagement.MaybePropsDB, validity::StructVector{@NamedTuple{period::DataPeriod, run::DataRun, filekey::FileKey, validity::String}}; kwargs...)
     # get unique runs and periods for the individual entries 
     runsel = unique([(row.period, row.run) for row in validity])
     # write validity for each run and period
     for (period, run) in runsel
         val = filter(row -> row.period == period && row.run == run, validity)
-        writevalidity(props_db, first(val.filekey), join(val.validity, "\", \""); kwargs...)
+        writevalidity(props_db, first(val.filekey), val.validity; kwargs...)
     end
 end
 

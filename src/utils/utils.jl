@@ -10,6 +10,7 @@ using PropertyDicts
 using StructArrays
 using Unitful
 using Format
+using JSON
 using Dates
 using Measurements
 using Measurements: ±
