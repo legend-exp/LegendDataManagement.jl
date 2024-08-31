@@ -33,8 +33,6 @@ using TypedTables
 import Markdown
 using MIMEs: mime_from_extension
 
-import ThreadPinning
-
 include("legend_report.jl")
 include("status_types.jl")
 include("atomic_fcreate.jl")
