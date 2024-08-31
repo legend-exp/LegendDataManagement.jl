@@ -44,7 +44,9 @@ const ljl_expr_allowed_funcs = Set([
     :sin, :cos, :tan, :asin, :acos, :atan,
     :isnan, :isinf, :isfinite,
     :all, :any, :broadcast, 
-    :±
+    :±, 
+    :(:), :Symbol, :String, :Int, :Float64, :Bool,
+    :DetectorId, :ChannelId
 ])
 
 const _ljlexpr_units = IdDict([
@@ -84,6 +86,7 @@ end
 
 _process_ljlexpr_impl(x::Real, @nospecialize(f_varsubst)) = x
 _process_ljlexpr_impl(x::LineNumberNode, @nospecialize(f_varsubst)) = x
+_process_ljlexpr_impl(x::QuoteNode, @nospecialize(f_varsubst)) = x
 _process_ljlexpr_impl(sym::Symbol, f_varsubst) = f_varsubst(sym)
 
 function _process_ljlexpr_impl(@nospecialize(expr::Expr), @nospecialize(f_varsubst))
