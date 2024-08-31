@@ -71,7 +71,7 @@ Tables = "0.2, 1.0"
 TypedTables = "1.4"
 UUIDs = "1"
 Unitful = "1"
-julia = "1.9"
+julia = "1.10"
 
 [extras]
 LegendHDF5IO = "c9265ca6-b027-5446-b1a4-febfa8dd10b0"
