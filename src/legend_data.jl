@@ -228,6 +228,9 @@ function search_disk(::Type{DT}, path::AbstractString) where DT<:DataSelector
     return unique(sort(DT.(valid_files)))
 end
 
+
+const _cached_channelinfo = LRU{Tuple{UInt, AnyValiditySelection}, StructVector}(maxsize = 10^3)
+
 """
     channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false)
     channelinfo(data::LegendData, sel::RunCategorySelLike; system::Symbol = :all, only_processable::Bool = false)
@@ -236,71 +239,74 @@ Get all channel information for the given [`LegendData`](@ref) and
 [`ValiditySelection`](@ref).
 """
 function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false)
-    chmap = data.metadata(sel).hardware.configuration.channelmaps
-    diodmap = data.metadata.hardware.detectors.germanium.diodes
-    dpcfg = data.metadata(sel).dataprod.config.analysis
-    
-    channel_keys = collect(keys(chmap))
+    key = (objectid(data), sel)
+    chinfo = get!(_cached_channelinfo, key) do
+        chmap = data.metadata(sel).hardware.configuration.channelmaps
+        diodmap = data.metadata.hardware.detectors.germanium.diodes
+        dpcfg = data.metadata(sel).dataprod.config.analysis
+        
+        channel_keys = collect(keys(chmap))
 
-    _convert_location(l::AbstractString) = (location = Symbol(l), detstring = -1, position = -1, fiber = "")
+        _convert_location(l::AbstractString) = (location = Symbol(l), detstring = -1, position = -1, fiber = "")
 
-    function _convert_location(l::PropDict)
-        (
-            location = :array,
-            detstring = get(l, :string, -1),
-            position = _convert_pos(get(l, :position, -1)),
-            fiber = get(l, :fiber, ""),
-        )
-    end
-
-    _convert_location(l::PropDicts.MissingProperty) = (location = :unknown, detstring = -1, position = -1, fiber = "")
-
-    _convert_pos(p::Integer) = Int(p)
-    function _convert_pos(p::AbstractString)
-        if p == "top"
-            1
-        elseif p == "bottom"
-            0
-        else
-            -1
+        function _convert_location(l::PropDict)
+            (
+                location = :array,
+                detstring = get(l, :string, -1),
+                position = _convert_pos(get(l, :position, -1)),
+                fiber = get(l, :fiber, ""),
+            )
         end
+
+        _convert_location(l::PropDicts.MissingProperty) = (location = :unknown, detstring = -1, position = -1, fiber = "")
+
+        _convert_pos(p::Integer) = Int(p)
+        function _convert_pos(p::AbstractString)
+            if p == "top"
+                1
+            elseif p == "bottom"
+                0
+            else
+                -1
+            end
+        end
+
+        function make_row(k::Symbol)
+            fcid::Int = get(chmap[k].daq, :fcid, -1)
+            rawid::Int = chmap[k].daq.rawid
+            channel::ChannelId = ChannelId(rawid)
+
+            detector::DetectorId = DetectorId(k)
+            det_type::Symbol = Symbol(ifelse(haskey(diodmap, k), diodmap[k].type, :unknown))
+            enrichment::Unitful.Quantity{<:Measurement{<:Float64}} = if haskey(diodmap, k) && haskey(diodmap[k].production, :enrichment) measurement(diodmap[k].production.enrichment.val, diodmap[k].production.enrichment.unc) else measurement(Float64(NaN), Float64(NaN)) end *100u"percent"
+            mass::Unitful.Mass{<:Float64} = if haskey(diodmap, k) && haskey(diodmap[k].production, :mass_in_g) diodmap[k].production.mass_in_g else Float64(NaN) end *1e-3*u"kg"
+            local system::Symbol = Symbol(chmap[k].system)
+            processable::Bool = get(dpcfg[k], :processable, false)
+            usability::Symbol = Symbol(get(dpcfg[k], :usability, :unknown))
+            is_blinded::Bool = get(dpcfg[k], :is_blinded, false)
+            low_aoe_status::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("low_aoe"), :unknown))
+            high_aoe_status::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("high_aoe"), :unknown))
+            lq_status::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("lq"), :unknown))
+            batch5_dt_cut::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("batch5_dt_cut"), :unknown))
+            is_bb_like::String = replace(get(get(dpcfg[k], :psd, PropDict()), :is_bb_like, ""), "&" => "&&") 
+
+            location::Symbol, detstring::Int, position::Int, fiber::StaticString{8} = _convert_location(chmap[k].location)
+
+            cc4::StaticString{8} = get(chmap[k].electronics.cc4, :id, "")
+            cc4ch::Int = get(chmap[k].electronics.cc4, :channel, -1)
+            daqcrate::Int = get(chmap[k].daq, :crate, -1)
+            daqcard::Int = chmap[k].daq.card.id
+            hvcard::Int = get(chmap[k].voltage.card, :id, -1)
+            hvch::Int = get(chmap[k].voltage, :channel, -1)
+
+            return (;
+                detector, channel, fcid, rawid, system, processable, usability, is_blinded, low_aoe_status, high_aoe_status, lq_status, batch5_dt_cut, is_bb_like, det_type,
+                location, detstring, fiber, position, cc4, cc4ch, daqcrate, daqcard, hvcard, hvch, enrichment, mass
+            )
+        end
+
+        StructVector(make_row.(channel_keys))
     end
-
-    function make_row(k::Symbol)
-        fcid::Int = get(chmap[k].daq, :fcid, -1)
-        rawid::Int = chmap[k].daq.rawid
-        channel::ChannelId = ChannelId(rawid)
-
-        detector::DetectorId = DetectorId(k)
-        det_type::Symbol = Symbol(ifelse(haskey(diodmap, k), diodmap[k].type, :unknown))
-        enrichment::Unitful.Quantity{<:Measurement{<:Float64}} = if haskey(diodmap, k) && haskey(diodmap[k].production, :enrichment) measurement(diodmap[k].production.enrichment.val, diodmap[k].production.enrichment.unc) else measurement(Float64(NaN), Float64(NaN)) end *100u"percent"
-        mass::Unitful.Mass{<:Float64} = if haskey(diodmap, k) && haskey(diodmap[k].production, :mass_in_g) diodmap[k].production.mass_in_g else Float64(NaN) end *1e-3*u"kg"
-        local system::Symbol = Symbol(chmap[k].system)
-        processable::Bool = get(dpcfg[k], :processable, false)
-        usability::Symbol = Symbol(get(dpcfg[k], :usability, :unknown))
-        is_blinded::Bool = get(dpcfg[k], :is_blinded, false)
-        low_aoe_status::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("low_aoe"), :unknown))
-        high_aoe_status::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("high_aoe"), :unknown))
-        lq_status::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("lq"), :unknown))
-        batch5_dt_cut::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("batch5_dt_cut"), :unknown))
-        is_bb_like::String = replace(get(get(dpcfg[k], :psd, PropDict()), :is_bb_like, ""), "&" => "&&") 
-
-        location::Symbol, detstring::Int, position::Int, fiber::StaticString{8} = _convert_location(chmap[k].location)
-
-        cc4::StaticString{8} = get(chmap[k].electronics.cc4, :id, "")
-        cc4ch::Int = get(chmap[k].electronics.cc4, :channel, -1)
-        daqcrate::Int = get(chmap[k].daq, :crate, -1)
-        daqcard::Int = chmap[k].daq.card.id
-        hvcard::Int = get(chmap[k].voltage.card, :id, -1)
-        hvch::Int = get(chmap[k].voltage, :channel, -1)
-
-        return (;
-            detector, channel, fcid, rawid, system, processable, usability, is_blinded, low_aoe_status, high_aoe_status, lq_status, batch5_dt_cut, is_bb_like, det_type,
-            location, detstring, fiber, position, cc4, cc4ch, daqcrate, daqcard, hvcard, hvch, enrichment, mass
-        )
-    end
-
-    chinfo = StructVector(make_row.(channel_keys))
     if !(system == :all)
         chinfo = chinfo |> filterby(@pf $system .== system)
     end
@@ -316,6 +322,8 @@ function channelinfo(data::LegendData, sel::RunCategorySelLike; kwargs...)
 end
 
 
+const _cached_channelinfo_detector = LRU{Tuple{UInt, AnyValiditySelection, Union{ChannelIdLike, DetectorIdLike}}, NamedTuple}(maxsize = 10^3)
+
 """
     channelinfo(data::LegendData, sel::AnyValiditySelection, channel::Union{ChannelIdLike, DetectorIdLike})
     channelinfo(data::LegendData, sel::AnyValiditySelection, detector::DetectorIdLike)
@@ -324,20 +332,23 @@ Get channel information validitiy selection and [`DetectorId`](@ref) resp.
 [`ChannelId`](@ref).
 """
 function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, channel::Union{ChannelIdLike, DetectorIdLike}; kwargs...)
-    chinfo = channelinfo(data, sel; kwargs...)
-    if _can_convert_to(ChannelId, channel)
-        idxs = findall(x -> ChannelId(x) == ChannelId(channel), chinfo.channel)
-    elseif _can_convert_to(DetectorId, channel)
-        idxs = findall(x -> DetectorId(x) == DetectorId(channel), chinfo.detector)
-    else
-        throw(ArgumentError("Invalid channel: $channel"))
-    end
-    if isempty(idxs)
-        throw(ArgumentError("No channel information found for $channel"))
-    elseif length(idxs) > 1
-        throw(ArgumentError("Multiple channel information entries for $channel"))
-    else
-        return chinfo[only(idxs)]
+    key = (objectid(data), sel, channel)
+    get!(_cached_channelinfo_detector, key) do
+        chinfo = channelinfo(data, sel; kwargs...)
+        if _can_convert_to(ChannelId, channel)
+            idxs = findall(x -> ChannelId(x) == ChannelId(channel), chinfo.channel)
+        elseif _can_convert_to(DetectorId, channel)
+            idxs = findall(x -> DetectorId(x) == DetectorId(channel), chinfo.detector)
+        else
+            throw(ArgumentError("Invalid channel: $channel"))
+        end
+        if isempty(idxs)
+            throw(ArgumentError("No channel information found for $channel"))
+        elseif length(idxs) > 1
+            throw(ArgumentError("Multiple channel information entries for $channel"))
+        else
+            chinfo[only(idxs)]
+        end
     end
 end
 
