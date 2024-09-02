@@ -36,6 +36,16 @@ function get_ged_evt_chsel_propfunc(data::LegendData, sel::AnyValiditySelection)
 end
 export get_ged_evt_chsel_propfunc
 
+"""
+    get_ged_evt_hitchsel_propfunc(data::LegendData, sel::AnyValiditySelection)
+
+Get the hit Ge-detector channel selection PropertyFunction.
+"""
+function get_ged_evt_hitchsel_propfunc(data::LegendData, sel::AnyValiditySelection)
+    ljl_propfunc(_dataprod_evt(data, sel, :geds).hitchannels)
+end
+export get_ged_evt_hitchsel_propfunc
+
 
 """
     get_ged_evt_kwargs(data::LegendData, sel::AnyValiditySelection)
