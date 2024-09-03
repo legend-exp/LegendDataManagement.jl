@@ -321,8 +321,8 @@ function channelinfo(data::LegendData, sel::RunCategorySelLike; kwargs...)
     channelinfo(data, start_filekey(data, sel); kwargs...)
 end
 
-
-const _cached_channelinfo_detector = LRU{Tuple{UInt, AnyValiditySelection, Union{ChannelIdLike, DetectorIdLike}}, NamedTuple}(maxsize = 10^3)
+# TODO: Fix LRU cache and make work with channelinfo and channelname
+const _cached_channelinfo_detector_idx = LRU{Tuple{UInt, AnyValiditySelection, Symbol}, Int}(maxsize = 10^3)
 
 """
     channelinfo(data::LegendData, sel::AnyValiditySelection, channel::Union{ChannelIdLike, DetectorIdLike})
@@ -332,24 +332,21 @@ Get channel information validitiy selection and [`DetectorId`](@ref) resp.
 [`ChannelId`](@ref).
 """
 function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, channel::Union{ChannelIdLike, DetectorIdLike}; kwargs...)
-    key = (objectid(data), sel, channel)
-    get!(_cached_channelinfo_detector, key) do
-        chinfo = channelinfo(data, sel; kwargs...)
-        if _can_convert_to(ChannelId, channel)
-            idxs = findall(x -> ChannelId(x) == ChannelId(channel), chinfo.channel)
-        elseif _can_convert_to(DetectorId, channel)
-            idxs = findall(x -> DetectorId(x) == DetectorId(channel), chinfo.detector)
-        else
-            throw(ArgumentError("Invalid channel: $channel"))
-        end
-        if isempty(idxs)
-            throw(ArgumentError("No channel information found for $channel"))
-        elseif length(idxs) > 1
-            throw(ArgumentError("Multiple channel information entries for $channel"))
-        else
-            chinfo[only(idxs)]
-        end
+    key = (objectid(data), sel, Symbol(channel))
+    chinfo = channelinfo(data, sel; kwargs...)
+    idxs = if _can_convert_to(ChannelId, channel)
+        findall(x -> ChannelId(x) == ChannelId(channel), chinfo.channel)
+    elseif _can_convert_to(DetectorId, channel)
+        findall(x -> DetectorId(x) == DetectorId(channel), chinfo.detector)
+    else
+        throw(ArgumentError("Invalid channel: $channel"))
     end
+    if isempty(idxs)
+        throw(ArgumentError("No channel information found for $channel"))
+    elseif length(idxs) > 1
+        throw(ArgumentError("Multiple channel information entries for $channel"))
+    end
+    chinfo[only(idxs)]
 end
 
 function channel_info(data::LegendData, sel::AnyValiditySelection)
