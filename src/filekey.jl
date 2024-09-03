@@ -337,7 +337,7 @@ export DataCategory
 Base.:(==)(a::DataCategory, b::DataCategory) = a.label == b.label
 Base.isless(a::DataCategory, b::DataCategory) = isless(a.label, b.label)
 
-const category_expr = r"^([a-z]+)$"
+const category_expr = r"^[a-z]{3}$"
 
 _can_convert_to(::Type{DataCategory}, s::AbstractString) = !isnothing(match(category_expr, s))
 _can_convert_to(::Type{DataCategory}, s::Symbol) = _can_convert_to(DataCategory, string(s))
