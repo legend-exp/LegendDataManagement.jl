@@ -9,6 +9,8 @@ using LegendDataTypes: fast_flatten, flatten_by_key
 using TypedTables, PropertyFunctions
 
 const ChannelOrDetectorIdLike = Union{ChannelIdLike, DetectorIdLike}
+const AbstractDataSelectorLike = Union{AbstractString, Symbol, DataTierLike, DataCategoryLike, DataPeriodLike, DataRunLike, DataPartitionLike, ChannelOrDetectorIdLike}
+const PossibleDataSelectors = [DataTier, DataCategory, DataPeriod, DataRun, DataPartition, ChannelId, DetectorId]
 
 function _get_channelid(data::LegendData, rsel::Union{AnyValiditySelection, RunCategorySelLike}, det::ChannelOrDetectorIdLike)
     if LegendDataManagement._can_convert_to(ChannelId, det)
@@ -105,17 +107,29 @@ _load_all_keys(t::Table, n_evts::Int=-1) = t[:][if (n_evts < 1 || n_evts > lengt
 _load_all_keys(x, n_evts::Int=-1) = x
 
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, ChannelOrDetectorIdLike}; n_evts::Int=-1)
-    tier, filekey, ch = DataTier(rsel[1]), rsel[2], _get_channelid(data, rsel[2], rsel[3])
+    tier, filekey, ch = DataTier(rsel[1]), rsel[2], if !isempty(string((rsel[3]))) _get_channelid(data, rsel[2], rsel[3]) else rsel[3] end
     _lh5_data_open(data, tier, filekey, ch) do h
-        if !haskey(h, "$ch")
+        if !isempty(string((ch))) && !haskey(h, "$ch")
             throw(ArgumentError("Channel $ch not found in $(basename(string(h.data_store)))"))
         end
         if f == identity
-            _load_all_keys(h[ch, tier], n_evts)
+            if !isempty(string((ch)))
+                _load_all_keys(h[ch, tier], n_evts)
+            else
+                _load_all_keys(h[tier], n_evts)
+            end
         elseif f isa PropSelFunction
-            _load_all_keys(getproperties(_propfunc_columnnames(f)...)(h[ch, tier]), n_evts)
+            if !isempty(string((ch)))
+                _load_all_keys(getproperties(_propfunc_columnnames(f)...)(h[ch, tier]), n_evts)
+            else
+                _load_all_keys(getproperties(_propfunc_columnnames(f)...)(h[tier]), n_evts)
+            end
         else
-            result = f.(_load_all_keys(h[ch, tier], n_evts))
+            result = if !isempty(string((ch)))
+                f.(_load_all_keys(h[ch, tier], n_evts))
+            else
+                f.(_load_all_keys(h[tier], n_evts))
+            end
             if result isa AbstractVector{<:NamedTuple}
                 Table(result)
             else
@@ -125,15 +139,86 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     end
 end
 
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey}; kwargs...)
+    ch_keys = _lh5_data_open(data, rsel[1], rsel[2], "") do h
+        keys(h)
+    end
+    @debug "Found keys: $ch_keys"
+    if length(ch_keys) == 1
+        if string(only(ch_keys)) == string(rsel[1])
+            LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], ""); kwargs...)
+        elseif LegendDataManagement._can_convert_to(ChannelId, only(ch_keys)) || LegendDataManagement._can_convert_to(DetectorId, only(ch_keys))
+            LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], string(only(ch_keys))); kwargs...)
+        else
+            throw(ArgumentError("No tierm channel or detector found in $(basename(string(h.data_store)))"))
+        end
+    else
+        NamedTuple{Tuple(Symbol.(ch_keys))}([LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], ch); kwargs...) for ch in ch_keys]...)
+    end
+end
+
 lflatten(x) = fast_flatten(x)
+# lflatten(t::AbstractVector{<:Table}) = append!(t...)
 lflatten(nt::AbstractVector{<:NamedTuple}) = flatten_by_key(nt)
 
-LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, AbstractVector{FileKey}, ChannelOrDetectorIdLike}; kwargs...) =
-    lflatten([LegendDataManagement.read_ldata(f, data, (rsel[1], fk, rsel[3]); kwargs...) for fk in rsel[2]])
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, AbstractVector{FileKey}, ChannelOrDetectorIdLike}; kwargs...)
+    if !isempty(string(rsel[3]))
+        lflatten([LegendDataManagement.read_ldata(f, data, (rsel[1], fk, rsel[3]); kwargs...) for fk in rsel[2]])
+    else
+        lflatten([LegendDataManagement.read_ldata(f, data, (rsel[1], fk); kwargs...) for fk in rsel[2]])
+    end
+end
+LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, AbstractVector{FileKey}}; kwargs...) = 
+    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], ""); kwargs...)
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, DataCategoryLike, DataPeriodLike, DataRunLike, ChannelOrDetectorIdLike}; kwargs...)
+### Argument distinction for different DataSelector Types
+function _convert_rsel2dsel(rsel::NTuple{<:Any, AbstractDataSelectorLike})
+    selector_types = [PossibleDataSelectors[LegendDataManagement._can_convert_to.(PossibleDataSelectors, Ref(s))] for s in rsel]
+    if length(selector_types[2]) > 1 && DataCategory in selector_types[2]
+        selector_types[2] = [DataCategory]
+    end
+    if isempty(last(selector_types))
+        selector_types[end] = [String]
+    end
+    if !all(length.(selector_types) .<= 1)
+        throw(ArgumentError("Ambiguous selector types: $selector_types for $rsel"))
+    end
+    Tuple([only(st)(r) for (r, st) in zip(rsel, selector_types)])
+end
+
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::NTuple{<:Any, AbstractDataSelectorLike}; kwargs...)
+    LegendDataManagement.read_ldata(f, data, _convert_rsel2dsel(rsel); kwargs...)
+end
+
+LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPeriod}; kwargs...) =
+    LegendDataManagement.read_ldata(f, data, (DataTier(rsel[1]), DataCategory(rsel[2]), DataPeriod(rsel[3]), ""))
+
+LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPeriod, DataRun}; kwargs...) = 
+    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], rsel[3], rsel[4], ""))
+
+
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPartition, ChannelOrDetectorIdLike}; kwargs...)
+    first_run = first(LegendDataManagement._get_partitions(data, :default)[rsel[3]])
+    ch = _get_channelid(data, (first_run.period, first_run.run, rsel[2]), rsel[4])
+    pinfo = partitioninfo(data, ch, rsel[3])
+    @assert ch == _get_channelid(data, (first(pinfo).period, first(pinfo).run, rsel[2]), rsel[4]) "Channel mismatch in partitioninfo"
+    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], pinfo, ch); kwargs...)
+end
+
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPeriod, ChannelOrDetectorIdLike}; kwargs...)
+    rinfo = runinfo(data, rsel[3])
+    first_run = first(rinfo)
+    ch = if !isempty(string(rsel[4]))
+        _get_channelid(data, (first_run.period, first_run.run, rsel[2]), rsel[4])
+    else
+        string(rsel[4])
+    end
+    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], rinfo, ch); kwargs...)
+end
+
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPeriod, DataRun, ChannelOrDetectorIdLike}; kwargs...)
     fks = search_disk(FileKey, data.tier[rsel[1], rsel[2], rsel[3], rsel[4]])
-    ch = _get_channelid(data, (rsel[3], rsel[4], rsel[2]), rsel[5])
+    ch = rsel[5]
     if isempty(fks) && isfile(data.tier[rsel[1:4]..., ch])
         LegendDataManagement.read_ldata(f, data, (rsel[1], start_filekey(data, (rsel[3], rsel[4], rsel[2])), ch); kwargs...)
     elseif !isempty(fks)
@@ -143,29 +228,23 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     end
 end
 
+
+### DataPartition
 const _partinfo_required_cols = NamedTuple{(:period, :run), Tuple{DataPeriod, DataRun}}
 
 LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, DataCategoryLike, Table{_partinfo_required_cols}, ChannelOrDetectorIdLike}; kwargs...) =
     lflatten([LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], r.period, r.run, rsel[4]); kwargs...) for r in rsel[3]])
+
+LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, DataCategoryLike, Table{_partinfo_required_cols}}; kwargs...) =
+    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], rsel[3], ""); kwargs...)
 
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, DataCategoryLike, Table, ChannelOrDetectorIdLike}; kwargs...)
     @assert (hasproperty(rsel[3], :period) && hasproperty(rsel[3], :run)) "Runtable doesn't provide periods and runs"
     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], Table(period = rsel[3].period, run = rsel[3].run), rsel[4]); kwargs...)
 end
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, DataCategoryLike, DataPartition, ChannelOrDetectorIdLike}; kwargs...)
-    first_run = first(LegendDataManagement._get_partitions(data, :default)[rsel[3]])
-    ch = _get_channelid(data, (first_run.period, first_run.run, rsel[2]), rsel[4])
-    pinfo = partitioninfo(data, ch, rsel[3])
-    @assert ch == _get_channelid(data, (first(pinfo).period, first(pinfo).run, rsel[2]), rsel[4]) "Channel mismatch in partitioninfo"
-    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], pinfo, ch); kwargs...)
-end
+LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, DataCategoryLike, Table}; kwargs...) =
+    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], rsel[3], ""); kwargs...)
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, DataCategoryLike, DataPeriodLike, ChannelOrDetectorIdLike}; kwargs...)
-    rinfo = runinfo(data, rsel[3])
-    first_run = first(rinfo)
-    ch = _get_channelid(data, (first_run.period, first_run.run, rsel[2]), rsel[4])
-    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], rinfo, ch); kwargs...)
-end
 
 end # module
