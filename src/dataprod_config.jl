@@ -151,6 +151,8 @@ end
 
 Return cross-period data partitions.
 """
+function partitioninfo end
+export partitioninfo
 function partitioninfo(data::LegendData, ch::ChannelId)
     _get_partitions(data, Symbol(ChannelId(ch)))
 end
@@ -169,7 +171,8 @@ function partitioninfo(data, ch, p::Union{Symbol, AbstractString})
         throw(ArgumentError("Invalid specification \"$p\". Must be of type DataPartition or DataPeriod"))
     end
 end
-export partitioninfo
+partitioninfo(data, ch, period::DataPeriodLike, run::DataRunLike) = sort(Vector{DataPartition}([p for (p, pinfo) in partitioninfo(data, ch) if any(map(row -> row.period == DataPeriod(period) && row.run == DataRun(run), pinfo))]))
+
 
 
 Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, ch::ChannelId, p::Vector{<:DataPeriod}) = unique(vcat(f.(Ref(data), Ref(ch), p)...))
