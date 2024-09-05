@@ -320,6 +320,11 @@ export channelinfo
 function channelinfo(data::LegendData, sel::RunCategorySelLike; kwargs...)
     channelinfo(data, start_filekey(data, sel); kwargs...)
 end
+channelinfo(data::LegendData, sel...; kwargs...) = channelinfo(data, sel; kwargs...)
+function channelinfo(data::LegendData, sel::Tuple{<:DataPeriodLike, <:DataRunLike, <:DataCategoryLike, Union{ChannelIdLike, DetectorIdLike}}; kwargs...)
+    @info ((sel[1:3]...), sel[4])
+    channelinfo(data, ((sel[1:3]), sel[4]); kwargs...)
+end
 
 # TODO: Fix LRU cache and make work with channelinfo and channelname
 const _cached_channelinfo_detector_idx = LRU{Tuple{UInt, AnyValiditySelection, Symbol}, Int}(maxsize = 10^3)
@@ -331,7 +336,9 @@ const _cached_channelinfo_detector_idx = LRU{Tuple{UInt, AnyValiditySelection, S
 Get channel information validitiy selection and [`DetectorId`](@ref) resp.
 [`ChannelId`](@ref).
 """
-function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, channel::Union{ChannelIdLike, DetectorIdLike}; kwargs...)
+# function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, channel::Union{ChannelIdLike, DetectorIdLike}; kwargs...)
+function channelinfo(data::LegendData, sel::Tuple{Union{AnyValiditySelection, RunCategorySelLike}, Union{ChannelIdLike, DetectorIdLike}}; kwargs...)
+    sel, channel = sel[1], sel[2]
     key = (objectid(data), sel, Symbol(channel))
     chinfo = channelinfo(data, sel; kwargs...)
     idxs = if _can_convert_to(ChannelId, channel)
