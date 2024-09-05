@@ -284,15 +284,18 @@ function runinfo(data::LegendData, runsel::RunCategorySelLike)
     getproperty(runinfo(data, (period, run)), Symbol(category))
 end
 runinfo(data, fk::FileKey) = runinfo(data, (fk.period, fk.run, fk.category))
-
+runinfo(data, selectors...) = runinfo(data, selectors)
 
 """
     start_filekey(data::LegendData, runsel::RunCategorySelLike)
 
 Get the starting filekey for `data` in `period`, `run`, `category`.
 """
-start_filekey(data::LegendData, runsel::RunCategorySelLike) = runinfo(data, runsel).startkey
+function start_filekey end
 export start_filekey
+start_filekey(data::LegendData, runsel::RunCategorySelLike) = runinfo(data, runsel).startkey
+start_filekey(data::LegendData, fk::FileKey) = start_filekey(data, (fk.period, fk.run, fk.category))
+start_filekey(data::LegendData, selectors...) = start_filekey(data, selectors)
 
 
 """
@@ -300,9 +303,10 @@ export start_filekey
 
 Get the livetime for `data` in physics data taking of `run` in `period`.
 """
-livetime(data::LegendData, runsel::RunCategorySelLike) = runinfo(data, runsel).livetime
+function livetime end
 export livetime
-
+livetime(data::LegendData, runsel::RunCategorySelLike) = runinfo(data, runsel).livetime
+livetime(data, selectors...) = livetime(data, selectors)
 
 """
     is_lrun(data::LegendData, runsel::RunSelLike)
@@ -318,6 +322,8 @@ function is_lrun(data::LegendData, runsel::RunCategorySelLike)::Bool
         false
     end
 end
+is_lrun(data::LegendData, fk::FileKey) = is_lrun(data, (fk.period, fk.run, fk.category))
+is_lrun(data::LegendData, selectors...) = is_lrun(data, selectors)
 export is_lrun
 
 """
@@ -341,6 +347,8 @@ is_analysis_cal_run(data::LegendData, runsel::RunSelLike) = runinfo(data, runsel
 
 Return `true` if `run` is an `cat` analysis run for `data` in `period`.
 """
+function is_analysis_run end
+export is_analysis_run
 function is_analysis_run(data::LegendData, runsel::RunCategorySelLike)
     # first check if it is a legend run at all
     if !is_lrun(data, runsel)
@@ -357,9 +365,10 @@ function is_analysis_run(data::LegendData, runsel::RunCategorySelLike)
         throw(ArgumentError("Invalid category $(runs.category) for analysis run"))
     end
 end
-export is_analysis_run
+is_analysis_run(data::LegendData, fk::FileKey) = is_analysis_run(data, (fk.period, fk.run, fk.category))
+is_analysis_run(data::LegendData, selectors...) = is_analysis_run(data, selectors)
 
-const _cached_bad_filekeys = LRU{UInt, Set{FileKey}}(maxsize = 10)
+const _cached_bad_filekeys = LRU{UInt, Set{FileKey}}(maxsize = 10^3)
 
 """
     bad_filekeys(data::LegendData)
