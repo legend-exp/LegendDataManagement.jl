@@ -322,7 +322,6 @@ function channelinfo(data::LegendData, sel::RunCategorySelLike; kwargs...)
 end
 channelinfo(data::LegendData, sel...; kwargs...) = channelinfo(data, sel; kwargs...)
 function channelinfo(data::LegendData, sel::Tuple{<:DataPeriodLike, <:DataRunLike, <:DataCategoryLike, Union{ChannelIdLike, DetectorIdLike}}; kwargs...)
-    @info ((sel[1:3]...), sel[4])
     channelinfo(data, ((sel[1:3]), sel[4]); kwargs...)
 end
 
