@@ -145,15 +145,30 @@ function _resolve_partition_runs(data::LegendData, period::DataPeriod, runs::Abs
 end
 
 """
-    partitioninfo(data::LegendData, s::ChannelIdLike)
+    partitioninfo(data::LegendData, ch::ChannelId)
+    partitioninfo(data::LegendData, ch::ChannelId, part::DataPartitionLike)
+    partitioninfo(data::LegendData, ch::ChannelId, period::DataPeriodLike)
 
 Return cross-period data partitions.
 """
-function partitioninfo(data::LegendData, ch::ChannelIdLike)
+function partitioninfo(data::LegendData, ch::ChannelId)
     _get_partitions(data, Symbol(ChannelId(ch)))
+end
+function partitioninfo(data::LegendData, det::DetectorIdLike)
+    ch = channelinfo(data, first(filter(!ismissing, runinfo(data).cal.startkey)), det).channel
+    partitioninfo(data, ch)
 end
 partitioninfo(data, ch, part::DataPartition) = partitioninfo(data, ch)[part]
 partitioninfo(data, ch, period::DataPeriod) = sort(Vector{DataPartition}([p for (p, pinfo) in partitioninfo(data, ch) if period in pinfo.period]))
+function partitioninfo(data, ch, p::Union{Symbol, AbstractString})
+    if _can_convert_to(DataPartition, p)
+        partitioninfo(data, ch, DataPartition(p))
+    elseif _can_convert_to(DataPeriod, p)
+        partitioninfo(data, ch, DataPeriod(p))
+    else 
+        throw(ArgumentError("Invalid specification \"$p\". Must be of type DataPartition or DataPeriod"))
+    end
+end
 export partitioninfo
 
 
@@ -244,8 +259,8 @@ function runinfo(data::LegendData)
             @NamedTuple{period::DataPeriod, run::DataRun, is_analysis_cal_run::Bool, is_analysis_phy_run::Bool, cal::nttype, phy::nttype, fft::nttype}((period, run, Bool(is_ana_cal_run), Bool(is_ana_phy_run), get_cat_entry(:cal), get_cat_entry(:phy), get_cat_entry(:fft)))
         end
         periods_and_runs = [[make_row(p, r, ri) for (r, ri) in rs] for (p, rs) in rinfo]
-        flat_pr = vcat(periods_and_runs...)::Vector{@NamedTuple{period::DataPeriod, run::DataRun, is_analysis_cal_run::Bool, is_analysis_phy_run::Bool, cal::nttype, phy::nttype, fft::nttype}}
-        Table(sort(StructArray(flat_pr)))
+        flat_pr = sort(StructArray(vcat(periods_and_runs...)::Vector{@NamedTuple{period::DataPeriod, run::DataRun, is_analysis_cal_run::Bool, is_analysis_phy_run::Bool, cal::nttype, phy::nttype, fft::nttype}}))
+        Table(merge(columns(flat_pr), (cal = Table(StructArray(flat_pr.cal)), phy = Table(StructArray(flat_pr.phy)), fft = Table(StructArray(flat_pr.fft)))))
     end
 end
 export runinfo
