@@ -272,14 +272,13 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
         end
 
         function make_row(k::Symbol)
+
             fcid::Int = get(chmap[k].daq, :fcid, -1)
             rawid::Int = chmap[k].daq.rawid
             channel::ChannelId = ChannelId(rawid)
 
             detector::DetectorId = DetectorId(k)
             det_type::Symbol = Symbol(ifelse(haskey(diodmap, k), diodmap[k].type, :unknown))
-            enrichment::Unitful.Quantity{<:Measurement{<:Float64}} = if haskey(diodmap, k) && haskey(diodmap[k].production, :enrichment) measurement(diodmap[k].production.enrichment.val, diodmap[k].production.enrichment.unc) else measurement(Float64(NaN), Float64(NaN)) end *100u"percent"
-            mass::Unitful.Mass{<:Float64} = if haskey(diodmap, k) && haskey(diodmap[k].production, :mass_in_g) diodmap[k].production.mass_in_g else Float64(NaN) end *1e-3*u"kg"
             local system::Symbol = Symbol(chmap[k].system)
             processable::Bool = get(dpcfg[k], :processable, false)
             usability::Symbol = Symbol(get(dpcfg[k], :usability, :unknown))
@@ -292,19 +291,22 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
 
             location::Symbol, detstring::Int, position::Int, fiber::StaticString{8} = _convert_location(chmap[k].location)
 
-            cc4::StaticString{8} = get(chmap[k].electronics.cc4, :id, "")
-            cc4ch::Int = get(chmap[k].electronics.cc4, :channel, -1)
-            daqcrate::Int = get(chmap[k].daq, :crate, -1)
-            daqcard::Int = chmap[k].daq.card.id
-            hvcard::Int = get(chmap[k].voltage.card, :id, -1)
-            hvch::Int = get(chmap[k].voltage, :channel, -1)
-
             c = (;
                 detector, channel, fcid, rawid, system, processable, usability, is_blinded, low_aoe_status, high_aoe_status, lq_status, batch5_dt_cut, is_bb_like, det_type,
-                location, detstring, fiber, position, cc4, cc4ch, daqcrate, daqcard, hvcard, hvch, enrichment, mass
+                location, detstring, fiber, position
             )
 
             if detailed
+                cc4::StaticString{8} = get(chmap[k].electronics.cc4, :id, "")
+                cc4ch::Int = get(chmap[k].electronics.cc4, :channel, -1)
+                daqcrate::Int = get(chmap[k].daq, :crate, -1)
+                daqcard::Int = chmap[k].daq.card.id
+                hvcard::Int = get(chmap[k].voltage.card, :id, -1)
+                hvch::Int = get(chmap[k].voltage, :channel, -1)
+
+                enrichment::Unitful.Quantity{<:Measurement{<:Float64}} = if haskey(diodmap, k) && haskey(diodmap[k].production, :enrichment) measurement(diodmap[k].production.enrichment.val, diodmap[k].production.enrichment.unc) else measurement(Float64(NaN), Float64(NaN)) end *100u"percent"
+                mass::Unitful.Mass{<:Float64} = if haskey(diodmap, k) && haskey(diodmap[k].production, :mass_in_g) diodmap[k].production.mass_in_g else Float64(NaN) end *1e-3*u"kg"
+            
                 total_volume::Unitful.Volume{<:Float64} = if haskey(diodmap, k) get_active_volume(diodmap[k], 0.0) else Float64(NaN) end * 1e-3u"cm^3"
                 fccds = diodmap[k].characterization.l200_site.fccd_in_mm
                 fccd::Float64 = if isa(fccds, NoSuchPropsDBEntry) || 
@@ -317,7 +319,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
                     fccds[first(keys(fccds))].value
                 end
                 active_volume::Unitful.Volume{<:Float64} = if haskey(diodmap, k) get_active_volume(diodmap[k], 0.0) else Float64(NaN) end * 1e-3u"cm^3"
-                c = merge(c, (; total_volume, active_volume))
+                c = merge(c, (; cc4, cc4ch, daqcrate, daqcard, hvcard, hvch, enrichment, mass, total_volume, active_volume))
             end
             
             c
