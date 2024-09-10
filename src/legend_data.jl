@@ -238,7 +238,7 @@ const _cached_channelinfo = LRU{Tuple{UInt, AnyValiditySelection}, StructVector}
 Get all channel information for the given [`LegendData`](@ref) and
 [`ValiditySelection`](@ref).
 """
-function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false, detailed::Bool = false)
+function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false, extended::Bool = false)
     key = (objectid(data), sel)
     chinfo = get!(_cached_channelinfo, key) do
         chmap = data.metadata(sel).hardware.configuration.channelmaps
@@ -296,7 +296,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
                 location, detstring, fiber, position
             )
 
-            if detailed
+            if extended
                 cc4::StaticString{8} = get(chmap[k].electronics.cc4, :id, "")
                 cc4ch::Int = get(chmap[k].electronics.cc4, :channel, -1)
                 daqcrate::Int = get(chmap[k].daq, :crate, -1)

@@ -33,7 +33,7 @@ include("testing_utils.jl")
     empty!(LegendDataManagement._cached_channelinfo)
 
     # Test the extended channel info with active volume calculation
-    extended = channelinfo(l200, filekey, detailed = true)
+    extended = channelinfo(l200, filekey, extended = true)
     @test extended isa TypedTables.Table
     @test :active_volume in columnnames(extended)
 
