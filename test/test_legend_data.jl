@@ -24,10 +24,18 @@ include("testing_utils.jl")
     @test l200.metadata == LegendDataManagement.AnyProps(props_base_path)
 
     # ToDo: Make type-stable:
-    @test (channelinfo(l200, filekey)) isa TypedTables.Table
+    @test channelinfo(l200, filekey) isa TypedTables.Table
     chinfo = channelinfo(l200, filekey)
     @test all(filterby(@pf $processable && $usability == :on)(chinfo).processable)
     @test all(filterby(@pf $processable && $usability == :on)(chinfo).usability .== :on)
+
+    # Delete the channelinfo cache
+    empty!(LegendDataManagement._cached_channelinfo)
+
+    # Test the extended channel info with active volume calculation
+    extended = channelinfo(l200, filekey, detailed = true)
+    @test extended isa TypedTables.Table
+    @test :active_volume in columnnames(extended)
 
     # ToDo: Make type-stable:
     # @test #=@inferred=#(channel_info(l200, filekey)) isa StructArray
