@@ -60,8 +60,8 @@ function get_active_volume(pd::PropDict, ::Val{:bege}, fccd::T = .0) where {T <:
     x = h * tan(α)
     taper_bottom_volume = iszero(x) ? zero(T) : get_outer_taper_volume(x, h * R / x, h, R)
     
-    return  π * R^2 * H - (groove_volume + taper_top_volume + taper_bottom_volume) +
-            π * g.groove.radius_in_mm.outer^2 * fccd - get_extra_volume(g, fccd)
+    return (π * R^2 * H - (groove_volume + taper_top_volume + taper_bottom_volume) +
+            π * g.groove.radius_in_mm.outer^2 * fccd - get_extra_volume(g, fccd)) * 1e-3u"cm^3"
 end
 
 function get_active_volume(pd::PropDict, ::Val{:icpc}, fccd::T = .0) where {T <: AbstractFloat}
@@ -97,9 +97,9 @@ function get_active_volume(pd::PropDict, ::Val{:icpc}, fccd::T = .0) where {T <:
     x = h * tan(α)
     taper_borehole_volume = iszero(x) ? zero(T) : get_inner_taper_volume(x, h * (rb + x) / x, h, rb + x)
     
-    return  π * R^2 * H - (groove_volume + borehole_volume) - 
+    return (π * R^2 * H - (groove_volume + borehole_volume) - 
             taper_top_volume + taper_bottom_volume + taper_borehole_volume +
-            π * g.groove.radius_in_mm.outer^2 * fccd - get_extra_volume(g, fccd)
+            π * g.groove.radius_in_mm.outer^2 * fccd - get_extra_volume(g, fccd)) * 1e-3u"cm^3"
 end
 
 function get_active_volume(pd::PropDict, ::Val{:coax}, fccd::T = .0) where {T <: AbstractFloat}
@@ -129,8 +129,8 @@ function get_active_volume(pd::PropDict, ::Val{:coax}, fccd::T = .0) where {T <:
     x = h * tan(α)
     taper_bottom_volume = iszero(x) ? zero(T) : get_outer_taper_volume(x, h * R / x, h, R)
         
-    return  π * R^2 * H - (taper_top_volume + taper_bottom_volume + groove_volume + borehole_volume) + 
-            π * g.groove.radius_in_mm.outer^2 * fccd - get_extra_volume(g, fccd)
+    return (π * R^2 * H - (taper_top_volume + taper_bottom_volume + groove_volume + borehole_volume) + 
+            π * g.groove.radius_in_mm.outer^2 * fccd - get_extra_volume(g, fccd)) * 1e-3u"cm^3"
 end
 
 
@@ -153,8 +153,8 @@ function get_active_volume(pd::PropDict, ::Val{:ppc}, fccd::T = .0) where {T <: 
     x = h * tan(α)
     taper_bottom_volume = iszero(x) ? zero(T) : get_outer_taper_volume(x, h * R / x, h, R)
     
-    return  π * R^2 * H - (taper_top_volume + taper_bottom_volume) +
-            π * g.pp_contact.radius_in_mm^2 * fccd - get_extra_volume(g, fccd)
+    return (π * R^2 * H - (taper_top_volume + taper_bottom_volume) +
+            π * g.pp_contact.radius_in_mm^2 * fccd - get_extra_volume(g, fccd)) * 1e-3u"cm^3"
 end
 
 function get_active_volume(pd::PropDict, fccd::AbstractFloat)

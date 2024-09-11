@@ -307,7 +307,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
                 enrichment::Unitful.Quantity{<:Measurement{<:Float64}} = if haskey(diodmap, k) && haskey(diodmap[k].production, :enrichment) measurement(diodmap[k].production.enrichment.val, diodmap[k].production.enrichment.unc) else measurement(Float64(NaN), Float64(NaN)) end *100u"percent"
                 mass::Unitful.Mass{<:Float64} = if haskey(diodmap, k) && haskey(diodmap[k].production, :mass_in_g) diodmap[k].production.mass_in_g else Float64(NaN) end *1e-3*u"kg"
             
-                total_volume::Unitful.Volume{<:Float64} = if haskey(diodmap, k) get_active_volume(diodmap[k], 0.0) else Float64(NaN) end * 1e-3u"cm^3"
+                total_volume::Unitful.Volume{<:Float64} = if haskey(diodmap, k) get_active_volume(diodmap[k], 0.0) else Float64(NaN) * u"cm^3" end
                 fccds = diodmap[k].characterization.l200_site.fccd_in_mm
                 fccd::Float64 = if isa(fccds, NoSuchPropsDBEntry) || 
                                    isa(fccds, PropDicts.MissingProperty) || 
@@ -318,7 +318,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
                 else 
                     fccds[first(keys(fccds))].value
                 end
-                active_volume::Unitful.Volume{<:Float64} = if haskey(diodmap, k) get_active_volume(diodmap[k], 0.0) else Float64(NaN) end * 1e-3u"cm^3"
+                active_volume::Unitful.Volume{<:Float64} = if haskey(diodmap, k) get_active_volume(diodmap[k], 0.0) else Float64(NaN) * u"cm^3" end
                 c = merge(c, (; cc4, cc4ch, daqcrate, daqcard, hvcard, hvch, enrichment, mass, total_volume, active_volume))
             end
             
