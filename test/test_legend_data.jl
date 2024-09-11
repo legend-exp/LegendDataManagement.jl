@@ -35,7 +35,11 @@ include("testing_utils.jl")
     # Test the extended channel info with active volume calculation
     extended = channelinfo(l200, filekey, extended = true)
     @test extended isa TypedTables.Table
-    @test :active_volume in columnnames(extended)
+
+    # Check that some keywords only appear in the extended channelinfo
+    extended_keywords = (:cc4, :cc4ch, :daqcrate, :daqcard, :hvcard, :hvch, :enrichment, :mass, :total_volume, :active_volume)
+    @test !any(in(columnnames(chinfo)),   extended_keywords)
+    @test  all(in(columnnames(extended)), extended_keywords)
 
     # ToDo: Make type-stable:
     # @test #=@inferred=#(channel_info(l200, filekey)) isa StructArray
