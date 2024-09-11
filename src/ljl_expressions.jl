@@ -43,7 +43,9 @@ const ljl_expr_allowed_funcs = Set([
     :exp, :exp2, :exp10, :log, :log2, :log10,
     :sin, :cos, :tan, :asin, :acos, :atan,
     :isnan, :isinf, :isfinite,
-    :all, :any, :broadcast, 
+    :all, :any, :broadcast,
+    :get, :getproperty,
+    :value, :uncertainty, :stdscore, :weightedmean,
     :±, 
     :(:), :Symbol, :String, :Int, :Float64, :Bool,
     :DetectorId, :ChannelId

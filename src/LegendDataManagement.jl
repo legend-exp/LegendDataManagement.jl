@@ -18,7 +18,7 @@ using PropertyDicts
 using StructArrays
 using Unitful
 using Measurements
-using Measurements: ±
+using Measurements: ±, value, uncertainty
 
 using Printf: @printf
 
