@@ -5,6 +5,42 @@ const validity_filename = "validity.jsonl"
 const _ValidityTimesFiles = NamedTuple{(:valid_from, :filelist), Tuple{Vector{Timestamp}, Vector{Vector{String}}}}
 const _ValidityDict = IdDict{DataCategory,_ValidityTimesFiles}
 
+_merge_validity_info!!(::Nothing, ::Nothing) = nothing
+_merge_validity_info!!(a::_ValidityDict, ::Nothing) = a
+_merge_validity_info!!(::Nothing, b::_ValidityDict) = b
+
+function _merge_validity_info!!(a::_ValidityDict, b::_ValidityDict)
+    for k in keys(b)
+        if haskey(a, k)
+            tf_a, tf_b = a[k], b[k]
+            vf_a, fl_a = tf_a.valid_from, tf_a.filelist
+            vf_b, fl_b = tf_b.valid_from, tf_b.filelist
+            vf_new, fl_new = similar(vf_a, 0), similar(fl_a, 0)
+            ia, ib = firstindex(vf_a), firstindex(vf_b)
+            while ia <= lastindex(vf_a) || ib <= lastindex(vf_b)
+                if ib > lastindex(vf_b) || ia <= lastindex(vf_a) && vf_a[ia] < vf_b[ib]
+                    push!(vf_new, vf_a[ia])
+                    push!(fl_new, fl_a[ia])
+                    ia += 1
+                elseif ia > lastindex(vf_a) || vf_a[ia] > vf_b[ib]
+                    push!(vf_new, vf_b[ib])
+                    push!(fl_new, fl_b[ib])
+                    ib += 1
+                else
+                    @assert vf_a[ia] == vf_b[ib]
+                    push!(vf_new, vf_a[ia])
+                    push!(fl_new, vcat(fl_a[ia], fl_b[ib]))
+                    ia += 1
+                    ib += 1
+                end
+            end
+            a[k] = (valid_from = vf_new, filelist = fl_new)
+        else
+            a[k] = b[k]
+        end
+    end
+    return a
+end
 
 
 """
@@ -40,7 +76,7 @@ function _get_validity_sel_filelist(validity::_ValidityDict, category::DataCateg
     return validity_filelists[idx]
 end
 
-function _read_validity_sel_filelist(dir_path::String, validity::_ValidityDict, sel::ValiditySelection)
+function _read_validity_sel_filelist(primary_path::String, override_path::String, validity::_ValidityDict, sel::ValiditySelection)
     filelist = if haskey(validity, sel.category)
         _get_validity_sel_filelist(validity, sel.category, sel.timestamp)
     elseif haskey(validity, DataCategory(:all))
@@ -49,7 +85,22 @@ function _read_validity_sel_filelist(dir_path::String, validity::_ValidityDict, 
         throw(ErrorException("No validity entries for category $(sel.category) or category all"))
     end
 
-    abs_filelist = joinpath.(Ref(dir_path), filelist)
+    abs_filelist = Vector{String}()
+    for rel_filename in filelist
+        primary_filename = joinpath(primary_path, rel_filename)
+        override_filename = !isempty(override_path) ? joinpath(override_path, rel_filename) : ""
+        if ispath(primary_filename)
+            push!(abs_filelist, primary_filename)
+            if ispath(override_filename)
+                push!(abs_filelist, override_filename)
+            end
+        elseif ispath(override_filename)
+            push!(abs_filelist, override_filename)
+        else
+            throw(ErrorException("File \"$rel_filename\" referenced by $sel not found"))
+        end
+    end
+
     return readlprops(abs_filelist)
 end
 
@@ -103,6 +154,7 @@ depending on what on-disk content `path` points to.
 """
 struct PropsDB{VS<:Union{Nothing,ValiditySelection}} <: AbstractDict{Symbol,AbstractDict}
     _base_path::String
+    _override_base::String
     _rel_path::Vector{String}
     _validity_sel::VS
     _prop_names::Vector{Symbol}
@@ -110,7 +162,7 @@ struct PropsDB{VS<:Union{Nothing,ValiditySelection}} <: AbstractDict{Symbol,Abst
 end
 
 function Base.:(==)(a::PropsDB, b::PropsDB)
-    _base_path(a) == _base_path(b) && _rel_path(a) == _rel_path(b) && _validity_sel(a) == _validity_sel(b) &&
+    _base_path(a) == _base_path(b) && _override_base(a) == _override_base(b) && _rel_path(a) == _rel_path(b) && _validity_sel(a) == _validity_sel(b) &&
         _prop_names(a) == _prop_names(b) && _needs_vsel(a) == _needs_vsel(b)
 end
 
@@ -131,6 +183,7 @@ struct NoSuchPropsDBEntry
 end
 
 _base_path(@nospecialize(pd::NoSuchPropsDBEntry)) = getfield(pd, :_base_path)
+_override_base(@nospecialize(pd::NoSuchPropsDBEntry)) = ""
 _rel_path(@nospecialize(pd::NoSuchPropsDBEntry)) = getfield(pd, :_rel_path)
 
 function _get_md_property(missing_props::NoSuchPropsDBEntry, s::Symbol)
@@ -163,33 +216,54 @@ into a `PropDicts.PropDict`.
 Constructors:
 
 ```julia
-LegendDataManagement.AnyProps(base_path::AbstractString)
+LegendDataManagement.AnyProps(base_path::AbstractString; override_base::AbstractString = "")
 ```
 """
 const AnyProps = Union{PropsDB,PropDict}
 
-AnyProps(base_path::AbstractString) = _any_props(String(base_path), String[], nothing)
+function AnyProps(base_path::AbstractString; override_base::AbstractString = "")
+    return _any_props(String(base_path), String(override_base), String[], nothing)
+end
 
-function _any_props(base_path::String, rel_path::Vector{String}, validity_sel::Union{Nothing,ValiditySelection})
+function _any_props(base_path::String, override_base::String, rel_path::Vector{String}, validity_sel::Union{Nothing,ValiditySelection})
     !isdir(base_path) && throw(ArgumentError("PropsDB base path \"$base_path\" is not a directory"))
-    validity_path = joinpath(base_path, rel_path..., validity_filename)
-    validity_info = _load_validity(String(validity_path))
+    full_primary_path = String(joinpath(base_path, rel_path...))
+    full_override_path = String(joinpath(override_base, rel_path...))
+    if !isdir(full_override_path)
+        full_override_path = ""
+    end
 
-    files_in_dir = String.(readdir(joinpath(base_path, rel_path...)))
+    validity_primary_path = joinpath(full_primary_path, validity_filename)
+    validity_primary_info = _load_validity(String(validity_primary_path))
+    validity_info = if !isempty(override_base)
+        validity_override_path = joinpath(override_base, rel_path..., validity_filename)
+        if ispath(validity_override_path)
+            validity_override_info = _load_validity(validity_override_path)
+            _merge_validity_info!!(validity_primary_info, validity_override_info)
+        else
+            validity_primary_info
+        end
+    else
+        validity_primary_info
+    end
+
+    files_in_dir = Set(String.(readdir(full_primary_path)))
+    if !isempty(full_override_path)
+        union!(files_in_dir, Set(String.(readdir(full_override_path))))
+    end
     maybe_validity_info = something(validity_info, _ValidityDict())
     validity_filerefs = vcat(vcat(map(x -> x.filelist, values(maybe_validity_info))...)...)
-    validity_filerefs_found = !isempty(intersect(files_in_dir, validity_filerefs))
-    non_validity_files = setdiff(files_in_dir, validity_filerefs)
+    non_validity_files = collect(setdiff(files_in_dir, validity_filerefs))
     prop_names = filter(!isequal(:__no_property), _md_propertyname.(non_validity_files))
 
     if !isnothing(validity_info)
         if !isnothing(validity_sel)
-            _read_validity_sel_filelist(String(joinpath(base_path, rel_path...)), validity_info, validity_sel)
+            _read_validity_sel_filelist(full_primary_path, full_override_path, validity_info, validity_sel)
         else
-            PropsDB(base_path, rel_path, validity_sel, prop_names, true)
+            PropsDB(base_path, override_base, rel_path, validity_sel, prop_names, true)
         end
     else
-        PropsDB(base_path, rel_path, validity_sel, prop_names, false)
+        PropsDB(base_path, override_base, rel_path, validity_sel, prop_names, false)
     end
 end
 
@@ -201,7 +275,7 @@ function _read_jsonl(filename::String)
 end
 
 function _load_validity(validity_path::String)
-    if isfile(validity_path)
+    if ispath(validity_path)
         entries = PropDict.(_read_jsonl(validity_path))
         new_validity = _ValidityDict()
         for props in entries
@@ -226,10 +300,12 @@ end
 
 
 _base_path(@nospecialize(pd::PropsDB)) = getfield(pd, :_base_path)
+_override_base(@nospecialize(pd::PropsDB)) = getfield(pd, :_override_base)
 _rel_path(@nospecialize(pd::PropsDB)) = getfield(pd, :_rel_path)
 _validity_sel(@nospecialize(pd::PropsDB)) = getfield(pd, :_validity_sel)
 _prop_names(@nospecialize(pd::PropsDB)) = getfield(pd, :_prop_names)
 _needs_vsel(@nospecialize(pd::PropsDB)) = getfield(pd, :_needs_vsel)
+
 
 """
     data_path(pd::LegendDataManagement.PropsDB)
@@ -239,12 +315,19 @@ Return the path to the data directory that contains `pd`.
 data_path(@nospecialize(pd::PropsDB)) = joinpath(_base_path(pd), _rel_path(pd)...)
 data_path(@nospecialize(pd::NoSuchPropsDBEntry)) = joinpath(_base_path(pd), _rel_path(pd)...)
 
+function _propsdb_fullpaths(@nospecialize(pd::PropsDB), @nospecialize(sub_paths::AbstractString...))
+    pribase, ovrbase = _base_path(pd), _override_base(pd)
+    rp = _rel_path(pd)
+    primary = joinpath(pribase, rp..., sub_paths...)
+    override = isempty(ovrbase) ? "" : joinpath(ovrbase, rp..., sub_paths...)
+    return (String(primary)::String, String(override)::String)
+end
 
-function _check_propery_access(pd, filename::String="")
+function _check_propery_access(pd, existing_filename::String="")
     if _needs_vsel(pd) && isempty(_prop_names(pd))
-        full_path = joinpath(_base_path(pd), _rel_path(pd)...)
-        if isfile(filename)
-            @warn "Content access not available for PropsDB at \"$full_path\", but \"$(basename(filename))\" exists."
+        full_path = first(_propsdb_fullpaths(pd))
+        if !isempty(existing_filename)
+            @warn "Content access not available for PropsDB at \"$full_path\", but \"$existing_filename\" ispath."
         else
             throw(ArgumentError("Content access not available for PropsDB at \"$full_path\" without validity selection"))
         end
@@ -252,7 +335,7 @@ function _check_propery_access(pd, filename::String="")
 end
 
 
-(@nospecialize(pd::PropsDB{Nothing}))(selection::ValiditySelection) = _any_props(_base_path(pd), _rel_path(pd), selection)
+(@nospecialize(pd::PropsDB{Nothing}))(selection::ValiditySelection) = _any_props(_base_path(pd), _override_base(pd), _rel_path(pd), selection)
 
 function(@nospecialize(pd::PropsDB{Nothing}))(timestamp::Union{DateTime,Timestamp,AbstractString}, category::Union{DataCategory,Symbol,AbstractString})
     pd(ValiditySelection(timestamp, category))
@@ -313,13 +396,21 @@ end
 
 function _get_md_property(@nospecialize(pd::PropsDB), s::Symbol)
     new_relpath = push!(copy(_rel_path(pd)), string(s))
-    json_filename = joinpath(data_path(pd), "$s.json")
-    _check_propery_access(pd, json_filename)
+
+    json_primary_filename, json_override_filename = _propsdb_fullpaths(pd, "$s.json")
 
     if isdir(joinpath(_base_path(pd), new_relpath...))
-        _any_props(_base_path(pd), new_relpath, _validity_sel(pd))
-    elseif isfile(json_filename)
-        readlprops(json_filename)
+        _any_props(_base_path(pd), _override_base(pd), new_relpath, _validity_sel(pd))
+    elseif ispath(json_primary_filename)
+        _check_propery_access(pd, json_primary_filename)
+        if ispath(json_override_filename)
+            readlprops([json_primary_filename, json_override_filename])
+        else
+            readlprops(json_primary_filename)
+        end
+    elseif ispath(json_override_filename)
+        _check_propery_access(pd, json_override_filename)
+        readlprops(json_override_filename)
     else
         if !_needs_vsel(pd) && (isnothing(_validity_sel(pd)) || isempty(_validity_sel(pd)))
             NoSuchPropsDBEntry(_base_path(pd), push!(copy(_rel_path(pd)), string(s)))

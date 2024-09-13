@@ -21,7 +21,7 @@ include("testing_utils.jl")
     @test normalize_path(@inferred(l200.tier[:dsp, "l200-p02-r006-cal-20221226T200846Z"])) == normalize_path(joinpath(testdata_dir, "generated", "tier", "dsp", "cal", "p02", "r006", "l200-p02-r006-cal-20221226T200846Z-tier_dsp.lh5"))
 
     props_base_path = data_path(LegendDataConfig().setups.l200, "metadata")
-    @test l200.metadata == LegendDataManagement.AnyProps(props_base_path)
+    @test l200.metadata isa LegendDataManagement.PropsDB
 
     # ToDo: Make type-stable:
     @test (channelinfo(l200, filekey)) isa TypedTables.Table

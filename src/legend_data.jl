@@ -68,16 +68,23 @@ get_setup_name(data::LegendData) = getfield(data, :_name)
     elseif s == :name
         getfield(d, :_name)
     elseif s == :metadata
-        AnyProps(data_path(d, "metadata"))
+        _ldata_propsdb(d, :metadata)
     elseif s == :tier
         LegendTierData(d)
     elseif s == :par
-        AnyProps(data_path(d, "par"))
+        _ldata_propsdb(d, :par)
     elseif s == :jlpar
-        AnyProps(data_path(d, "jlpar"))
+        _ldata_propsdb(d, :jlpar)
     else
         throw(ErrorException("LegendData has no property $s"))
     end
+end
+
+function _ldata_propsdb(d::LegendData, dbsym::Symbol)
+    dbname = string(dbsym)
+    base_path = data_path(d, dbname)
+    override_base = joinpath(data_path(d, "metadata"), "jldataprod", "overrides", dbname)
+    AnyProps(base_path, override_base = override_base)
 end
 
 @inline function Base.propertynames(d::LegendData)
