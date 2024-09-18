@@ -8,8 +8,20 @@
 @inline get_outer_taper_volume(x, y, h, r) = π * (r^2 * h - (r - x)^2 * h) - get_inner_taper_volume(x, y, h, r)
 
 function get_extra_volume(geometry::PropDict, ::Val{:crack}, fccd::T) where {T <: AbstractFloat}
-    @warn "Active volume calculations for detectors with cracks are not implemented yet"
-    return zero(T)
+    r = geometry.radius_in_mm
+    H = geometry.height_in_mm
+    p0 = geometry.extra.crack.radius_in_mm
+    alpha = geometry.extra.crack.angle_in_deg
+    return if iszero(alpha)
+        # Vertical crack
+        (r^2 * acos(1 - p0/r) - sqrt(2r*p0 - p0^2) * (r - p0)) * H
+    else 
+        # Inclined crack
+        t = max(p0 - H * tand(alpha), p0 * 0)
+        int11 = (1 - t/r) * acos(1 - t/r) - sqrt(1 - (1 - t/r)^2)
+        int12 = (1 - p0/r) * acos(1 - p0/r) - sqrt(1 - (1 - p0/r)^2)
+        -cotd(alpha) * (r^3 * (int12 - int11) + ((2*r*p0 - p0^2)^(3/2) - (2*r*t - t^2)^(3/2))/ 3)
+    end
 end
 
 function get_extra_volume(geometry::PropDict, ::Val{:topgroove}, fccd::AbstractFloat)
