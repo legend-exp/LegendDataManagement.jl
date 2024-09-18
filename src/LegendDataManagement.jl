@@ -51,15 +51,4 @@ include("evt_functions.jl")
 include("lprops.jl")
 include("utils/utils.jl")
 
-@static if !isdefined(Base, :get_extension)
-    using Requires
-end
-
-function __init__()
-    @static if !isdefined(Base, :get_extension)
-        @require LegendHDF5IO = "c9265ca6-b027-5446-b1a4-febfa8dd10b0" begin
-            include("../ext/LegendDataManagementLegendHDF5IOExt.jl")
-        end        
-    end
-end
 end # module
