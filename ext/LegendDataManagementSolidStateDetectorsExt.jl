@@ -6,8 +6,35 @@ using SolidStateDetectors
 using LegendDataManagement
 using Unitful
 using PropDicts
+using LsqFit
 
 const _SSDDefaultNumtype = Float32
+
+struct RadfordImpurityDensity{T} <: SolidStateDetectors.AbstractImpurityDensity{T}
+    # a + b*z + c*exp((z-L)/tau) -> needs at least 4 points
+    a::T
+    b::T 
+    c::T 
+    tau::T
+    L::T
+    det_z0::T
+end
+
+function SolidStateDetectors.get_impurity_density(
+    idm::RadfordImpurityDensity, pt::SolidStateDetectors.AbstractCoordinatePoint{T}
+    )::T where {T}
+    cpt = CartesianPoint(pt)
+    z = cpt[3]
+
+    # the function parameters are in crystal axis coordinates i.e. z = 0 is seed end, z = L crystal length 
+    # -> convert to detector coordiantes where z = 0 corresponds to p+ contact i.e. z -> det_z0 - z
+    -(idm.a .+ idm.b * (idm.det_z0 .- z) .+ idm.c * exp.((idm.det_z0 .- z .- idm.L)/idm.tau)) 
+
+end
+
+function SolidStateDetectors.ImpurityDensity(T::DataType, t::Val{:radford}, dict::AbstractDict, input_units::NamedTuple)
+    RadfordImpurityDensity{T}(dict["parameters"]..., )
+end
 
 
 """
@@ -527,11 +554,27 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         mantle_contact_parts
     end
 
- 
-    config_dict["detectors"][1]["semiconductor"]["impurity_density"] = dicttype(
-        "name" => "constant", 
-        "value" => "-1e9cm^-3"
-    )
+
+    if X == PropDict
+
+        if !haskey(xtal_meta, :impurity_measurements)
+            @warn "No information regarding impurity density for $(xtal_meta.name)"
+        end
+        # TODO: check units of impurity density against the values in the config file
+        # Fit the impurity measurement data to a Radford model
+        @. fit_model(z, p) = p[1] + p[2]*z + p[3]*exp((z-p[5])/p[4])
+        pos = xtal_meta.impurity_measurements.distance_from_seed_end_mm * 1e-3  # units: m
+        val = xtal_meta.impurity_measurements.value_in_1e9e_cm3                 # units: e/m^-3
+        fit_result = curve_fit(fit_model, pos, val, ones(Float64,5))
+
+        config_dict["detectors"][1]["semiconductor"]["impurity_density"] =  dicttype(
+            "name" => "radford", 
+            "parameters" => vcat(fit_result.param..., xtal_meta.slices[Symbol(meta.name[end])].detector_offset_in_mm / 1000)
+        )
+    else
+        @warn "No crystal metadata found for detector $(meta.name)"
+        # TODO: Implement a default impurity density for cases without crystal metadata
+    end
 
     # evaluate "include" statements - needed for the charge drift model
     SolidStateDetectors.scan_and_merge_included_json_files!(config_dict, "")
