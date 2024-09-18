@@ -8,10 +8,10 @@
 @inline get_outer_taper_volume(x, y, h, r) = π * (r^2 * h - (r - x)^2 * h) - get_inner_taper_volume(x, y, h, r)
 
 function get_extra_volume(geometry::PropDict, ::Val{:crack}, fccd::T) where {T <: AbstractFloat}
-    r = geometry.radius_in_mm
-    H = geometry.height_in_mm
-    p0 = geometry.extra.crack.radius_in_mm
+    r = geometry.radius_in_mm - fccd
+    H = geometry.height_in_mm - 2*fccd
     alpha = geometry.extra.crack.angle_in_deg
+    p0 = geometry.extra.crack.radius_in_mm + fccd * (secd(alpha) - tand(alpha) - 1)
     return if iszero(alpha)
         # Vertical crack
         (r^2 * acos(1 - p0/r) - sqrt(2r*p0 - p0^2) * (r - p0)) * H
