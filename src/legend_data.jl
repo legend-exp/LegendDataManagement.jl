@@ -318,7 +318,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
                 else 
                     fccds[first(keys(fccds))].value
                 end
-                active_volume::Unitful.Volume{<:Float64} = if haskey(diodmap, k) get_active_volume(diodmap[k], 0.0) else Float64(NaN) * u"cm^3" end
+                active_volume::Unitful.Volume{<:Float64} = if haskey(diodmap, k) get_active_volume(diodmap[k], fccd) else Float64(NaN) * u"cm^3" end
                 c = merge(c, (; cc4, cc4ch, daqcrate, daqcard, hvcard, hvch, enrichment, mass, total_volume, active_volume))
             end
             
