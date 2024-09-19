@@ -9,7 +9,7 @@ Example (requires a `$LEGEND_DATA_CONFIG` environment variable pointing to a leg
 ```julia
 using LegendDataManagement, LegendHDF5IO
 l200 = LegendData(:l200)
-filekeys = search_dsik(FileKey, l200.tier[:jldsp, :cal, :p03, :r000])
+filekeys = search_disk(FileKey, l200.tier[:jldsp, :cal, :p03, :r000])
 
 chinfo = channelinfo(l200, (:p03, :r000, :cal); system=:geds, only_processable=true)
 
