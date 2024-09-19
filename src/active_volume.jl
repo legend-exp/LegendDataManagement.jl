@@ -8,17 +8,38 @@
 @inline get_outer_taper_volume(x, y, h, r) = π * (r^2 * h - (r - x)^2 * h) - get_inner_taper_volume(x, y, h, r)
 
 function get_extra_volume(geometry::PropDict, ::Val{:crack}, fccd::T) where {T <: AbstractFloat}
-    @warn "Active volume calculations for detectors with cracks are not implemented yet"
-    return zero(T)
+    # Find a picture of the definition of crack here:
+    # https://github.com/legend-exp/legend-metadata/blob/archived/hardware/detectors/detector-metadata_5.pdf
+    r = geometry.radius_in_mm - fccd
+    H = geometry.height_in_mm - 2*fccd
+    alpha = geometry.extra.crack.angle_in_deg
+    p0 = geometry.extra.crack.radius_in_mm + fccd * (secd(alpha) - tand(alpha) - 1)
+    return if iszero(alpha)
+        # Vertical crack
+        (r^2 * acos(1 - p0/r) - sqrt(2r*p0 - p0^2) * (r - p0)) * H
+    else 
+        # Inclined crack
+        t = max(p0 - H * tand(alpha), p0 * 0)
+        int11 = (1 - t/r) * acos(1 - t/r) - sqrt(1 - (1 - t/r)^2)
+        int12 = (1 - p0/r) * acos(1 - p0/r) - sqrt(1 - (1 - p0/r)^2)
+        -cotd(alpha) * (r^3 * (int12 - int11) + ((2*r*p0 - p0^2)^(3/2) - (2*r*t - t^2)^(3/2))/ 3)
+    end
 end
 
 function get_extra_volume(geometry::PropDict, ::Val{:topgroove}, fccd::AbstractFloat)
-    r = geometry.extra.topgroove.radius_in_mm
-    d = geometry.extra.topgroove.depth_in_mm
-    return π * r^2 * d
+    # Find a picture of the definition of topgroove here:
+    # https://github.com/legend-exp/legend-metadata/blob/archived/hardware/detectors/detector-metadata_4.pdf
+    rb = geometry.borehole.radius_in_mm
+    db = geometry.borehole.radius_in_mm
+    rg = geometry.extra.topgroove.radius_in_mm
+    dg = geometry.extra.topgroove.depth_in_mm
+    db <= dg && @warn "The depth of the borehole ($(db)mm) should be bigger than the depth of the topgroove ($(dg)mm)."
+    return π * ((rg + fccd)^2 - (rb + fccd)^2) * dg
 end
 
 function get_extra_volume(geometry::PropDict, ::Val{:bottom_cylinder}, fccd::AbstractFloat)
+    # Find a picture of the definition of bottom_cylinder here:
+    # https://github.com/legend-exp/legend-metadata/blob/archived/hardware/detectors/detector-metadata_6.pdf
     r = geometry.extra.bottom_cylinder.radius_in_mm - fccd
     h = geometry.extra.bottom_cylinder.height_in_mm - fccd
     t = geometry.extra.bottom_cylinder.transition_in_mm
