@@ -348,7 +348,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
                     "to" => borehole_radius
                 ),
                 "h" => borehole_depth,
-                "origin" => [0, 0, borehole_depth]
+                "origin" => [0, 0, borehole_depth / 2]
             )),
             dicttype("cone" => dicttype(
                 "r" => borehole_radius,
@@ -367,7 +367,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         dicttype("cone" => dicttype(
             "r" => pp_radius,
             "h" => pp_depth,
-            "origin" => [0, 0, pp_depth]
+            "origin" => [0, 0, pp_depth / 2]
         ))
     end
 
