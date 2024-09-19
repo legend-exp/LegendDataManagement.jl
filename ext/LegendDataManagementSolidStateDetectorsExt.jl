@@ -11,12 +11,12 @@ const _SSDDefaultNumtype = Float32
 
 
 """
-    SolidStateDetector[{T<:AbstractFloat}](data::LegendData, detector::DetectorIdLike
+    SolidStateDetector[{T<:AbstractFloat}](data::LegendData, detector::DetectorIdLike)
     SolidStateDetector[{T<:AbstractFloat}(::Type{LegendData}, detector_props::AbstractDict)
     SolidStateDetector[{T<:AbstractFloat}(::Type{LegendData}, json_filename::AbstractString)
 
 LegendDataManagement provides an extension for SolidStateDetectors, a
-`SolidStateDetector` can be constructed from LEGEND metadata  using the
+`SolidStateDetector` can be constructed from LEGEND metadata using the
 methods above.
 """
 function SolidStateDetectors.SolidStateDetector(data::LegendData, detector::DetectorIdLike)
@@ -42,7 +42,7 @@ function SolidStateDetectors.SolidStateDetector(::Type{LegendData}, meta::Abstra
 end
 
 function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::AbstractDict) where {T<:AbstractFloat}
-    SolidStateDetectors.SolidStateDetector{T}(LegendData, convert(PropDict, meta))
+    SolidStateDetectors.SolidStateDetector{T}(LegendData, convert(PropDict, meta), LegendDataManagement.NoSuchPropsDBEntry("",[]))
 end
 
 function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}) where {T<:AbstractFloat}
@@ -50,7 +50,15 @@ function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::Pro
     return SolidStateDetector{T}(config_dict, SolidStateDetectors.construct_units(config_dict))
 end
 
+"""
+    Simulation[{T<:AbstractFloat}](data::LegendData, detector::DetectorIdLike)
+    Simulation[{T<:AbstractFloat}(::Type{LegendData}, detector_props::AbstractDict)
+    Simulation[{T<:AbstractFloat}(::Type{LegendData}, json_filename::AbstractString)
 
+LegendDataManagement provides an extension for SolidStateDetectors, a
+`Simulation` can be constructed from LEGEND metadata using the
+methods above.
+"""
 function SolidStateDetectors.Simulation(data::LegendData, detector::DetectorIdLike)
     SolidStateDetectors.Simulation{_SSDDefaultNumtype}(data, detector)
 end
@@ -61,12 +69,20 @@ function SolidStateDetectors.Simulation{T}(data::LegendData, detector::DetectorI
     Simulation{T}(LegendData, detector_props, xtal_props)
 end
 
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, filename::String) where {T<:AbstractFloat}
+    Simulation{T}(LegendData, readprops(filename, subst_pathvar = false, subst_env = false, trim_null = false))
+end
+
+function SolidStateDetectors.Simulation(::Type{LegendData}, filename::String)
+    Simulation{_SSDDefaultNumtype}(LegendData, filename)
+end
+
 function SolidStateDetectors.Simulation(::Type{LegendData}, meta::AbstractDict)
     SolidStateDetectors.Simulation{_SSDDefaultNumtype}(LegendData, meta)
 end
 
 function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::AbstractDict) where {T<:AbstractFloat}
-    SolidStateDetectors.Simulation{T}(LegendData, convert(PropDict, meta))
+    SolidStateDetectors.Simulation{T}(LegendData, convert(PropDict, meta), LegendDataManagement.NoSuchPropsDBEntry("", []))
 end
 
 function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}) where {T<:AbstractFloat}

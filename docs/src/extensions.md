@@ -36,7 +36,7 @@ dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, det)
 ```
 ## `SolidStateDetectors` extension
 
-LegendDataManagment provides an extension for [SolidStateDetectors](https://github.com/JuliaPhysics/SolidStateDetectors.jl). This makes it possible to create `SolidStateDetector` instances from LEGEND metadata.
+LegendDataManagment provides an extension for [SolidStateDetectors](https://github.com/JuliaPhysics/SolidStateDetectors.jl). This makes it possible to create `SolidStateDetector` and `Simulation` instances from LEGEND metadata.
 
 Example (requires a `$LEGEND_DATA_CONFIG` environment variable pointing to a legend data-config file):
 
@@ -51,6 +51,21 @@ A detector can also be constructed using the filename of the LEGEND metadata det
 ```julia
 det = SolidStateDetector(LegendData, "V99000A.json")
 ```
+
+In addition, when creating a `Simulation`, all simulation functions in SolidStateDetectors.jl can be applied. As usual, all fields stored in the `Simulation` can be written and read using `LegendHDF5IO`:
+
+```julia
+using LegendDataManagement
+using SolidStateDetectors
+
+sim = Simulation(LegendData, "V99000A.json")
+simulate!(sim) # calculate electric field and weighting potentials
+
+using LegendHDF5IO
+ssd_write("V99000A.lh5", sim)
+sim_in = ssd_read("V99000A.lh5", Simulation)
+```
+
 
 The following code will generate an overview plot of every 5th LEGEND detector (requires the actual LEGEND metadata instead of the metadata in legend-testdata):
 
