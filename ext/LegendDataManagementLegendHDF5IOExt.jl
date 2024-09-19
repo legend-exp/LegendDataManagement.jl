@@ -1,15 +1,9 @@
 module LegendDataManagementLegendHDF5IOExt
 
-@static if isdefined(Base, :get_extension)
-    using LegendDataManagement
-    using LegendHDF5IO
-else
-    using ..LegendDataManagement
-    using LegendHDF5IO
-end
+using LegendDataManagement
+using LegendHDF5IO
 
 # using LegendDataManagement: LegendDataManagement.DataSelector
-using LegendHDF5IO
 
 const dataselector_bytypes = Dict{Type, String}()
 
