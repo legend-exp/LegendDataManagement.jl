@@ -1,6 +1,6 @@
 name = "LegendDataManagement"
 uuid = "9feedd95-f0e0-423f-a8dc-de0970eae6b3"
-version = "0.3.2"
+version = "0.3.3"
 
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
@@ -63,7 +63,7 @@ PropDicts = "0.2.4"
 PropertyDicts = "0.2"
 PropertyFunctions = "0.2.1"
 RecipesBase = "1"
-SolidStateDetectors = "0.8, 0.9"
+SolidStateDetectors = "0.8, 0.9, 0.10"
 StaticStrings = "0.2"
 Statistics = "1"
 StructArrays = "0.4, 0.5, 0.6"
