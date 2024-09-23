@@ -207,8 +207,8 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
             r_out_top = r_center + Δr * (1 + 2*gap/hZ)
             push!(semiconductor_geometry_subtractions, dicttype("cone" => dicttype(
                 "r" => dicttype(
-                    "from" => r_out_bot,
-                    "to" => r_out_top
+                    "bottom" => r_out_bot,
+                    "top" => r_out_top
                 ),
                 "h" => 2 * hZ,
                 "origin" => [0, 0, crystal_height - borehole_taper_height / 2 + gap]
