@@ -130,7 +130,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
                 "phi" => dicttype(
                     "from" => 0,
                     "to" => 0,
-                    "boundaries" => "reflecting"
+                    "boundaries" => "periodic"
                 ),
                 "z" => dicttype(
                     "from" => -0.2 * crystal_height,
@@ -325,10 +325,6 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
     # bulletization
     # is_bulletized = !all(values(meta.geometry.bulletization) .== 0)
     # is_bulletized && @warn "Bulletization is not implemented yet, ignore for now."
-
-    # extras
-    haskey(meta.geometry, :extra) && @warn "Extras are not implemented yet, ignore for now."
-
 
     ### P+ CONTACT ###
 
@@ -532,6 +528,73 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         "name" => "constant", 
         "value" => "-1e9cm^-3"
     )
+
+    # extras
+    if haskey(meta.geometry, :extra) 
+        if haskey(meta.geometry.extra, :crack)
+            
+            # cut the crack volume from the semiconductor
+            radius_crack = meta.geometry.extra.crack.radius_in_mm
+            α = meta.geometry.extra.crack.angle_in_deg
+
+            crack = dicttype(
+                "translate" => dicttype(
+                    "box" => dicttype(
+                        "widths" => [100,200,200],
+                        "rotation" => dicttype("Y" => α),
+                    ),
+                    "x" => crystal_radius - radius_crack + 50*cosd(α),
+                    "z" => -50*sind(α)
+                )
+            )
+            push!(config_dict["detectors"][1]["semiconductor"]["geometry"]["difference"], crack)
+
+            # cut the crack from the mantle contact 
+            semiconductor_volume = config_dict["detectors"][1]["semiconductor"]["geometry"]
+
+            config_dict["detectors"][1]["contacts"][2]["geometry"] = dicttype(
+                "union" => [
+                    dicttype(
+                        "difference" => vcat(
+                            config_dict["detectors"][1]["contacts"][2]["geometry"],
+                            # cut out from the contact
+                            dicttype(
+                                "translate" => dicttype(
+                                    "box" => dicttype(
+                                        "widths" => [100,200,200],
+                                        "rotation" => dicttype("Y" => α),
+                                    ),
+                                    "x" => crystal_radius - radius_crack + 50*cosd(α),
+                                    "z" => -50*sind(α)
+                                )
+                            )
+                        )
+                    ),
+                    #addition to the contact 
+                    dicttype(
+                        "intersection" => [
+                            dicttype(
+                                "translate" => dicttype(
+                                    "box" => dicttype(
+                                        "widths" => [0,200,200],
+                                        "rotation" => dicttype("Y" => α),
+                                    ),
+                                    "x" => crystal_radius - radius_crack,
+                                )
+                            ),
+                            semiconductor_volume
+                        ]
+                    )
+                ]
+            )
+
+            # make sure that the simulation is performed in 3D
+            config_dict["grid"]["axes"]["phi"]["to"] = 360
+        else
+            @warn "Extras `topgroove` and `bottom_cylinder` are not yet implemented"
+        end
+    end
+    
 
     # evaluate "include" statements - needed for the charge drift model
     SolidStateDetectors.scan_and_merge_included_json_files!(config_dict, "")
