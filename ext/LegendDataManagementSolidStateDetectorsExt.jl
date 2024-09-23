@@ -112,6 +112,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
     
     is_coax = meta.type == "coax"
     has_bottom_cylinder = haskey(meta.geometry, :extra)  && haskey(meta.geometry.extra, :bottom_cylinder)
+    has_top_groove = haskey(meta.geometry, :extra) && haskey(meta.geometry.extra, :topgroove)
 
     config_dict = dicttype(
         "name" => meta.name,
@@ -359,6 +360,21 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         end
     end
 
+    if has_top_groove
+        top_groove_radius = meta.geometry.extra.topgroove.radius_in_mm
+        top_groove_height = meta.geometry.extra.topgroove.depth_in_mm
+        push!(semiconductor_geometry_subtractions, dicttype(
+                "tube" => dicttype(
+                    "r" => top_groove_radius,
+                    "h" => top_groove_height + gap,
+                    "origin" => dicttype(
+                        "z" => crystal_height - top_groove_height/2 + gap/2
+                    )
+                )
+            )
+        )
+    end
+
     if isempty(semiconductor_geometry_subtractions)
         config_dict["detectors"][1]["semiconductor"]["geometry"] = semiconductor_geometry_basis
     else
@@ -429,7 +445,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
             r = if !has_borehole || is_coax
                 !has_top_taper ? crystal_radius : crystal_radius - top_taper_radius
             else has_borehole && !is_coax
-                r_in = borehole_radius
+                r_in = has_top_groove ? top_groove_radius : borehole_radius
                 r_out = crystal_radius
                 if has_borehole_taper r_in += borehole_taper_radius end
                 if has_top_taper r_out -= top_taper_radius end
@@ -442,6 +458,35 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
             ))
         end
         push!(mantle_contact_parts, top_plate)
+        
+        if has_top_groove
+            push!(mantle_contact_parts, dicttype(
+                    "tube" => dicttype(
+                        "r" => dicttype(
+                            "from" => top_groove_radius,
+                            "to" => top_groove_radius
+                        ),
+                        "h" => top_groove_height,
+                        "origin" => dicttype(
+                            "z" => crystal_height - top_groove_height/2
+                        )
+                    )
+                )
+            )
+            push!(mantle_contact_parts, dicttype(
+                    "tube" => dicttype(
+                        "r" => dicttype(
+                            "from" => borehole_radius,
+                            "to" => top_groove_radius
+                        ),
+                        "h" => 0,
+                        "origin" => dicttype(
+                            "z" => crystal_height - top_groove_height
+                        )
+                    )
+                )
+            )
+        end
 
         if has_top_taper
             Δr_li_thickness = li_thickness / cosd(top_taper_angle)
@@ -495,13 +540,18 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
             )))
         elseif has_borehole && !is_coax # but no borehole taper
             h = borehole_depth
+            z_origin = crystal_height - h/2
+            if has_top_groove 
+                h -= top_groove_height 
+                z_origin -= top_groove_height/2
+            end
             push!(mantle_contact_parts, dicttype("cone" => dicttype(
                 "r" => dicttype(
                     "from" => borehole_radius,
                     "to" => borehole_radius + li_thickness
                 ),
                 "h" => h,
-                "origin" => [0, 0, crystal_height - h / 2]
+                "origin" => [0, 0, z_origin]
             )))
         end
 
@@ -749,12 +799,6 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
 
             # make sure that the simulation is performed in 3D
             config_dict["grid"]["axes"]["phi"]["to"] = 360
-
-        elseif haskey(meta.geometry.extra, :topgroove)
-
-        elseif haskey(meta.geometry.extra, :bottom_cylinder)
-        else
-            @warn "The extra provided in the metadata geometry is not yet implemented."
         end
     end
     
