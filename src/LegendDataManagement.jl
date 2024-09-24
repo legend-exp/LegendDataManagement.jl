@@ -18,14 +18,14 @@ using PropertyDicts
 using StructArrays
 using Unitful
 using Measurements
-using Measurements: ±
+using Measurements: ±, value, uncertainty
 
 using Printf: @printf
 
 using IntervalSets: AbstractInterval, ClosedInterval, leftendpoint, rightendpoint
 using LRUCache: LRU
 using ProgressMeter: @showprogress
-using PropertyFunctions: PropertyFunction, @pf, filterby, props2varsyms
+using PropertyFunctions: PropertyFunction, @pf, filterby, props2varsyms, PropSelFunction
 using StaticStrings: StaticString
 import Tables
 using Tables: columns
@@ -36,7 +36,6 @@ using MIMEs: mime_from_extension
 include("legend_report.jl")
 include("status_types.jl")
 include("atomic_fcreate.jl")
-include("calfunc.jl")
 include("filekey.jl")
 include("dataset.jl")
 include("data_config.jl")
@@ -49,6 +48,8 @@ include("dataprod_config.jl")
 include("calibration_functions.jl")
 include("evt_functions.jl")
 include("lprops.jl")
+include("data_io.jl")
+include("active_volume.jl")
 include("utils/utils.jl")
 
 end # module

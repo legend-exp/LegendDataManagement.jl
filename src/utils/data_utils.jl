@@ -19,6 +19,10 @@ function load_run_ch end
 export load_run_ch
 
 function load_run_ch(open_func::Function, flatten_func::Function, data::LegendData, filekeys::Vector{FileKey}, tier::DataTierLike, ch::ChannelIdLike; check_filekeys::Bool=true, keys::Tuple=())
+    Base.depwarn(
+        "`load_run_ch` is deprecated, use `read_ldata` instead`.",
+        ((Base.Core).Typeof(load_run_ch)).name.mt.name, force=true
+    )
     ch_filekeys = if check_filekeys
         @info "Check Filekeys"
         ch_filekeys = Vector{FileKey}()
@@ -93,11 +97,19 @@ function load_raw_evt end
 export load_raw_evt
 
 function load_raw_evt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::Int)
+    Base.depwarn(
+        "`load_raw_evt` is deprecated, use `read_ldata` instead`.",
+        ((Base.Core).Typeof(load_raw_evt)).name.mt.name, force=true
+    )
     data_ch_evtIDs = open_func(data.tier[:raw, data_hit.filekey[sel_evt]])[ch].raw.eventnumber[:]
     open_func(data.tier[:raw, data_hit.filekey[sel_evt]])[ch].raw[findall(data_hit.eventID_fadc[sel_evt] .== data_ch_evtIDs)]
 end
 
 function load_raw_evt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::Union{UnitRange{Int}, Vector{Int}})
+    Base.depwarn(
+        "`load_raw_evt` is deprecated, use `read_ldata` instead`.",
+        ((Base.Core).Typeof(load_raw_evt)).name.mt.name, force=true
+    )
     tbl_vec = map(unique(data_hit.filekey[sel_evt])) do fk
         data_ch_evtIDs = open_func(data.tier[:raw, fk])[ch].raw.eventnumber[:]
         idxs = reduce(vcat, broadcast(data_hit.eventID_fadc[sel_evt]) do x
@@ -128,6 +140,10 @@ Load data for a channel from a partition.
 - `Table`: data table with flattened events
 """
 function load_partition_ch(open_func::Function, flatten_func::Function, data::LegendData, partinfo::Table, tier::DataTierLike, cat::DataCategoryLike, ch::ChannelIdLike; data_keys::Tuple=(), n_evts::Int=-1, select_random::Bool=false)
+    Base.depwarn(
+        "`load_partition_ch` is deprecated, use `read_ldata` instead`.",
+        ((Base.Core).Typeof(load_partition_ch)).name.mt.name, force=true
+    )
     @assert !isempty(partinfo) "No partition info found"
     @assert n_evts > 0 || n_evts == -1 "Number of events must be positive"
     if isempty(data_keys)

@@ -36,14 +36,19 @@ const ljl_expr_allowed_funcs = Set([
     :!,
     :(==), :<, :>, :>=, :<=, :!=,
     :isapprox, :≈, :≈,
+    :in, :∈, :..,
     :+, :-, :*, :/,
     :^, :sqrt,
     :abs, :abs2, :normalize, :norm,
-    :exp, exp2, :exp10, :log, :log2, :log10,
+    :exp, :exp2, :exp10, :log, :log2, :log10,
     :sin, :cos, :tan, :asin, :acos, :atan,
     :isnan, :isinf, :isfinite,
-    :all, :any, :broadcast, 
-    :±
+    :all, :any, :broadcast,
+    :get, :getproperty,
+    :value, :uncertainty, :stdscore, :weightedmean,
+    :±, 
+    :(:), :Symbol, :String, :Int, :Float64, :Bool,
+    :DetectorId, :ChannelId
 ])
 
 const _ljlexpr_units = IdDict([
@@ -83,6 +88,7 @@ end
 
 _process_ljlexpr_impl(x::Real, @nospecialize(f_varsubst)) = x
 _process_ljlexpr_impl(x::LineNumberNode, @nospecialize(f_varsubst)) = x
+_process_ljlexpr_impl(x::QuoteNode, @nospecialize(f_varsubst)) = x
 _process_ljlexpr_impl(sym::Symbol, f_varsubst) = f_varsubst(sym)
 
 function _process_ljlexpr_impl(@nospecialize(expr::Expr), @nospecialize(f_varsubst))
@@ -142,7 +148,14 @@ function _propfrom_from_expr(pf_body)
 end
 
 
-_pf_varsym(sym::Symbol) = Expr(:$, sym)
+const _ljlexpr_numbers = IdDict([
+    :NaN => :NaN,
+    :Inf => :Inf,
+    :missing => :missing,
+    :nothing => :nothing
+])
+
+_pf_varsym(sym::Symbol) = get(_ljlexpr_numbers, sym, Expr(:$, sym))
 
 const _cached_ljl_propfunc = Dict{Union{LJlExprLike}, PropertyFunction}()
 const _cached_ljl_propfunc_lock = ReentrantLock()

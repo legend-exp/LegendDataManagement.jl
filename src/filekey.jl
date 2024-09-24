@@ -230,7 +230,7 @@ _can_convert_to(::Type{DataPeriod}, s) = false
 function DataPeriod(s::AbstractString)
     m = match(period_expr, s)
     if (m == nothing)
-        throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data-run name"))
+        throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data-period name"))
     else
         DataPeriod(parse(Int, (m::RegexMatch).captures[1]))
     end
@@ -337,7 +337,7 @@ export DataCategory
 Base.:(==)(a::DataCategory, b::DataCategory) = a.label == b.label
 Base.isless(a::DataCategory, b::DataCategory) = isless(a.label, b.label)
 
-const category_expr = r"^([a-z]+)$"
+const category_expr = r"^[a-z]{3}$"
 
 _can_convert_to(::Type{DataCategory}, s::AbstractString) = !isnothing(match(category_expr, s))
 _can_convert_to(::Type{DataCategory}, s::Symbol) = _can_convert_to(DataCategory, string(s))
@@ -649,7 +649,7 @@ end
 const ch_expr = r"^ch([0-9]{3}|(?:0[1-9]|[1-9][0-9])[0-9]{5})$"
 
 _can_convert_to(::Type{ChannelId}, s::AbstractString) = !isnothing(match(ch_expr, s))
-_can_convert_to(::Type{ChannelId}, s::Int) = _can_convert_to(ChannelId, lpad(0, no < 1000 ? 3 : 7, '0'))
+_can_convert_to(::Type{ChannelId}, s::Int) = _can_convert_to(ChannelId, "ch$s")
 _can_convert_to(::Type{ChannelId}, s::ChannelId) = true
 _can_convert_to(::Type{ChannelId}, s) = false
 

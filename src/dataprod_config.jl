@@ -145,16 +145,34 @@ function _resolve_partition_runs(data::LegendData, period::DataPeriod, runs::Abs
 end
 
 """
-    partitioninfo(data::LegendData, s::ChannelIdLike)
+    partitioninfo(data::LegendData, ch::ChannelId)
+    partitioninfo(data::LegendData, ch::ChannelId, part::DataPartitionLike)
+    partitioninfo(data::LegendData, ch::ChannelId, period::DataPeriodLike)
 
 Return cross-period data partitions.
 """
-function partitioninfo(data::LegendData, ch::ChannelIdLike)
+function partitioninfo end
+export partitioninfo
+function partitioninfo(data::LegendData, ch::ChannelId)
     _get_partitions(data, Symbol(ChannelId(ch)))
+end
+function partitioninfo(data::LegendData, det::DetectorIdLike)
+    ch = channelinfo(data, first(filter(!ismissing, runinfo(data).cal.startkey)), det).channel
+    partitioninfo(data, ch)
 end
 partitioninfo(data, ch, part::DataPartition) = partitioninfo(data, ch)[part]
 partitioninfo(data, ch, period::DataPeriod) = sort(Vector{DataPartition}([p for (p, pinfo) in partitioninfo(data, ch) if period in pinfo.period]))
-export partitioninfo
+function partitioninfo(data, ch, p::Union{Symbol, AbstractString})
+    if _can_convert_to(DataPartition, p)
+        partitioninfo(data, ch, DataPartition(p))
+    elseif _can_convert_to(DataPeriod, p)
+        partitioninfo(data, ch, DataPeriod(p))
+    else 
+        throw(ArgumentError("Invalid specification \"$p\". Must be of type DataPartition or DataPeriod"))
+    end
+end
+partitioninfo(data, ch, period::DataPeriodLike, run::DataRunLike) = sort(Vector{DataPartition}([p for (p, pinfo) in partitioninfo(data, ch) if any(map(row -> row.period == DataPeriod(period) && row.run == DataRun(run), pinfo))]))
+
 
 
 Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, ch::ChannelId, p::Vector{<:DataPeriod}) = unique(vcat(f.(Ref(data), Ref(ch), p)...))
@@ -244,8 +262,8 @@ function runinfo(data::LegendData)
             @NamedTuple{period::DataPeriod, run::DataRun, is_analysis_cal_run::Bool, is_analysis_phy_run::Bool, cal::nttype, phy::nttype, fft::nttype}((period, run, Bool(is_ana_cal_run), Bool(is_ana_phy_run), get_cat_entry(:cal), get_cat_entry(:phy), get_cat_entry(:fft)))
         end
         periods_and_runs = [[make_row(p, r, ri) for (r, ri) in rs] for (p, rs) in rinfo]
-        flat_pr = vcat(periods_and_runs...)::Vector{@NamedTuple{period::DataPeriod, run::DataRun, is_analysis_cal_run::Bool, is_analysis_phy_run::Bool, cal::nttype, phy::nttype, fft::nttype}}
-        Table(sort(StructArray(flat_pr)))
+        flat_pr = sort(StructArray(vcat(periods_and_runs...)::Vector{@NamedTuple{period::DataPeriod, run::DataRun, is_analysis_cal_run::Bool, is_analysis_phy_run::Bool, cal::nttype, phy::nttype, fft::nttype}}))
+        Table(merge(columns(flat_pr), (cal = Table(StructArray(flat_pr.cal)), phy = Table(StructArray(flat_pr.phy)), fft = Table(StructArray(flat_pr.fft)))))
     end
 end
 export runinfo
@@ -269,15 +287,18 @@ function runinfo(data::LegendData, runsel::RunCategorySelLike)
     getproperty(runinfo(data, (period, run)), Symbol(category))
 end
 runinfo(data, fk::FileKey) = runinfo(data, (fk.period, fk.run, fk.category))
-
+runinfo(data, selectors...) = runinfo(data, selectors)
 
 """
     start_filekey(data::LegendData, runsel::RunCategorySelLike)
 
 Get the starting filekey for `data` in `period`, `run`, `category`.
 """
-start_filekey(data::LegendData, runsel::RunCategorySelLike) = runinfo(data, runsel).startkey
+function start_filekey end
 export start_filekey
+start_filekey(data::LegendData, runsel::RunCategorySelLike) = runinfo(data, runsel).startkey
+start_filekey(data::LegendData, fk::FileKey) = start_filekey(data, (fk.period, fk.run, fk.category))
+start_filekey(data::LegendData, selectors...) = start_filekey(data, selectors)
 
 
 """
@@ -285,9 +306,10 @@ export start_filekey
 
 Get the livetime for `data` in physics data taking of `run` in `period`.
 """
-livetime(data::LegendData, runsel::RunCategorySelLike) = runinfo(data, runsel).livetime
+function livetime end
 export livetime
-
+livetime(data::LegendData, runsel::RunCategorySelLike) = runinfo(data, runsel).livetime
+livetime(data, selectors...) = livetime(data, selectors)
 
 """
     is_lrun(data::LegendData, runsel::RunSelLike)
@@ -303,6 +325,8 @@ function is_lrun(data::LegendData, runsel::RunCategorySelLike)::Bool
         false
     end
 end
+is_lrun(data::LegendData, fk::FileKey) = is_lrun(data, (fk.period, fk.run, fk.category))
+is_lrun(data::LegendData, selectors...) = is_lrun(data, selectors)
 export is_lrun
 
 """
@@ -326,6 +350,8 @@ is_analysis_cal_run(data::LegendData, runsel::RunSelLike) = runinfo(data, runsel
 
 Return `true` if `run` is an `cat` analysis run for `data` in `period`.
 """
+function is_analysis_run end
+export is_analysis_run
 function is_analysis_run(data::LegendData, runsel::RunCategorySelLike)
     # first check if it is a legend run at all
     if !is_lrun(data, runsel)
@@ -342,9 +368,10 @@ function is_analysis_run(data::LegendData, runsel::RunCategorySelLike)
         throw(ArgumentError("Invalid category $(runs.category) for analysis run"))
     end
 end
-export is_analysis_run
+is_analysis_run(data::LegendData, fk::FileKey) = is_analysis_run(data, (fk.period, fk.run, fk.category))
+is_analysis_run(data::LegendData, selectors...) = is_analysis_run(data, selectors)
 
-const _cached_bad_filekeys = LRU{UInt, Set{FileKey}}(maxsize = 10)
+const _cached_bad_filekeys = LRU{UInt, Set{FileKey}}(maxsize = 10^3)
 
 """
     bad_filekeys(data::LegendData)
