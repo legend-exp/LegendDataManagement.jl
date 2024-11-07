@@ -554,26 +554,36 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         mantle_contact_parts
     end
 
+    ### IMPURITY DENSITY ###
 
-    if X == PropDict
+    if X != PropDict
+        @warn "No crystal metadata found for detector $(meta.name)"
+    end
 
-        if !haskey(xtal_meta, :impurity_measurements)
-            @warn "No information regarding impurity density for $(xtal_meta.name)"
-        end
-        # TODO: check units of impurity density against the values in the config file
+    if X == PropDict && !haskey(xtal_meta, :impurity_measurements)
+        @warn "No information regarding impurity density for $(xtal_meta.name)"
+    end
+
+    config_dict["detectors"][1]["semiconductor"]["impurity_density"] = \
+    if X == PropDict && haskey(xtal_meta, :impurity_measurements)
+        @info "Reading impurity density values from crystal metadata $(xtal_meta.name)"
         # Fit the impurity measurement data to a Radford model
         @. fit_model(z, p) = p[1] + p[2]*z + p[3]*exp((z-p[5])/p[4])
         pos = xtal_meta.impurity_measurements.distance_from_seed_end_mm * 1e-3  # units: m
         val = xtal_meta.impurity_measurements.value_in_1e9e_cm3                 # units: e/m^-3
         fit_result = curve_fit(fit_model, pos, val, ones(Float64,5))
-
-        config_dict["detectors"][1]["semiconductor"]["impurity_density"] =  dicttype(
+        dicttype(
             "name" => "radford", 
             "parameters" => vcat(fit_result.param..., xtal_meta.slices[Symbol(meta.name[end])].detector_offset_in_mm / 1000)
         )
     else
-        @warn "No crystal metadata found for detector $(meta.name)"
-        # TODO: Implement a default impurity density for cases without crystal metadata
+        # default impurity density for cases without crystal metadata
+        default_impurity_value = "-1e10cm^-3"
+        @info "Set impurity density to constant default value of $(default_impurity_value)"
+        dicttype(
+            "name" => "constant", 
+            "value" => default_impurity_value
+        )
     end
 
     # evaluate "include" statements - needed for the charge drift model
