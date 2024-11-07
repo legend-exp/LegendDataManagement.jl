@@ -27,6 +27,7 @@ using LRUCache: LRU
 using ProgressMeter: @showprogress
 using PropertyFunctions: PropertyFunction, @pf, filterby, props2varsyms, PropSelFunction
 using StaticStrings: StaticString
+using Suppressor: @suppress
 import Tables
 using Tables: columns
 using TypedTables
@@ -50,6 +51,7 @@ include("evt_functions.jl")
 include("lprops.jl")
 include("data_io.jl")
 include("active_volume.jl")
+include("exposure.jl")
 include("utils/utils.jl")
 
 end # module
