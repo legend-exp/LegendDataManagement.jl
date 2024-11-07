@@ -16,7 +16,7 @@ include("testing_utils.jl")
         @testset "$(detname)" begin
             det = SolidStateDetector{Float64}(l200, detname) 
             @test det isa SolidStateDetector
-            sim = Simulation{Float64}(l200, detname)
+            sim = Simulation{Float64}(l200, detname, crystal_impurity = true)
             @test sim isa Simulation
 
             # Compare active volume from SSD to active volume from LegendDataManagement
