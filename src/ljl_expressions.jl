@@ -44,11 +44,13 @@ const ljl_expr_allowed_funcs = Set([
     :sin, :cos, :tan, :asin, :acos, :atan,
     :isnan, :isinf, :isfinite,
     :all, :any, :broadcast,
-    :get, :getproperty,
+    :get, :getproperty, :getindex, :keys, :values, :pairs, :haskey,
+    :isempty, :length, :size, :first, :last, :findfirst, :findnext, :findall, :filter, :map, :reduce, 
+    :vcat, :hcat, :hvcat, :cat, :reshape, :transpose, :permutedims, :sort, :sortperm, :sortperm, 
     :value, :uncertainty, :stdscore, :weightedmean,
     :±, 
     :(:), :Symbol, :String, :Int, :Float64, :Bool,
-    :DetectorId, :ChannelId
+    :DetectorId, :ChannelId,
 ])
 
 const _ljlexpr_units = IdDict([
