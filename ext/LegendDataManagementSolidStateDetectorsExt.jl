@@ -46,34 +46,34 @@ LegendDataManagement provides an extension for SolidStateDetectors, a
 `SolidStateDetector` can be constructed from LEGEND metadata using the
 methods above.
 """
-function SolidStateDetectors.SolidStateDetector(data::LegendData, detector::DetectorIdLike)
-    SolidStateDetectors.SolidStateDetector{_SSDDefaultNumtype}(data, detector)
+function SolidStateDetectors.SolidStateDetector(data::LegendData, detector::DetectorIdLike; kwargs...)
+    SolidStateDetectors.SolidStateDetector{_SSDDefaultNumtype}(data, detector; kwargs...)
 end
 
-function SolidStateDetectors.SolidStateDetector{T}(data::LegendData, detector::DetectorIdLike) where {T<:AbstractFloat}
+function SolidStateDetectors.SolidStateDetector{T}(data::LegendData, detector::DetectorIdLike; kwargs...) where {T<:AbstractFloat}
     detector_props = getproperty(data.metadata.hardware.detectors.germanium.diodes, Symbol(detector))
     xtal_props = getproperty(data.metadata.hardware.detectors.germanium.crystals, Symbol(string(detector)[1:end-1]))
-    SolidStateDetector{T}(LegendData, detector_props, xtal_props)
+    SolidStateDetector{T}(LegendData, detector_props, xtal_props; kwargs...)
 end
 
-function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, filename::String) where {T<:AbstractFloat}
-    SolidStateDetector{T}(LegendData, readprops(filename, subst_pathvar = false, subst_env = false, trim_null = false))
+function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, filename::String; kwargs...) where {T<:AbstractFloat}
+    SolidStateDetector{T}(LegendData, readprops(filename, subst_pathvar = false, subst_env = false, trim_null = false); kwargs...)
 end
 
-function SolidStateDetectors.SolidStateDetector(::Type{LegendData}, filename::String)
-    SolidStateDetector{_SSDDefaultNumtype}(LegendData, filename)
+function SolidStateDetectors.SolidStateDetector(::Type{LegendData}, filename::String; kwargs...)
+    SolidStateDetector{_SSDDefaultNumtype}(LegendData, filename; kwargs...)
 end
 
-function SolidStateDetectors.SolidStateDetector(::Type{LegendData}, meta::AbstractDict)
-    SolidStateDetectors.SolidStateDetector{_SSDDefaultNumtype}(LegendData, meta)
+function SolidStateDetectors.SolidStateDetector(::Type{LegendData}, meta::AbstractDict; kwargs...)
+    SolidStateDetectors.SolidStateDetector{_SSDDefaultNumtype}(LegendData, meta; kwargs...)
 end
 
-function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::AbstractDict) where {T<:AbstractFloat}
-    SolidStateDetectors.SolidStateDetector{T}(LegendData, convert(PropDict, meta), LegendDataManagement.NoSuchPropsDBEntry("",[]))
+function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::AbstractDict; kwargs...) where {T<:AbstractFloat}
+    SolidStateDetectors.SolidStateDetector{T}(LegendData, convert(PropDict, meta), LegendDataManagement.NoSuchPropsDBEntry("",[]); kwargs...)
 end
 
-function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}) where {T<:AbstractFloat}
-    config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta)
+function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}; kwargs...) where {T<:AbstractFloat}
+    config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta; kwargs...)
     return SolidStateDetector{T}(config_dict, SolidStateDetectors.construct_units(config_dict))
 end
 
@@ -86,39 +86,39 @@ LegendDataManagement provides an extension for SolidStateDetectors, a
 `Simulation` can be constructed from LEGEND metadata using the
 methods above.
 """
-function SolidStateDetectors.Simulation(data::LegendData, detector::DetectorIdLike)
-    SolidStateDetectors.Simulation{_SSDDefaultNumtype}(data, detector)
+function SolidStateDetectors.Simulation(data::LegendData, detector::DetectorIdLike; kwargs...)
+    SolidStateDetectors.Simulation{_SSDDefaultNumtype}(data, detector; kwargs...)
 end
 
-function SolidStateDetectors.Simulation{T}(data::LegendData, detector::DetectorIdLike) where {T<:AbstractFloat}
+function SolidStateDetectors.Simulation{T}(data::LegendData, detector::DetectorIdLike; kwargs...) where {T<:AbstractFloat}
     detector_props = getproperty(data.metadata.hardware.detectors.germanium.diodes, Symbol(detector))
     xtal_props = getproperty(data.metadata.hardware.detectors.germanium.crystals, Symbol(string(detector)[1:end-1]))
-    Simulation{T}(LegendData, detector_props, xtal_props)
+    Simulation{T}(LegendData, detector_props, xtal_props; kwargs...)
 end
 
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, filename::String) where {T<:AbstractFloat}
-    Simulation{T}(LegendData, readprops(filename, subst_pathvar = false, subst_env = false, trim_null = false))
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, filename::String; kwargs...) where {T<:AbstractFloat}
+    Simulation{T}(LegendData, readprops(filename, subst_pathvar = false, subst_env = false, trim_null = false); kwargs...)
 end
 
-function SolidStateDetectors.Simulation(::Type{LegendData}, filename::String)
-    Simulation{_SSDDefaultNumtype}(LegendData, filename)
+function SolidStateDetectors.Simulation(::Type{LegendData}, filename::String; kwargs...)
+    Simulation{_SSDDefaultNumtype}(LegendData, filename; kwargs...)
 end
 
-function SolidStateDetectors.Simulation(::Type{LegendData}, meta::AbstractDict)
-    SolidStateDetectors.Simulation{_SSDDefaultNumtype}(LegendData, meta)
+function SolidStateDetectors.Simulation(::Type{LegendData}, meta::AbstractDict; kwargs...)
+    SolidStateDetectors.Simulation{_SSDDefaultNumtype}(LegendData, meta; kwargs...)
 end
 
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::AbstractDict) where {T<:AbstractFloat}
-    SolidStateDetectors.Simulation{T}(LegendData, convert(PropDict, meta), LegendDataManagement.NoSuchPropsDBEntry("", []))
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::AbstractDict; kwargs...) where {T<:AbstractFloat}
+    SolidStateDetectors.Simulation{T}(LegendData, convert(PropDict, meta), LegendDataManagement.NoSuchPropsDBEntry("", []); kwargs...)
 end
 
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}) where {T<:AbstractFloat}
-    config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta)
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}; kwargs...) where {T<:AbstractFloat}
+    config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta; kwargs...)
     return Simulation{T}(config_dict)
 end
 
 
-function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::X; dicttype = Dict{String,Any}) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
+function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::X; dicttype = Dict{String,Any}, crystal_impurity::Bool = false) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
 
     # Not all possible configurations are yet implemented!
     # https://github.com/legend-exp/legend-metadata/blob/main/hardware/detectors/detector-metadata_1.pdf
@@ -564,8 +564,14 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         @warn "No information regarding impurity density for $(xtal_meta.name)"
     end
 
-    config_dict["detectors"][1]["semiconductor"]["impurity_density"] = \
-    if X == PropDict && haskey(xtal_meta, :impurity_measurements)
+    if !crystal_impurity
+        @warn """
+        Reading the impurity density from the crystal metadata will be ignored.
+        Set `crystal_impurity=true` to load the impurity density from the crystal metadata
+        """
+    end
+
+    config_dict["detectors"][1]["semiconductor"]["impurity_density"] = if X == PropDict && haskey(xtal_meta, :impurity_measurements) && crystal_impurity
         @info "Reading impurity density values from crystal metadata $(xtal_meta.name)"
         # Fit the impurity measurement data to a Radford model
         @. fit_model(z, p) = p[1] + p[2]*z + p[3]*exp((z-p[5])/p[4])
