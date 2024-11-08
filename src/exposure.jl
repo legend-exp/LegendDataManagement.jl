@@ -84,7 +84,7 @@ function _get_exposure(data::LegendData, det::DetectorIdLike, rinfo::Table, is_a
         livetimes = livetimes .* getproperty(rinfo, analysis_flag)
     end
     # sum up all livetimes (excluding NaN values)
-    livetime = sum(livetimes .* .!isnan.(livetimes))
+    livetime = !isempty(livetimes) ? sum((livetimes .* .!isnan.(livetimes))) : 0.0u"s"
 
     # determine the mass of 76Ge
     filekeys = getproperty.(rinfo_cat, :startkey)
