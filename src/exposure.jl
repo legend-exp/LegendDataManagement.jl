@@ -63,7 +63,9 @@ function get_exposure(data::LegendData, det::DetectorIdLike, sel::Union{Abstract
 end
 
 
+### TODO: determine livetimes from data files instead of metadata
 function _get_exposure(data::LegendData, det::DetectorIdLike, rinfo::Table, is_analysis_run::Bool=true, cat::DataCategoryLike=:phy)
+
     # check that the DataCategory is valid
     if !(_can_convert_to(DataCategory, cat) && hasproperty(rinfo, DataCategory(cat).label))
         throw(ArgumentError("Data category `$(cat)`` is invalid"))
