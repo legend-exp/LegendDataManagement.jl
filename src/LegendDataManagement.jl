@@ -27,7 +27,6 @@ using LRUCache: LRU
 using ProgressMeter: @showprogress
 using PropertyFunctions: PropertyFunction, @pf, filterby, props2varsyms, PropSelFunction
 using StaticStrings: StaticString
-using Suppressor: @suppress
 import Tables
 using Tables: columns
 using TypedTables

@@ -91,10 +91,10 @@ function _get_exposure(data::LegendData, det::DetectorIdLike, rinfo::Table, is_a
     mass = if !iszero(livetime) && !isempty(filekeys)
         # read in the channelinfo
         filekey = first(filekeys)
-        _chinfo = @suppress channelinfo(data, filekey, det, extended = true)
+        _chinfo = channelinfo(data, filekey, det, extended = true, verbose = false)
         chinfo = if !all(x -> hasproperty(_chinfo, x), (:enrichment, :mass, :active_volume, :total_volume))
             empty!(_cached_channelinfo)
-            @suppress channelinfo(data, filekey, det, extended = true)
+            channelinfo(data, filekey, det, extended = true, verbose = false)
         else
             _chinfo
         end

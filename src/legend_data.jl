@@ -245,7 +245,7 @@ const _cached_channelinfo = LRU{Tuple{UInt, AnyValiditySelection}, StructVector}
 Get all channel information for the given [`LegendData`](@ref) and
 [`ValiditySelection`](@ref).
 """
-function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false, extended::Bool = false)
+function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false, extended::Bool = false, verbose::Bool = true)
     key = (objectid(data), sel)
     chinfo = get!(_cached_channelinfo, key) do
         chmap = data.metadata(sel).hardware.configuration.channelmaps
@@ -320,7 +320,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
                                    isa(fccds, PropDicts.MissingProperty) || 
                                    isa(fccds[first(keys(fccds))].value, PropDicts.MissingProperty)
                     
-                    haskey(diodmap, k) && @warn "No FCCD value given for detector $(detector)"
+                    verbose && haskey(diodmap, k) && @warn "No FCCD value given for detector $(detector)"
                     0.0
                 else 
                     fccds[first(keys(fccds))].value
