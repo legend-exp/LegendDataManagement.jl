@@ -50,6 +50,7 @@ include("evt_functions.jl")
 include("lprops.jl")
 include("data_io.jl")
 include("active_volume.jl")
+include("exposure.jl")
 include("utils/utils.jl")
 
 end # module
