@@ -28,8 +28,7 @@ function SolidStateDetectors.get_impurity_density(
 
     # the function parameters are in crystal axis coordinates i.e. z = 0 is seed end, z = L crystal length 
     # -> convert to detector coordiantes where z = 0 corresponds to p+ contact i.e. z -> det_z0 - z
-    -(idm.a .+ idm.b * (idm.det_z0 .- z) .+ idm.c * exp.((idm.det_z0 .- z .- idm.L)/idm.tau)) 
-
+    idm.a .+ idm.b * (idm.det_z0 .- z) .+ idm.c * exp.((idm.det_z0 .- z .- idm.L)/idm.tau)
 end
 
 function SolidStateDetectors.ImpurityDensity(T::DataType, t::Val{:radford}, dict::AbstractDict, input_units::NamedTuple)
@@ -572,15 +571,15 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
     end
 
     config_dict["detectors"][1]["semiconductor"]["impurity_density"] = if X == PropDict && haskey(xtal_meta, :impurity_measurements) && crystal_impurity
-        @info "Reading impurity density values from crystal metadata $(xtal_meta.name)"
+        @info "Reading impurity density values from crystal metadata $(xtal_meta.order)$(xtal_meta.name)"
         # Fit the impurity measurement data to a Radford model
         @. fit_model(z, p) = p[1] + p[2]*z + p[3]*exp((z-p[5])/p[4])
-        pos = xtal_meta.impurity_measurements.distance_from_seed_end_mm * 1e-3  # units: m
-        val = xtal_meta.impurity_measurements.value_in_1e9e_cm3                 # units: e/m^-3
-        fit_result = curve_fit(fit_model, pos, val, ones(Float64,5))
+        pos =  xtal_meta.impurity_measurements.distance_from_seed_end_mm * 1e-3  # units: m
+        val = -xtal_meta.impurity_measurements.value_in_1e9e_cm3 * 1e15          # units: e/m^-3 (p-type => negative values)
+        fit_result = curve_fit(fit_model, pos, val, [-1e15, -1e15, -1e15, 1., 1.])
         dicttype(
             "name" => "radford", 
-            "parameters" => vcat(fit_result.param..., xtal_meta.slices[Symbol(meta.name[end])].detector_offset_in_mm / 1000)
+            "parameters" => vcat(fit_result.param..., xtal_meta.slices[Symbol(meta.name[end])].detector_offset_in_mm * 1e-3)
         )
     else
         # default impurity density for cases without crystal metadata
