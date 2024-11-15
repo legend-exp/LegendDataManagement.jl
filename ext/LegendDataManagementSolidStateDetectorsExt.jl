@@ -570,7 +570,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         """
     end
 
-    config_dict["detectors"][1]["semiconductor"]["impurity_density"] = if X == PropDict && haskey(xtal_meta, :impurity_measurements) && crystal_impurity
+    config_dict["detectors"][1]["semiconductor"]["impurity_density"] = if crystal_impurity && X == PropDict && haskey(xtal_meta, :impurity_measurements) && haskey(xtal_meta.impurity_measurements, :value_in_1e9e_cm3) && !isempty(xtal_meta.impurity_measurements.value_in_1e9e_cm3)
         @info "Reading impurity density values from crystal metadata $(xtal_meta.order)$(xtal_meta.name)"
         # Fit the impurity measurement data to a Radford model
         @. fit_model(z, p) = p[1] + p[2]*z + p[3]*exp((z-p[5])/p[4])
