@@ -33,7 +33,7 @@ get_exposure(l200, :V00050A, DataPartition(1))
 """
 function get_exposure(data::LegendData, det::DetectorIdLike, period::DataPeriodLike, run::DataRunLike; is_analysis_run::Bool=true, cat::DataCategoryLike=:phy)
     rinfo = runinfo(data, period, run)
-    _get_exposure(data, det, Table([rinfo]), is_analysis_run, cat)
+    _get_exposure(data, det, rinfo, is_analysis_run, cat)
 end
 
 function get_exposure(data::LegendData, det::DetectorIdLike, period::DataPeriod; is_analysis_run::Bool=true, cat::DataCategoryLike=:phy)
@@ -56,7 +56,7 @@ function get_exposure(data::LegendData, det::DetectorIdLike, sel::Union{Abstract
     selectors = (DataPartition, DataPeriod)
     for SEL in selectors
         if _can_convert_to(SEL, sel)
-             return _get_exposure(data, det, SEL(sel); kwargs...)
+            return _get_exposure(data, det, SEL(sel); kwargs...)
         end
     end
     throw(ArgumentError("The selector $(sel) cannot be converted to type: $(selectors)"))
@@ -70,20 +70,14 @@ function _get_exposure(data::LegendData, det::DetectorIdLike, rinfo::Table, is_a
     if !(_can_convert_to(DataCategory, cat) && hasproperty(rinfo, DataCategory(cat).label))
         throw(ArgumentError("Data category `$(cat)`` is invalid"))
     end
-    cat_label::Symbol = DataCategory(cat).label
+    cat_label::Symbol = Symbol(DataCategory(cat))
 
     # determine livetime
     rinfo_cat = getproperty(rinfo, cat_label)
     livetimes = getproperty.(rinfo_cat, :livetime)
     
-    # if is_analysis_run == true: 
-    # check that the analysis flag is valid and apply it
-    analysis_flag = Symbol("is_analysis_$(cat_label)_run")
-    if is_analysis_run 
-        if !hasproperty(rinfo, analysis_flag)
-            throw(ArgumentError("No column `$(analysis_flag)` found. Please set `is_analysis_run = false` in `get_exposure`"))
-        end
-        livetimes = livetimes .* getproperty(rinfo, analysis_flag)
+    if is_analysis_run
+        livetimes = livetimes .* getproperty(rinfo_cat, :is_analysis_run)
     end
     # sum up all livetimes (excluding NaN values)
     livetime = !isempty(livetimes) ? sum((livetimes .* .!isnan.(livetimes))) : 0.0u"s"
