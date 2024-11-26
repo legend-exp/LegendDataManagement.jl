@@ -12,6 +12,17 @@ const ChannelOrDetectorIdLike = Union{ChannelIdLike, DetectorIdLike}
 const AbstractDataSelectorLike = Union{AbstractString, Symbol, DataTierLike, DataCategoryLike, DataPeriodLike, DataRunLike, DataPartitionLike, ChannelOrDetectorIdLike}
 const PossibleDataSelectors = [DataTier, DataCategory, DataPeriod, DataRun, DataPartition, ChannelId, DetectorId]
 
+function _is_valid_channel(data::LegendData, rsel::Union{AnyValiditySelection, RunCategorySelLike}, det::ChannelOrDetectorIdLike)
+    if LegendDataManagement._can_convert_to(ChannelId, det)
+        true
+    elseif LegendDataManagement._can_convert_to(DetectorId, det)
+        detector2channel(data, rsel, det) isa ChannelId
+    else
+        @warn "Skipped $det since it is neither a valid ChannelId nor DetectorId"
+        false
+    end
+end
+
 function _get_channelid(data::LegendData, rsel::Union{AnyValiditySelection, RunCategorySelLike}, det::ChannelOrDetectorIdLike)
     if LegendDataManagement._can_convert_to(ChannelId, det)
         ChannelId(det)
@@ -143,6 +154,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     ch_keys = _lh5_data_open(data, rsel[1], rsel[2], "") do h
         keys(h)
     end
+    filter!(x -> _is_valid_channel(data, rsel[2], x), ch_keys)
     @debug "Found keys: $ch_keys"
     if length(ch_keys) == 1
         if string(only(ch_keys)) == string(rsel[1])
