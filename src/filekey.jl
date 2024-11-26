@@ -411,9 +411,12 @@ export Timestamp
 
 Dates.DateTime(timestamp::Timestamp) = Dates.unix2datetime(timestamp.unixtime)
 Timestamp(datetime::Dates.DateTime) = Timestamp(round(Int, Dates.datetime2unix(datetime)))
+Timestamp(ts::Unitful.Time{<:Real}) = Timestamp(Dates.unix2datetime(ustrip(u"s", ts)))
 
 _can_convert_to(::Type{Timestamp}, s::AbstractString) = _is_timestamp_string(s) || _is_filekey_string(s)
 _can_convert_to(::Type{Timestamp}, s::Integer) = true
+_can_convert_to(::Type{Timestamp}, s::Dates.DateTime) = true
+_can_convert_to(::Type{Timestamp}, s::Unitful.Time{<:Real}) = true
 _can_convert_to(::Type{Timestamp}, s::Timestamp) = true
 _can_convert_to(::Type{Timestamp}, s) = false
 
@@ -429,6 +432,7 @@ end
 
 Base.convert(::Type{Timestamp}, s::AbstractString) = Timestamp(s)
 Base.convert(::Type{Timestamp}, datetime::DateTime) = Timestamp(datetime)
+Base.convert(::Type{Timestamp}, ts::Unitful.Time{<:Real}) = Timestamp(ts)
 
 
 Base.:(==)(a::Timestamp, b::Timestamp) = a.unixtime == b.unixtime
@@ -457,7 +461,7 @@ _timestamp_from_string(s::AbstractString) = DateTime(Timestamp(s))
 Anything that can represent a timestamp, like `Timestamp("20221226T200846Z")`
 or "20221226T200846Z".
 """
-const TimestampLike = Union{Timestamp, AbstractString, Integer}
+const TimestampLike = Union{Timestamp, AbstractString, Integer, Unitful.Time{<:Real}}
 export TimestampLike
 
 
