@@ -400,13 +400,13 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
         chinfo = chinfo |> filterby(@pf $processable .== true)
     end
     if !(only_usability == :all)
-        chinfo = chinfo |> filterby(@pf $usability .== usability)
+        chinfo = chinfo |> filterby(@pf $usability .== only_usability)
     end
     # apply sorting
-    if sort_by == :detector
-        chinfo = chinfo |> sortby(@pf string($detector))
-    elseif sort_by == :channel
-        chinfo = chinfo |> sortby(@pf string($channel))
+    if sort_by == :string
+        chinfo = chinfo |> sortby(@pf $detstring * maximum(chinfo.position) + $position)
+    elseif hasproperty(chinfo, sort_by)
+        chinfo = chinfo |> sortby(ljl_propfunc("string($sort_by)"))
     end
     return Table(chinfo)
 end
