@@ -276,17 +276,34 @@ function search_disk(::Type{DataSet}, data::LegendData; search_categories::Vecto
     end
 end
 
+"""
+    find_filekey(ds::DataSet, ts::TimestampLike)
+    find_filekey(data::LegendData, ts::TimestampLike; kwargs...)
+Find the filekey in a dataset that is closest to a given timestamp.
+The kwargs are passed to `search_disk` to generate the `DataSet`.
+"""
+function find_filekey end
+export find_filekey
+
+function find_filekey(ds::DataSet, ts::TimestampLike)
+    last(filter(fk -> fk.time < Timestamp(ts), ds.keys))
+end
+
+function find_filekey(data::LegendData, ts; kwargs...)
+    find_filekey(search_disk(DataSet, data; kwargs...), ts)
+end
+
 
 const _cached_channelinfo = LRU{Tuple{UInt, AnyValiditySelection}, StructVector}(maxsize = 10^3)
 
 """
-    channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false)
-    channelinfo(data::LegendData, sel::RunCategorySelLike; system::Symbol = :all, only_processable::Bool = false)
+    channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, extended::Bool = false)
+    channelinfo(data::LegendData, sel::RunCategorySelLike; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, extended::Bool = false)
 
 Get all channel information for the given [`LegendData`](@ref) and
 [`ValiditySelection`](@ref).
 """
-function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false, extended::Bool = false, verbose::Bool = true)
+function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, sort_by::Symbol=:detector, extended::Bool = false, verbose::Bool = true)
     key = (objectid(data), sel)
     chinfo = get!(_cached_channelinfo, key) do
         chmap = data.metadata(sel).hardware.configuration.channelmaps
@@ -375,11 +392,21 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
 
         StructVector(make_row.(channel_keys))
     end
+    # apply filters and masks
     if !(system == :all)
         chinfo = chinfo |> filterby(@pf $system .== system)
     end
     if only_processable
         chinfo = chinfo |> filterby(@pf $processable .== true)
+    end
+    if !(only_usability == :all)
+        chinfo = chinfo |> filterby(@pf $usability .== usability)
+    end
+    # apply sorting
+    if sort_by == :detector
+        chinfo = chinfo |> sortby(@pf string($detector))
+    elseif sort_by == :channel
+        chinfo = chinfo |> sortby(@pf string($channel))
     end
     return Table(chinfo)
 end
