@@ -8,8 +8,10 @@ using PropDicts
 using Statistics
 using TypedTables
 using Unitful
+using Dates
 using Format
 using Measurements: value, uncertainty, weightedmean
+using LegendDataManagement
 
 @recipe function f(
     chinfo::Table,
@@ -131,7 +133,77 @@ using Measurements: value, uncertainty, weightedmean
         seriescolor := c
         markerstrokecolor := c
         xvalues, value.(yvalues)
-    end  
+    end
+end
+
+@recipe function f(data::LegendData, fk::FileKey, ts::Unitful.Time{<:Real}, ch::ChannelIdLike; plot_tier=DataTier(:raw), plot_waveform=:waveform_presummed)
+    framestyle := :box
+    margins := (1, :mm)
+    yformatter := :plain
+    raw = read_ldata(data, plot_tier, fk, ch)
+    idx = findfirst(isequal(ts), raw.timestamp)
+    if isnothing(idx)
+        throw(ArgumentError("Timestamp $ts not found in the data"))
+    end
+    plot_title := "$(channelinfo(data, fk, ch).detector) ($(ch)) - Evt $(ts)"
+    @series begin
+        label := "$(Dates.unix2datetime(ustrip.(u"s", raw.timestamp[idx])))"
+        xunit := u"µs"
+        getproperty(raw, plot_waveform)[idx]
+    end
+end
+
+@recipe function f(data::LegendData, ts::Unitful.Time{<:Real}, ch::ChannelIdLike; plot_tier=DataTier(:raw), plot_waveform=:waveform_presummed)
+    fk = find_filekey(data, ts)
+    @series begin
+        plot_tier := plot_tier
+        plot_waveform := plot_waveform
+        data, fk, ts, ch
+    end
+end
+
+@recipe function f(data::LegendData, ts::Unitful.Time{<:Real}; plot_tier=DataTier(:raw), plot_waveform=:waveform_presummed, system=[:geds], only_processable=true)
+    fk = find_filekey(data, ts)
+    framestyle := :box
+    margins := (1, :mm)
+    yformatter := :plain
+    if fk.category == DataCategory(:cal)
+        @debug "Got $(fk.category) event, looking for raw event"
+        timestamps = read_ldata(:timestamp, data, DataTier(:raw), fk)
+        ch_ts = ""
+        for ch in keys(timestamps)
+            if any(ts .== timestamps[ch].timestamp)
+                ch_ts = string(ch)
+                @debug "Found event $ts in channel $ch"
+                break
+            end
+        end
+        if isempty(ch_ts)
+            throw(ArgumentError("Timestamp $ts not found in the data"))
+        end
+        ch = ChannelId(ch_ts)
+        @series begin
+            plot_tier := plot_tier
+            plot_waveform := plot_waveform
+            data, fk, ts, ch
+        end
+    elseif fk.category == DataCategory(:phy)
+        raw = read_ldata(data, plot_tier, fk)
+        sys = system[1]
+        chinfo = channelinfo(data, fk; system=sys, only_processable=only_processable)
+        idx = findfirst(isequal(ts), raw[first(chinfo.channel)].timestamp)
+        if isnothing(idx)
+            throw(ArgumentError("Timestamp $ts not found in the data"))
+        end
+        for chinfo_ch in chinfo
+            plot_title := "$(channelinfo(data, fk, ch).detector) ($(ch))"
+            @series begin
+                label := "$(chinfo_ch.detector) ($(chinfo_ch.channel))"
+                xunit := u"µs"
+                getproperty(raw, plot_waveform)[idx]
+            end
+        end
+    end
 end
 
 
