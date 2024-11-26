@@ -48,6 +48,7 @@ const ljl_expr_allowed_funcs = Set([
     :value, :uncertainty, :stdscore, :weightedmean,
     :±, 
     :(:), :Symbol, :String, :Int, :Float64, :Bool,
+    :string, :parse,
     :DetectorId, :ChannelId
 ])
 
