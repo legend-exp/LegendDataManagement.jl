@@ -167,6 +167,17 @@ end
     end
 end
 
+# TODO: check rounding of `Dates.DateTime`
+@recipe function f(data::LegendData, fk::FileKey, ts::Dates.DateTime, ch::ChannelIdLike; plot_tier=DataTier(:raw), plot_waveform=[:waveform_presummed], show_unixtime=false)
+    @series begin
+        plot_tier := plot_tier
+        plot_waveform := plot_waveform
+        show_unixtime := show_unixtime
+        data, fk, Dates.datetime2unix(ts)*u"s", ch
+    end
+end
+
+
 @recipe function f(data::LegendData, ts::Unitful.Time{<:Real}, ch::ChannelIdLike; plot_tier=DataTier(:raw), plot_waveform=[:waveform_presummed], show_unixtime=false)
     fk = find_filekey(data, ts)
     @series begin
@@ -176,6 +187,18 @@ end
         data, fk, ts, ch
     end
 end
+
+# TODO: check rounding of `Dates.DateTime`
+@recipe function f(data::LegendData, ts::Dates.DateTime, ch::ChannelIdLike; plot_tier=DataTier(:raw), plot_waveform=[:waveform_presummed], show_unixtime=false)
+    fk = find_filekey(data, ts)
+    @series begin
+        plot_tier := plot_tier
+        plot_waveform := plot_waveform
+        show_unixtime := show_unixtime
+        data, fk, Dates.datetime2unix(ts)*u"s", ch
+    end
+end
+
 
 @recipe function f(data::LegendData, ts::Unitful.Time{<:Real}; plot_tier=DataTier(:raw), system=Dict{Symbol, Vector{Symbol}}([:geds, :spms] .=> [[:waveform_presummed], [:waveform_bit_drop]]), only_processable=true, show_unixtime=false)
     fk = find_filekey(data, ts)
@@ -260,5 +283,15 @@ end
     end
 end
 
+# TODO: check rounding of `Dates.DateTime`
+@recipe function f(data::LegendData, ts::Dates.DateTime; plot_tier=DataTier(:raw), system=Dict{Symbol, Vector{Symbol}}([:geds, :spms] .=> [[:waveform_presummed], [:waveform_bit_drop]]), only_processable=true, show_unixtime=false)
+    @series begin
+        plot_tier := plot_tier
+        system := system
+        only_processable := only_processable
+        show_unixtime := show_unixtime
+        data, Dates.datetime2unix(ts)*u"s"
+    end
+end
 
 end # module LegendDataManagementPlotsExt
