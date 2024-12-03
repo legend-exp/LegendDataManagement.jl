@@ -316,17 +316,17 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
             
                 total_volume::Unitful.Volume{<:Float64} = if haskey(diodmap, k) get_active_volume(diodmap[k], 0.0) else Float64(NaN) * u"cm^3" end
                 fccds = diodmap[k].characterization.l200_site.fccd_in_mm
-                fccd::Float64 = if isa(fccds, NoSuchPropsDBEntry) || 
+                fccd::Measurement{Float64} = if isa(fccds, NoSuchPropsDBEntry) ||
                                    isa(fccds, PropDicts.MissingProperty) || 
                                    isa(fccds[first(keys(fccds))].value, PropDicts.MissingProperty)
                     
                     verbose && haskey(diodmap, k) && @warn "No FCCD value given for detector $(detector)"
-                    0.0
+                    measurement(0.0, 0.0)
                 else 
-                    fccds[first(keys(fccds))].value
+                    fccd = measurement(fccds[first(keys(fccds))].value, maximum(values(fccds[first(keys(fccds))].uncertainty.corr)))
                 end
-                active_volume::Unitful.Volume{<:Float64} = if haskey(diodmap, k) get_active_volume(diodmap[k], fccd) else Float64(NaN) * u"cm^3" end
-                c = merge(c, (; cc4, cc4ch, daqcrate, daqcard, hvcard, hvch, enrichment, mass, total_volume, active_volume))
+                active_volume::Unitful.Volume{<:Number} = if haskey(diodmap, k) get_active_volume(diodmap[k], fccd) else Float64(NaN) * u"cm^3" end
+                c = merge(c, (; cc4, cc4ch, daqcrate, daqcard, hvcard, hvch, enrichment, mass, total_volume, active_volume, fccd = fccd * u"mm"))
             end
             
             c
