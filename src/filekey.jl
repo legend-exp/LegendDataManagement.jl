@@ -461,7 +461,7 @@ _timestamp_from_string(s::AbstractString) = DateTime(Timestamp(s))
 Anything that can represent a timestamp, like `Timestamp("20221226T200846Z")`
 or "20221226T200846Z".
 """
-const TimestampLike = Union{Timestamp, AbstractString, Integer, Unitful.Time{<:Real}}
+const TimestampLike = Union{Timestamp, AbstractString, Integer, Unitful.Time{<:Real}, Dates.DateTime}
 export TimestampLike
 
 
