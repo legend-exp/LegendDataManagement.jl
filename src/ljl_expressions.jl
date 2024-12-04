@@ -97,13 +97,36 @@ function _process_ljlexpr_impl(@nospecialize(expr::Expr), @nospecialize(f_varsub
     _process_inner = Base.Fix2(_process_ljlexpr_impl, f_varsubst)
     if expr.head in ljl_expr_allowed_heads
         if expr.head == :.
-            obj = expr.args[begin]
-            propname = expr.args[begin+1]
-            return Expr(expr.head, _process_ljlexpr_impl(obj, f_varsubst), propname)
+            if length(expr.args) == 1
+                arg1 = only(expr.args)
+                if arg1 isa Symbol
+                    # Standalone dot-operator syntax:
+                    expr
+                else
+                    throw(ArgumentError("LEGEND Julia expressions don't support `$expr`"))
+                end
+            elseif length(expr.args) == 2
+                arg1 = expr.args[begin]
+                arg2 = expr.args[begin+1]
+                if arg2 isa Union{Symbol,QuoteNode}
+                    # Property access
+                    return Expr(expr.head, _process_ljlexpr_impl(arg1, f_varsubst), arg2)
+                elseif arg2 isa Expr && arg2.head == :tuple
+                    # Broadcast syntax
+                    return Expr(expr.head, arg1, Expr(:tuple, map(_process_inner, arg2.args)...))
+                else
+                    throw(ArgumentError("LEGEND Julia expressions don't support `$expr`"))
+                end
+            else
+                throw(ArgumentError("LEGEND Julia expressions don't support `$expr`"))
+            end
         elseif expr.head == :call
             funcname = expr.args[begin]
+            funcname_str = string(funcname)
+            # Handle constructs like `a .+ b`:
+            base_funcname = funcname_str[begin] == '.' ? Symbol(funcname_str[begin+1:end]) : funcname
             funcargs = expr.args[begin+1:end]
-            if funcname in ljl_expr_allowed_funcs
+            if base_funcname in ljl_expr_allowed_funcs
                 return Expr(expr.head, funcname, map(_process_inner, funcargs)...)
             else
                 throw(ArgumentError("Function \"$(funcname)\" not allowed in LEGEND Julia expression."))
