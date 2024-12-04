@@ -38,29 +38,35 @@ Write validity for a given filekey.
 function writevalidity end
 export writevalidity
 function writevalidity(props_db::LegendDataManagement.MaybePropsDB, filekey::FileKey, apply::Vector{String}; category::DataCategoryLike=:all)
+    remotecall_fetch(_writevalidity_impl, 1, props_db, filekey, apply; category=category)
+end
+const _writevalidity_lock = ReentrantLock()
+function _writevalidity_impl(props_db::LegendDataManagement.MaybePropsDB, filekey::FileKey, apply::Vector{String}; category::DataCategoryLike=:all)
     # write validity
-    # get timestamp from filekey
-    pars_validTimeStamp = string(filekey.time)
-    # get validity filename and check if exists
-    validity_filename = joinpath(data_path(props_db), "validity.jsonl")
-    mkpath(dirname(validity_filename))
-    touch(validity_filename)
-    # check if validity already written
-    validity_lines = readlines(validity_filename)
-    # check if given validity already exists
-    is_validity = findall(x -> contains(x, "$pars_validTimeStamp") && contains(x, "$(string(category))"), validity_lines)
-    if isempty(is_validity)
-        @info "Write new validity for $pars_validTimeStamp"
-        push!(validity_lines, "{\"valid_from\":\"$pars_validTimeStamp\", \"category\":\"$(string(category))\", \"apply\":[\"$(join(sort(apply), "\", \""))\"]}")
-    elseif length(is_validity) == 1
-        @info "Merge old $pars_validTimeStamp $(string(category)) validity entry"
-        apply = unique(append!(Vector{String}(JSON.parse(validity_lines[first(is_validity)])["apply"]), apply))
-        validity_lines[first(is_validity)] = "{\"valid_from\":\"$pars_validTimeStamp\", \"category\":\"$(string(category))\", \"apply\":[\"$(join(sort(apply), "\", \""))\"]}"
-    end
-    # write validity
-    open(validity_filename, "w") do io
-        for line in sort(validity_lines)
-            println(io, line)
+    @lock _writevalidity_lock begin
+        # get timestamp from filekey
+        pars_validTimeStamp = string(filekey.time)
+        # get validity filename and check if exists
+        validity_filename = joinpath(data_path(props_db), "validity.jsonl")
+        mkpath(dirname(validity_filename))
+        touch(validity_filename)
+        # check if validity already written
+        validity_lines = readlines(validity_filename)
+        # check if given validity already exists
+        is_validity = findall(x -> contains(x, "$pars_validTimeStamp") && contains(x, "$(string(category))"), validity_lines)
+        if isempty(is_validity)
+            @info "Write new validity for $pars_validTimeStamp"
+            push!(validity_lines, "{\"valid_from\":\"$pars_validTimeStamp\", \"category\":\"$(string(category))\", \"apply\":[\"$(join(sort(apply), "\", \""))\"]}")
+        elseif length(is_validity) == 1
+            @info "Merge old $pars_validTimeStamp $(string(category)) validity entry"
+            apply = unique(append!(Vector{String}(JSON.parse(validity_lines[first(is_validity)])["apply"]), apply))
+            validity_lines[first(is_validity)] = "{\"valid_from\":\"$pars_validTimeStamp\", \"category\":\"$(string(category))\", \"apply\":[\"$(join(sort(apply), "\", \""))\"]}"
+        end
+        # write validity
+        open(validity_filename, "w") do io
+            for line in sort(validity_lines)
+                println(io, line)
+            end
         end
     end
 end

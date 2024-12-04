@@ -212,8 +212,16 @@ end
 
 """
     search_disk(::Type{<:DataSelector}, path::AbstractString)
+    search_disk(::Type{DataSet}, data::LegendData; search_categories::Vector{<:DataCategoryLike} = DataCategory.([:cal, :phy]), search_tier::DataTierLike = DataTier(:raw), only_analysis_runs::Bool=true, save_filekeys::Bool=true, ignore_save_tier::Bool=false, save_tier::DataTierLike=DataTier(:jlfks))
 
-Search on-disk data for data categories, periods, runs, and filekeys.
+Search on-disk data for data categories, periods, runs, and filekeys or whole datasets
+If you want to search for a whole `DataSet`, you have the following keyword options:
+    - `search_categories` (default: `[:cal, :phy]`): The categories to search on disk.
+    - `search_tier` (default: `DataTier(:raw)`): The tier to search on disk.
+    - `only_analysis_runs` (default: `true`): Only include for analysis runs as defined in the metadata
+    - `save_filekeys` (default: `true`): Save the filekeys to a file in the `save_tier` directory.
+    - `ignore_save_tier` (default: `false`): Ignore the `save_tier` and do not save the filekeys.
+    - `save_tier` (default: `DataTier(:jlfks)`): The tier to save the filekeys to.
 
 Examples:
 
@@ -224,28 +232,78 @@ search_disk(DataCategory, l200.tier[:raw])
 search_disk(DataPeriod, l200.tier[:raw, :cal])
 search_disk(DataRun, l200.tier[:raw, :cal, "p02"])
 search_disk(FileKey, l200.tier[DataTier(:raw), :cal, DataPeriod(2), "r006"])
+search_disk(DataSet, l200)
 ```
 """
 function search_disk end
 export search_disk
 
-function search_disk(::Type{DT}, path::AbstractString) where DT<:DataSelector
+function search_disk(::Type{DT}, path::AbstractString; kwargs...) where DT<:DataSelector
     all_files = readdir(path)
     valid_files = filter(filename -> _can_convert_to(DT, filename), all_files)
     return unique(sort(DT.(valid_files)))
+end
+
+const _cached_dataset = LRU{Tuple{UInt, Vector{<:DataCategoryLike}, DataTierLike, DataTierLike}, DataSet}(maxsize = 10^3)
+
+function search_disk(::Type{DataSet}, data::LegendData; search_categories::Vector{<:DataCategoryLike} = DataCategory.([:cal, :phy]), search_tier::DataTierLike = DataTier(:raw), only_analysis_runs::Bool=true, save_filekeys::Bool=true, ignore_save_tier::Bool=false, save_tier::DataTierLike=DataTier(:jlfks))
+    key = (objectid(data), search_categories, search_tier, save_tier)
+    if ignore_save_tier
+        delete!(key, ignore_save_tier)
+    end
+    get!(_cached_dataset, key) do
+        DataSet(let rinfo = runinfo(data)
+            sort(tmapreduce(vcat, rinfo) do ri
+                vcat([let keylist_filename = joinpath(data.tier[save_tier, cat, ri.period, ri.run], "filekeys.txt"), search_path = data.tier[search_tier, cat, ri.period, ri.run]
+                    if !ispath(search_path)
+                        Vector{FileKey}()
+                    elseif only_analysis_runs && !is_analysis_run(data, ri.period, ri.run, cat)
+                        Vector{FileKey}()
+                    elseif isfile(keylist_filename) && !ignore_save_tier
+                        read_filekeys(keylist_filename)
+                    else
+                        let fks = search_disk(FileKey, search_path)
+                            if save_filekeys
+                                mkpath(dirname(keylist_filename))
+                                write_filekeys(keylist_filename, fks)
+                            end
+                            fks
+                        end
+                    end
+                end for cat in search_categories]...)
+            end)
+        end)
+    end
+end
+
+"""
+    find_filekey(ds::DataSet, ts::TimestampLike)
+    find_filekey(data::LegendData, ts::TimestampLike; kwargs...)
+Find the filekey in a dataset that is closest to a given timestamp.
+The kwargs are passed to `search_disk` to generate the `DataSet`.
+"""
+function find_filekey end
+export find_filekey
+
+function find_filekey(ds::DataSet, ts::TimestampLike)
+    last(filter(fk -> fk.time < Timestamp(ts), ds.keys))
+end
+
+function find_filekey(data::LegendData, ts; kwargs...)
+    find_filekey(search_disk(DataSet, data; kwargs...), ts)
 end
 
 
 const _cached_channelinfo = LRU{Tuple{UInt, AnyValiditySelection}, StructVector}(maxsize = 10^3)
 
 """
-    channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false)
-    channelinfo(data::LegendData, sel::RunCategorySelLike; system::Symbol = :all, only_processable::Bool = false)
+    channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, extended::Bool = false)
+    channelinfo(data::LegendData, sel::RunCategorySelLike; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, extended::Bool = false)
 
 Get all channel information for the given [`LegendData`](@ref) and
 [`ValiditySelection`](@ref).
 """
-function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false, extended::Bool = false, verbose::Bool = true)
+function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, sort_by::Symbol=:detector, extended::Bool = false, verbose::Bool = true)
     key = (objectid(data), sel)
     chinfo = get!(_cached_channelinfo, key) do
         chmap = data.metadata(sel).hardware.configuration.channelmaps
@@ -334,11 +392,21 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
 
         StructVector(make_row.(channel_keys))
     end
+    # apply filters and masks
     if !(system == :all)
         chinfo = chinfo |> filterby(@pf $system .== system)
     end
     if only_processable
         chinfo = chinfo |> filterby(@pf $processable .== true)
+    end
+    if !(only_usability == :all)
+        chinfo = chinfo |> filterby(@pf $usability .== only_usability)
+    end
+    # apply sorting
+    if sort_by == :string
+        chinfo = chinfo |> sortby(@pf $detstring * maximum(chinfo.position) + $position)
+    elseif hasproperty(chinfo, sort_by)
+        chinfo = chinfo |> sortby(ljl_propfunc("string($sort_by)"))
     end
     return Table(chinfo)
 end

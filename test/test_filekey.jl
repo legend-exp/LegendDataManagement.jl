@@ -4,6 +4,7 @@ using LegendDataManagement
 using Test
 
 using Dates
+using Unitful
 
 @testset "filekey" begin
     setup = ExpSetup(:l200)
@@ -29,6 +30,11 @@ using Dates
     timestamp = @inferred(Timestamp("20221226T200846Z"))
     @test timestamp.unixtime == 1672085326
     @test @inferred(string(timestamp)) == "20221226T200846Z"
+
+    unix_timestamp = 1672085326u"s"
+    timestamp2 = @inferred(Timestamp(unix_timestamp))
+    @test timestamp2.unixtime == 1672085326
+    @test @inferred(string(timestamp2)) == "20221226T200846Z"
     
     key = @inferred FileKey("l200-p02-r006-cal-20221226T200846Z")
     @test string(key) == "l200-p02-r006-cal-20221226T200846Z"

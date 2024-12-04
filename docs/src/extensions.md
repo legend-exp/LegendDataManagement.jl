@@ -1,5 +1,65 @@
 # Extensions
 
+## `Plots` extension
+
+LegendDataManagment provides an extension for [Plots](https://github.com/JuliaPlots/Plots.jl). This makes it possible to directly plot LEGEND data via the `plot` function. The extension is automatically loaded when both packages are loaded.
+You can plot a parameter overview as a 2D plot over a set of detectors (requires a `$LEGEND_DATA_CONFIG` environment variable pointing to a legend data-config file):
+
+```julia
+using LegendDataManagement, Plots
+
+l200 = LegendData(:l200)
+
+filekey = FileKey("l200-p03-r000-cal-20230311T235840Z")
+
+pars = l200.par.ppars.ecal(filekey)
+properties = [:e_cusp_ctc, :fwhm, :qbb];
+
+chinfo = channelinfo(l200, filekey; system = :geds, only_processable = true)
+
+plot(chinfo, pars, properties, verbose = true, color = 1, markershape = :o, calculate_mean = true)
+```
+
+The plot recipe takes three arguments:
+- `chinfo`: the channel info with all detectors to be plotted on the x-axis
+- `pars`: a `PropDict` that has the detector IDs as keys and parameters as values
+- `properties`: an array of `Symbols` to access the data that should be plotted
+(if no `properties` are provided, the `PropDict` `pars` is expected to just contain the data to be plotted as values)
+
+There are also keyword arguments:
+- `calculate_mean`: If set to `true`, then the mean values are included in the legend labels. For values with uncertainties, the mean values are calculated as weighted means.
+- `verbose`: some output when the plot is generated, e.g. if values for (some) detectors are missing
+
+A 3D plot is WIP.
+
+In addition, you can plot an event display of the `raw` waveforms:
+``` julia
+using Unitful, LegendDataManagement, Plots
+
+l200 = LegendData(:l200)
+
+ts = 1.6785791257987175e9u"s"
+
+ch = ChannelId(1104000)
+
+plot(l200, ts, ch)
+```
+
+- `plot_tier`: The data tier to be plotted. Default is `DataTier(:raw)`.
+- `plot_waveform`: All waveforms to be plotted from the data. Default is `[:waveform_presummed]` which plots the presummed waveform.
+- `show_unixtime`: If set to `true`, use unix time instead of the datetime in the title. Default is `false`.
+
+If the channel is not given, the recipe automtically searches for the correct event in the data.
+``` julia
+ts = 1.6785791257987175e9u"s"
+
+plot(l200, ts)
+```
+In case of a `cal` event, only the HPGe channel with that event is plotted. In case of a `phy` event, all waveforms of the full HPGe and SiPM systems are plotted. 
+The following additional keywords arguments can be set (the `plot_waveform` kwarg is replaced by the `system` kwarg here):
+- `system`: The system and the waveforms to be plotted for each system. Default is `Dict{Symbol, Vector{Symbol}}([:geds, :spms] .=> [[:waveform_presummed], [:waveform_bit_drop]])`
+- `only_processable`: If set to `true`, only processable channels are plotted. Default is `true`.
+
 ## `LegendHDF5IO` extension
 
 LegendDataManagment provides an extension for [LegendHDF5IO](https://github.com/legend-exp/LegendHDF5IO.jl).

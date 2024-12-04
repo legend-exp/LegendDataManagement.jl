@@ -24,8 +24,9 @@ using Printf: @printf
 
 using IntervalSets: AbstractInterval, ClosedInterval, leftendpoint, rightendpoint
 using LRUCache: LRU
+using OhMyThreads: @tasks, tmapreduce
 using ProgressMeter: @showprogress
-using PropertyFunctions: PropertyFunction, @pf, filterby, props2varsyms, PropSelFunction
+using PropertyFunctions: PropertyFunction, @pf, filterby, sortby, props2varsyms, PropSelFunction
 using StaticStrings: StaticString
 import Tables
 using Tables: columns

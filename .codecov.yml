@@ -1,1 +1,3 @@
 # comment: false
+ignore:
+  - "ext/LegendDataManagementPlotsExt.jl"
