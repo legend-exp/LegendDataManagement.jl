@@ -30,30 +30,33 @@ end
 export parse_ljlexpr
 
 
-const ljl_expr_allowed_heads = [:., :ref, :call, :macrocall, :||, :&&, :comparison, :if]
+const ljl_expr_allowed_heads = Symbol[:., :ref, :call, :macrocall, :||, :&&, :comparison, :if]
 
-const ljl_expr_allowed_funcs = Set([
+const ljl_expr_allowed_funcs = Set{Symbol}([
     :!,
     :(==), :<, :>, :>=, :<=, :!=,
-    :isapprox, :≈, :≈,
+    :isapprox, :≈,
     :in, :∈, :..,
-    :+, :-, :*, :/,
+    :+, :-, :*, :/, :div, :rem, :mod,
+    :|, :&, :xor,
     :^, :sqrt,
     :one, :zero, :identity,
     :abs, :abs2, :normalize, :norm,
     :exp, :exp2, :exp10, :log, :log2, :log10,
     :sin, :cos, :tan, :asin, :acos, :atan,
+    :min, :max,
     :isnan, :isinf, :isfinite,
     :all, :any, :broadcast,
-    :get, :getproperty,
-    :value, :uncertainty, :stdscore, :weightedmean,
-    :±, 
+    :sum, :prod, :minimum, :maximum, :mean,
+    :get, :getproperty, :getindex, :first, :last,
+    :haskey, :isempty, :length, :size,
     :(:), :Symbol, :String, :Int, :Float64, :Bool,
     :string, :parse,
+    :value, :uncertainty, :stdscore, :weightedmean, :±, 
     :DetectorId, :ChannelId
 ])
 
-const _ljlexpr_units = IdDict([
+const _ljlexpr_units = IdDict{Symbol,Expr}([
     :s => :(u"s"),
     :ms => :(u"ms"),
     :μs => :(u"μs"),
