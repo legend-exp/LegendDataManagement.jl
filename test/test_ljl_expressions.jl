@@ -36,10 +36,10 @@ include("testing_utils.jl")
     @test num_pf === ljl_propfunc(num_expr_string)
     @test @inferred(broadcast(num_pf, data)) == ref_numfunc.(data)
 
-    meas_expr_string = "(offs + slope * abs(E_trap) / 1000) - (5.2 ± 0.1)"
+    meas_expr_string = "(offs + (slope > 0.5 ? one(slope) : zero(slope)) * abs(E_trap) / 1000) - (5.2 ± 0.1)"
     meas_expr = parse_ljlexpr(meas_expr_string)
-    @test meas_expr == :((offs + (slope * abs(E_trap)) / 1000) - (5.2 ± 0.1))
-    ref_measfunc(x) = (x.offs + (x.slope * abs(x.E_trap)) / 1000) - Measurements.:(±)(5.2, 0.1)
+    @test meas_expr == :((offs + ((slope > 0.5 ? one(slope) : zero(slope)) * abs(E_trap)) / 1000) - (5.2 ± 0.1))
+    ref_measfunc(x) = (x.offs + ((x.slope > 0.5 ? one(x.slope) : zero(x.slope)) * abs(x.E_trap)) / 1000) - Measurements.:(±)(5.2, 0.1)
     meas_pf = ljl_propfunc(meas_expr)
     @test meas_pf isa PropertyFunctions.PropertyFunction
     @test meas_pf === ljl_propfunc(meas_expr_string)

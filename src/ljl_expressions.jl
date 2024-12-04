@@ -30,7 +30,7 @@ end
 export parse_ljlexpr
 
 
-const ljl_expr_allowed_heads = [:., :ref, :call, :macrocall, :||, :&&, :comparison]
+const ljl_expr_allowed_heads = [:., :ref, :call, :macrocall, :||, :&&, :comparison, :if]
 
 const ljl_expr_allowed_funcs = Set([
     :!,
@@ -39,6 +39,7 @@ const ljl_expr_allowed_funcs = Set([
     :in, :∈, :..,
     :+, :-, :*, :/,
     :^, :sqrt,
+    :one, :zero, :identity,
     :abs, :abs2, :normalize, :norm,
     :exp, :exp2, :exp10, :log, :log2, :log10,
     :sin, :cos, :tan, :asin, :acos, :atan,
