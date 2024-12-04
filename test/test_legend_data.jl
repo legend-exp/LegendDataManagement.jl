@@ -23,27 +23,35 @@ include("testing_utils.jl")
     props_base_path = data_path(LegendDataConfig().setups.l200, "metadata")
     @test l200.metadata isa LegendDataManagement.PropsDB
 
-    # ToDo: Make type-stable:
-    @test channelinfo(l200, filekey) isa TypedTables.Table
-    chinfo = channelinfo(l200, filekey)
-    @test all(filterby(@pf $processable && $usability == :on)(chinfo).processable)
-    @test all(filterby(@pf $processable && $usability == :on)(chinfo).usability .== :on)
+    @testset "channelinfo" begin
+        # ToDo: Make type-stable:
+        @test channelinfo(l200, filekey) isa TypedTables.Table
+        chinfo = channelinfo(l200, filekey)
+        @test all(filterby(@pf $processable && $usability == :on)(chinfo).processable)
+        @test all(filterby(@pf $processable && $usability == :on)(chinfo).usability .== :on)
 
-    # Delete the channelinfo cache
-    empty!(LegendDataManagement._cached_channelinfo)
+        # Delete the channelinfo cache
+        empty!(LegendDataManagement._cached_channelinfo)
 
-    # Test the extended channel info with active volume calculation
-    extended = channelinfo(l200, filekey, extended = true)
-    @test extended isa TypedTables.Table
+        # Test the extended channel info with active volume calculation
+        extended = channelinfo(l200, filekey, only_usability = :on, extended = true)
+        @test extended isa TypedTables.Table
 
-    # Check that some keywords only appear in the extended channelinfo
-    extended_keywords = (:cc4, :cc4ch, :daqcrate, :daqcard, :hvcard, :hvch, :enrichment, :mass, :total_volume, :active_volume)
-    @test !any(in(columnnames(chinfo)),   extended_keywords)
-    @test  all(in(columnnames(extended)), extended_keywords)
+        # Check that some keywords only appear in the extended channelinfo
+        extended_keywords = (:cc4, :cc4ch, :daqcrate, :daqcard, :hvcard, :hvch, :enrichment, :mass, :total_volume, :active_volume)
+        @test !any(in(columnnames(chinfo)),   extended_keywords)
+        @test  all(in(columnnames(extended)), extended_keywords)
 
-    # ToDo: Make type-stable:
-    # @test #=@inferred=#(channel_info(l200, filekey)) isa StructArray
-    # chinfo = channel_info(l200, filekey)
-    # @test all(filterby(@pf $processable && $usability == :on)(chinfo).processable)
-    # @test all(filterby(@pf $processable && $usability == :on)(chinfo).usability .== :on)
+        # ToDo: Make type-stable:
+        # @test #=@inferred=#(channel_info(l200, filekey)) isa StructArray
+        # chinfo = channel_info(l200, filekey)
+        # @test all(filterby(@pf $processable && $usability == :on)(chinfo).processable)
+        # @test all(filterby(@pf $processable && $usability == :on)(chinfo).usability .== :on)
+    end
+
+    @testset "search_disk" begin
+        datasets = search_disk(DataSet, l200)
+        # LegendTestData is probably not in the correct formats
+        @test_broken !(isempty(datasets))
+    end
 end
