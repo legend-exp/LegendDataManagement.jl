@@ -30,7 +30,7 @@ end
 export parse_ljlexpr
 
 
-const ljl_expr_allowed_heads = (:call, :macrocall, :||, :&&, :comparison)
+const ljl_expr_allowed_heads = [:., :ref, :call, :macrocall, :||, :&&, :comparison]
 
 const ljl_expr_allowed_funcs = Set([
     :!,
@@ -95,9 +95,13 @@ _process_ljlexpr_impl(sym::Symbol, f_varsubst) = f_varsubst(sym)
 function _process_ljlexpr_impl(@nospecialize(expr::Expr), @nospecialize(f_varsubst))
     _process_inner = Base.Fix2(_process_ljlexpr_impl, f_varsubst)
     if expr.head in ljl_expr_allowed_heads
-        if expr.head == :call
+        if expr.head == :.
+            obj = expr.args[begin]
+            propname = expr.args[begin+1]
+            return Expr(expr.head, _process_ljlexpr_impl(obj, f_varsubst), propname)
+        elseif expr.head == :call
             funcname = expr.args[begin]
-            funcargs = expr.args[2:end]
+            funcargs = expr.args[begin+1:end]
             if funcname in ljl_expr_allowed_funcs
                 return Expr(expr.head, funcname, map(_process_inner, funcargs)...)
             else
@@ -105,7 +109,7 @@ function _process_ljlexpr_impl(@nospecialize(expr::Expr), @nospecialize(f_varsub
             end
         elseif expr.head == :macrocall
             macro_name = expr.args[begin]
-            macro_args = expr.args[2:end]
+            macro_args = expr.args[begin+1:end]
             if macro_name == Symbol("@u_str")
                 return Expr(expr.head, macro_name, macro_args...)
             else
