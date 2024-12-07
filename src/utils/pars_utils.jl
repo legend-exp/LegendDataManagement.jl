@@ -38,7 +38,7 @@ Write validity for a given filekey.
 function writevalidity end
 export writevalidity
 function writevalidity(props_db::LegendDataManagement.MaybePropsDB, filekey::FileKey, apply::Vector{String}; category::DataCategoryLike=:all)
-    remotecall_fetch(_writevalidity_impl, 1, props_db, filekey, apply; category=category)
+    Distributed.remotecall_fetch(_writevalidity_impl, 1, props_db, filekey, apply; category=category)
 end
 const _writevalidity_lock = ReentrantLock()
 function _writevalidity_impl(props_db::LegendDataManagement.MaybePropsDB, filekey::FileKey, apply::Vector{String}; category::DataCategoryLike=:all)
