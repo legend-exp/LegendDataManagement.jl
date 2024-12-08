@@ -14,6 +14,7 @@ using JSON
 using Dates
 using Measurements
 using Measurements: ±
+import Distributed
 
 using PropertyFunctions: PropertyFunction, @pf, filterby, props2varsyms
 using Tables

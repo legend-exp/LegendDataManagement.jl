@@ -38,10 +38,10 @@ Write validity for a given filekey.
 function writevalidity end
 export writevalidity
 function writevalidity(props_db::LegendDataManagement.MaybePropsDB, filekey::FileKey, apply::Vector{String}; category::DataCategoryLike=:all)
-    remotecall_fetch(_writevalidity_impl, 1, props_db, filekey, apply; category=category)
+    Distributed.remotecall_fetch(_writevalidity_impl, 1, props_db, filekey, apply; category=category, write_from_master= (Distributed.myid() == 1))
 end
 const _writevalidity_lock = ReentrantLock()
-function _writevalidity_impl(props_db::LegendDataManagement.MaybePropsDB, filekey::FileKey, apply::Vector{String}; category::DataCategoryLike=:all)
+function _writevalidity_impl(props_db::LegendDataManagement.MaybePropsDB, filekey::FileKey, apply::Vector{String}; category::DataCategoryLike=:all, write_from_master::Bool=true)
     # write validity
     @lock _writevalidity_lock begin
         # get timestamp from filekey
@@ -55,10 +55,10 @@ function _writevalidity_impl(props_db::LegendDataManagement.MaybePropsDB, fileke
         # check if given validity already exists
         is_validity = findall(x -> contains(x, "$pars_validTimeStamp") && contains(x, "$(string(category))"), validity_lines)
         if isempty(is_validity)
-            @info "Write new validity for $pars_validTimeStamp"
+            if write_from_master @info "Write new validity for $pars_validTimeStamp" end
             push!(validity_lines, "{\"valid_from\":\"$pars_validTimeStamp\", \"category\":\"$(string(category))\", \"apply\":[\"$(join(sort(apply), "\", \""))\"]}")
         elseif length(is_validity) == 1
-            @info "Merge old $pars_validTimeStamp $(string(category)) validity entry"
+            if write_from_master @info "Merge old $pars_validTimeStamp $(string(category)) validity entry" end
             apply = unique(append!(Vector{String}(JSON.parse(validity_lines[first(is_validity)])["apply"]), apply))
             validity_lines[first(is_validity)] = "{\"valid_from\":\"$pars_validTimeStamp\", \"category\":\"$(string(category))\", \"apply\":[\"$(join(sort(apply), "\", \""))\"]}"
         end
