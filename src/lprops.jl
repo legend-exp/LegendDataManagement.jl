@@ -1,12 +1,35 @@
 # This file is a part of LegendDataManagement.jl, licensed under the MIT License (MIT).
 
+const _pseudo_unit_expr = r"(^|[^A-Za-z])(ADC|adc|sample)([^A-Za-z]|$)"
+
+function units_from_string(s::AbstractString)
+    if isempty(s) || s == "none"
+        NoUnits
+    elseif !isnothing(match(_pseudo_unit_expr, s))
+        NoUnits
+    else
+        try
+            uparse(s, unit_context=[Unitful, UnitfulAtomic])
+        catch e
+            s == "e" && return u"e_au" # parse "e" as u"e_au" from UnitfulAtomic
+            if e isa ErrorException
+                rethrow(ArgumentError("Unknown physical unit \"$s\""))
+            else
+                rethrow(e)
+            end
+        end
+    end
+end
+
+units_to_string(u::Unitful.Unitlike) = string(u)
+
 function _props2lprops(pd::PropDict)
     if haskey(pd, :val) && length(keys(pd)) <= 3 && (haskey(pd, :unit) || haskey(pd, :err))
         if haskey(pd, :unit)
             if haskey(pd, :err)
-                Unitful.Quantity.(measurement.(pd.val, ifelse(isnothing(pd.err), NaN, pd.err)), Unitful.uparse(pd.unit))
+                Unitful.Quantity.(measurement.(pd.val, ifelse(isnothing(pd.err), NaN, pd.err)), units_from_string(pd.unit))
             else
-                Unitful.Quantity.(pd.val, Unitful.uparse(pd.unit))
+                Unitful.Quantity.(pd.val, units_from_string(pd.unit))
             end
         elseif haskey(pd, :err)
             measurement.(pd.val, ifelse(isnothing(pd.err), NaN, pd.err))
@@ -14,7 +37,7 @@ function _props2lprops(pd::PropDict)
             throw(ArgumentError("_props2lprops can't handle PropDict $pd"))
         end
     elseif haskey(pd, :unit) && length(keys(pd)) == 1
-        Unitful.Quantity(NaN, Unitful.uparse(pd.unit))
+        Unitful.Quantity(NaN, units_from_string(pd.unit))
     else
         PropDict(Dict([key => _props2lprops(val) for (key, val) in pd]))
     end
