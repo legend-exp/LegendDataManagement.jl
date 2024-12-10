@@ -17,6 +17,7 @@ using PropDicts
 using PropertyDicts
 using StructArrays
 using Unitful
+using UnitfulAtomic
 using Measurements
 using Measurements: ±, value, uncertainty
 
