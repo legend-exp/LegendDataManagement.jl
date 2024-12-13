@@ -143,11 +143,20 @@ function _get_partitions(data::LegendData, label::Symbol; category::DataCategory
 end
 
 """
-    partitioninfo(data::LegendData, ch::ChannelId)
-    partitioninfo(data::LegendData, ch::ChannelId, part::DataPartitionLike)
-    partitioninfo(data::LegendData, ch::ChannelId, period::DataPeriodLike)
+    partitioninfo(data::LegendData, ch::ChannelId)::IdDict{DataPartition, Table}
 
-Return cross-period data partitions.
+    partitioninfo(data::LegendData, ch::ChannelId, part::DataPartitionLike; category::DataCategoryLike=:all)
+    partitioninfo(data::LegendData, ch::ChannelId, period::DataPeriodLike; category::DataCategoryLike=:all)
+    partitioninfo(data, ch, period::DataPeriodLike, run::DataRunLike; category::DataCategoryLike=:all)
+
+    Return cross-period data partitions.
+
+    # Arguments
+    - `data::LegendData`: The LegendData object containing the data.
+    - `ch::ChannelId`: The channel identifier.
+
+    # Returns
+    - `IdDict{DataPartition, Table}`: A dictionary mapping data partitions to tables.
 """
 function partitioninfo end
 export partitioninfo
