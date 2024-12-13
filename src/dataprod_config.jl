@@ -129,7 +129,6 @@ function _get_partitions(data::LegendData, label::Symbol; category::DataCategory
                     tab = if cat == :all
                         Table(flat_pr)
                     else
-                        @info Table(filter(row -> getproperty(row, cat).is_analysis_run, Table(flat_pr)))
                         Table(filter(row -> getproperty(row, cat).is_analysis_run, Table(flat_pr)))
                     end
                     DataPartition(pidx)::DataPartition => sort(tab)
