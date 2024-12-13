@@ -44,7 +44,7 @@ end
 function get_exposure(data::LegendData, det::DetectorIdLike, part::DataPartition; is_analysis_run::Bool=true, cat::DataCategoryLike=:phy)
     part_dict = partitioninfo(data, det)
     if haskey(part_dict, part)
-        rinfo = partitioninfo(data, det, part)
+        rinfo = partitioninfo(data, det, part; category=cat)
         return _get_exposure(data, det, rinfo, is_analysis_run, cat)
     end
     
