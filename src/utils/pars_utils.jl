@@ -107,7 +107,7 @@ function get_partitionvalidity(data::LegendData, ch::ChannelIdLike, det::Detecto
     # unpack
     ch, det, part = ChannelId(ch), DetectorId(det), DataPartition(part)
     # get partition validity
-    partinfo = partitioninfo(data, ch, part)
+    partinfo = partitioninfo(data, ch, part; category=cat)
     Vector{@NamedTuple{period::DataPeriod, run::DataRun, filekey::FileKey, validity::String}}([(period = pinf.period, run = pinf.run, filekey = start_filekey(data, (pinf.period, pinf.run, cat)), validity = "$det/$(part).json") for pinf in partinfo])
 end
 export get_partitionvalidity
