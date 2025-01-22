@@ -294,7 +294,7 @@ function find_filekey(data::LegendData, ts; kwargs...)
 end
 
 
-const _cached_channelinfo = LRU{Tuple{UInt, AnyValiditySelection}, StructVector}(maxsize = 10^3)
+const _cached_channelinfo = LRU{Tuple{UInt, AnyValiditySelection, Bool}, StructVector}(maxsize = 10^3)
 
 """
     channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, extended::Bool = false)
@@ -304,7 +304,7 @@ Get all channel information for the given [`LegendData`](@ref) and
 [`ValiditySelection`](@ref).
 """
 function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, sort_by::Symbol=:detector, extended::Bool = false, verbose::Bool = true)
-    key = (objectid(data), sel)
+    key = (objectid(data), sel, extended)
     chinfo = get!(_cached_channelinfo, key) do
         chmap = data.metadata(sel).hardware.configuration.channelmaps
         diodmap = data.metadata.hardware.detectors.germanium.diodes
@@ -351,13 +351,14 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
             low_aoe_status::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("low_aoe"), :unknown))
             high_aoe_status::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("high_aoe"), :unknown))
             lq_status::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("lq"), :unknown))
-            batch5_dt_cut::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("batch5_dt_cut"), :unknown))
+            ann_status::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("ann"), :unknown))
+            coax_rt_status::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("coax_rt"), :unknown))
             is_bb_like::String = replace(get(get(dpcfg[k], :psd, PropDict()), :is_bb_like, ""), "&" => "&&") 
 
             location::Symbol, detstring::Int, position::Int, fiber::StaticString{8} = _convert_location(chmap[k].location)
 
             c = (;
-                detector, channel, fcid, rawid, system, processable, usability, is_blinded, low_aoe_status, high_aoe_status, lq_status, batch5_dt_cut, is_bb_like, det_type,
+                detector, channel, fcid, rawid, system, processable, usability, is_blinded, low_aoe_status, high_aoe_status, lq_status, ann_status, coax_rt_status, is_bb_like, det_type,
                 location, detstring, fiber, position
             )
 
@@ -375,8 +376,8 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
                 total_volume::Unitful.Volume{<:Float64} = if haskey(diodmap, k) get_active_volume(diodmap[k], 0.0) else Float64(NaN) * u"cm^3" end
                 fccds = diodmap[k].characterization.l200_site.fccd_in_mm
                 fccd::Float64 = if isa(fccds, NoSuchPropsDBEntry) || 
-                                   isa(fccds, PropDicts.MissingProperty) || 
-                                   isa(fccds[first(keys(fccds))].value, PropDicts.MissingProperty)
+                                    isa(fccds, PropDicts.MissingProperty) || 
+                                    isa(fccds[first(keys(fccds))].value, PropDicts.MissingProperty)
                     
                     verbose && haskey(diodmap, k) && @warn "No FCCD value given for detector $(detector)"
                     0.0
