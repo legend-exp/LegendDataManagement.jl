@@ -87,14 +87,7 @@ function _get_exposure(data::LegendData, det::DetectorIdLike, rinfo::Table, is_a
     mass = if !iszero(livetime) && !isempty(filekeys)
         # read in the channelinfo
         filekey = first(filekeys)
-        _chinfo = channelinfo(data, filekey, det, extended = true, verbose = false)
-        chinfo = if !all(x -> hasproperty(_chinfo, x), (:enrichment, :mass, :active_volume, :total_volume))
-            empty!(_cached_channelinfo)
-            channelinfo(data, filekey, det, extended = true, verbose = false)
-        else
-            _chinfo
-        end
-        # chinfo.active_volume == chinfo.total_volume && @warn "No FCCD value given for detector $(det)"
+        chinfo = channelinfo(data, filekey, det, extended = true, verbose = false)
         chinfo.mass * chinfo.enrichment * chinfo.active_volume / chinfo.total_volume
     else
         0.0u"kg"
