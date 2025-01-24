@@ -94,6 +94,7 @@ For simplicity, the ch can also be given as a `DetectorID` which will be convert
 det = chinfo[1].detector
 dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, det)
 ```
+In case, a `ChannelId` is missing in a file, the function will throw an `ArgumentError`. To avoid this and return `nothing` instead, you can use the `ignore_missing` keyword argument.
 ## `SolidStateDetectors` extension
 
 LegendDataManagment provides an extension for [SolidStateDetectors](https://github.com/JuliaPhysics/SolidStateDetectors.jl). This makes it possible to create `SolidStateDetector` and `Simulation` instances from LEGEND metadata.
