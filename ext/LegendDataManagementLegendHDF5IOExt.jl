@@ -115,11 +115,16 @@ _load_all_keys(arr::AbstractArray, n_evts::Int=-1) = arr[:][if (n_evts < 1 || n_
 _load_all_keys(t::Table, n_evts::Int=-1) = t[:][if (n_evts < 1 || n_evts > length(t)) 1:length(t) else rand(1:length(t), n_evts) end]
 _load_all_keys(x, n_evts::Int=-1) = x
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, ChannelOrDetectorIdLike}; n_evts::Int=-1)
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, ChannelOrDetectorIdLike}; n_evts::Int=-1, ignore_missing::Bool=false)
     tier, filekey, ch = DataTier(rsel[1]), rsel[2], if !isempty(string((rsel[3]))) _get_channelid(data, rsel[2], rsel[3]) else rsel[3] end
     _lh5_data_open(data, tier, filekey, ch) do h
         if !isempty(string((ch))) && !haskey(h, "$ch")
-            throw(ArgumentError("Channel $ch not found in $(basename(string(h.data_store)))"))
+            if ignore_missing
+                @warn "Channel $ch not found in $(basename(string(h.data_store)))"
+                return nothing
+            else
+                throw(ArgumentError("Channel $ch not found in $(basename(string(h.data_store)))"))
+            end
         end
         if f == identity
             if !isempty(string((ch)))
@@ -160,16 +165,16 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
         elseif LegendDataManagement._can_convert_to(ChannelId, only(ch_keys)) || LegendDataManagement._can_convert_to(DetectorId, only(ch_keys))
             LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], string(only(ch_keys))); kwargs...)
         else
-            throw(ArgumentError("No tierm channel or detector found in $(basename(string(h.data_store)))"))
+            throw(ArgumentError("No tier channel or detector found in $(basename(string(h.data_store)))"))
         end
     else
         NamedTuple{Tuple(Symbol.(ch_keys))}([LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], ch); kwargs...) for ch in ch_keys]...)
     end
 end
 
-lflatten(x) = fast_flatten(x)
-# lflatten(t::AbstractVector{<:Table}) = append!(t...)
-lflatten(nt::AbstractVector{<:NamedTuple}) = flatten_by_key(nt)
+_skipnothingmissing(xv::AbstractVector) = [x for x in skipmissing(xv) if !isnothing(x)]
+lflatten(x) = fast_flatten(collect(_skipnothingmissing(x)))
+lflatten(nt::AbstractVector{<:NamedTuple}) = flatten_by_key(collect(_skipnothingmissing(nt)))
 
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, AbstractVector{FileKey}, ChannelOrDetectorIdLike}; kwargs...)
     if !isempty(string(rsel[3]))
@@ -210,7 +215,7 @@ LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPartition, ChannelOrDetectorIdLike}; kwargs...)
     first_run = first(LegendDataManagement._get_partitions(data, :default)[rsel[3]])
     ch = _get_channelid(data, (first_run.period, first_run.run, rsel[2]), rsel[4])
-    pinfo = partitioninfo(data, ch, rsel[3])
+    pinfo = partitioninfo(data, ch, rsel[3]; category=rsel[2])
     @assert ch == _get_channelid(data, (first(pinfo).period, first(pinfo).run, rsel[2]), rsel[4]) "Channel mismatch in partitioninfo"
     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], pinfo, ch); kwargs...)
 end
