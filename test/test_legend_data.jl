@@ -4,6 +4,7 @@ using LegendDataManagement
 using Test
 
 using StructArrays, PropertyFunctions, TypedTables
+using Measurements: uncertainty
 
 include("testing_utils.jl")
 
@@ -38,6 +39,8 @@ include("testing_utils.jl")
         extended_keywords = (:cc4, :cc4ch, :daqcrate, :daqcard, :hvcard, :hvch, :enrichment, :mass, :total_volume, :active_volume)
         @test !any(in(columnnames(chinfo)),   extended_keywords)
         @test  all(in(columnnames(extended)), extended_keywords)
+        @test !any(iszero.(uncertainty.(extended.fccd)))
+        @test !any(iszero.(uncertainty.(extended.active_volume)))
 
         # ToDo: Make type-stable:
         # @test #=@inferred=#(channel_info(l200, filekey)) isa StructArray
