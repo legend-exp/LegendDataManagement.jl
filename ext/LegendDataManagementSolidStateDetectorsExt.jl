@@ -46,7 +46,11 @@ function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::Abs
 end
 
 function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}) where {T<:AbstractFloat}
-    config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta)
+    SolidStateDetectors.SolidStateDetector{T}(LegendData, meta, xtal_meta, HPGeEnvironment())
+end
+
+function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment) where {T<:AbstractFloat}
+    config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta, env)
     return SolidStateDetector{T}(config_dict, SolidStateDetectors.construct_units(config_dict))
 end
 
@@ -86,12 +90,15 @@ function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::AbstractDic
 end
 
 function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}) where {T<:AbstractFloat}
-    config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta)
+    SolidStateDetectors.Simulation{T}(LegendData, meta, xtal_meta, HPGeEnvironment())
+end
+
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment) where {T<:AbstractFloat}
+    config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta, env)
     return Simulation{T}(config_dict)
 end
 
-
-function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::X; dicttype = Dict{String,Any}) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
+function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::X, env::HPGeEnvironment; dicttype = Dict{String,Any}) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
 
     # Not all possible configurations are yet implemented!
     # https://github.com/legend-exp/legend-metadata/blob/main/hardware/detectors/detector-metadata_1.pdf
@@ -139,7 +146,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
                 )
             )
         ),
-        "medium" => "vacuum",
+        "medium" => env.medium,
         "detectors" => []
     )
 
@@ -151,7 +158,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
             ),
             # "impurity_density" => dicttype("parameters" => Vector()),
             "geometry" => dicttype(),
-            "temperature" => 78
+            "temperature" => ustrip(u"K", env.temperature)
         ),
         "contacts" => []
         ))
