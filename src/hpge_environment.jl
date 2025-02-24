@@ -8,14 +8,14 @@ Struct to describe the environment of a HPGe detector which are not set in metad
 
 ## Fields
 * `medium::AbstractString`: Name of the medium.
-* `Temperature::T`: Temperature of detector/medium with units. 
+* `temperature::T`: Temperature of detector/medium with units. 
 
 ## Default constructor for vacuum cryostat at 78 K:
 
 * `HPGeEnvironment()`.
 """
 
-struct HPGeEnvironment{T<: Number}
+struct HPGeEnvironment{T<:Unitful.Temperature{<:Number}}
     medium::AbstractString
     temperature::T
     
