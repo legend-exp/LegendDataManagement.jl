@@ -45,11 +45,7 @@ function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::Abs
     SolidStateDetectors.SolidStateDetector{T}(LegendData, convert(PropDict, meta), LegendDataManagement.NoSuchPropsDBEntry("",[]))
 end
 
-function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}) where {T<:AbstractFloat}
-    SolidStateDetectors.SolidStateDetector{T}(LegendData, meta, xtal_meta, HPGeEnvironment())
-end
-
-function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment) where {T<:AbstractFloat}
+function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment()) where {T<:AbstractFloat}
     config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta, env)
     return SolidStateDetector{T}(config_dict, SolidStateDetectors.construct_units(config_dict))
 end
@@ -89,11 +85,7 @@ function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::AbstractDic
     SolidStateDetectors.Simulation{T}(LegendData, convert(PropDict, meta), LegendDataManagement.NoSuchPropsDBEntry("", []))
 end
 
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}) where {T<:AbstractFloat}
-    SolidStateDetectors.Simulation{T}(LegendData, meta, xtal_meta, HPGeEnvironment())
-end
-
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment) where {T<:AbstractFloat}
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment()) where {T<:AbstractFloat}
     config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta, env)
     return Simulation{T}(config_dict)
 end
