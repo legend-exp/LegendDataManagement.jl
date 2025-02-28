@@ -251,7 +251,7 @@ const _cached_dataprod_spms_cal = LRU{Tuple{UInt, AnyValiditySelection}, Union{P
 
 function _dataprod_spms_cal(data::LegendData, sel::AnyValiditySelection)
     key = (objectid(data), sel)
-    get!(_cached_dataprod_ged_cal, key) do
+    get!(_cached_dataprod_spms_cal, key) do
         dataprod_config(data).sipm(sel)
     end
 end
