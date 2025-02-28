@@ -7,19 +7,19 @@ _get_cal_values(pd::NoSuchPropsDBEntry, sel::AnyValiditySelection) = PropDicts.P
 ### HPGe calibration functions
 const _cached_get_ecal_props = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
 
-function _get_ecal_props(data::LegendData, sel::AnyValiditySelection)
+function _get_ecal_props(data::LegendData, sel::AnyValiditySelection; pars_type::Symbol=:rpars, pars_cat::Symbol=:ecal)
     key = (objectid(data), sel)
     get!(_cached_get_ecal_props, key) do
-        _get_cal_values(dataprod_parameters(data).rpars.ecal, sel)
+        _get_cal_values(dataprod_parameters(data)[pars_type][pars_cat], sel)
     end
 end
 
-function _get_ecal_props(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    get(_get_ecal_props(data, sel), Symbol(detector), PropDict())
+function _get_ecal_props(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; kwargs...)
+    get(_get_ecal_props(data, sel; kwargs...), Symbol(detector), PropDict())
 end
 
-function _get_e_cal_propsfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol)
-    ecal_props::String = get(get(get(_get_ecal_props(data, sel, detector), e_filter, PropDict()), :cal, PropDict()), :func, "e_max * NaN*keV")
+function _get_e_cal_propsfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol; kwargs...)
+    ecal_props::String = get(get(get(_get_ecal_props(data, sel, detector; kwargs...), e_filter, PropDict()), :cal, PropDict()), :func, "e_max * NaN*keV")
     return ecal_props
 end
 
@@ -32,8 +32,10 @@ function _dataprod_ged_cal(data::LegendData, sel::AnyValiditySelection)
     end
 end
 
-function _dataprod_ged_cal(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    merge(_dataprod_ged_cal(data, sel).default, get(_dataprod_ged_cal(data, sel), detector, PropDict()))
+function _dataprod_ged_cal(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:rpars)
+    @assert pars_type in (:ppars, :rpars) "pars_type must be either :ppars or :rpars"
+    dataprod_ged_config = _dataprod_ged_cal(data, sel)
+    merge(dataprod_ged_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_ged_config, :p, PropDict()), dataprod_ged_config), detector, PropDict()))
 end
 
 """
@@ -45,11 +47,11 @@ detector.
 Note: Caches configuration/calibration data internally, use a fresh `data`
 object if on-disk configuration/calibration data may have changed.
 """
-function get_ged_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    let energies = Symbol.(_dataprod_ged_cal(data, sel, detector).energy_types), energies_cal = Symbol.(_dataprod_ged_cal(data, sel, detector).energy_types .* "_cal")
+function get_ged_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:rpars, pars_cat::Symbol=:ecal)
+    let energies = Symbol.(_dataprod_ged_cal(data, sel, detector; pars_type=pars_type).energy_types), energies_cal = Symbol.(_dataprod_ged_cal(data, sel, detector; pars_type=pars_type).energy_types .* "_cal")
 
         ljl_propfunc(Dict{Symbol, String}(
-            energies_cal .=> _get_e_cal_propsfunc_str.(Ref(data), Ref(sel), Ref(detector), energies)
+            energies_cal .=> _get_e_cal_propsfunc_str.(Ref(data), Ref(sel), Ref(detector), energies; pars_type=pars_type, pars_cat=pars_cat)
         ))
     end
 end
@@ -245,17 +247,50 @@ export get_ged_aoe_cut_propfunc
 
 ### SiPM LAr cut functions
 
-const _cached_get_larcal_props = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
+const _cached_dataprod_spms_cal = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
 
-function _get_larcal_props(data::LegendData, sel::AnyValiditySelection)
+function _dataprod_spms_cal(data::LegendData, sel::AnyValiditySelection)
     key = (objectid(data), sel)
-    get!(_cached_get_larcal_props, key) do
-        get_values(dataprod_parameters(data).ppars.sipm(sel))
+    get!(_cached_dataprod_ged_cal, key) do
+        dataprod_config(data).sipm(sel)
     end
 end
 
-function _get_larcal_props(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    _get_larcal_props(data, sel)[Symbol(detector)]
+function _dataprod_lar_cal(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars)
+    @assert pars_type in (:ppars, :rpars) "pars_type must be either :ppars or :rpars"
+    dataprod_lar_config = _dataprod_spms_cal(data, sel).lar
+    merge(dataprod_lar_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_lar_config, :p, PropDict()), dataprod_lar_config), detector, PropDict()))
+end
+
+const _cached_get_larcal_props = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
+
+function _get_larcal_props(data::LegendData, sel::AnyValiditySelection; pars_type::Symbol=:ppars, pars_cat::Symbol=:sipmcal)
+    key = (objectid(data), sel)
+    get!(_cached_get_larcal_props, key) do
+        _get_cal_values(dataprod_parameters(data)[pars_type][pars_cat], sel)
+    end
+end
+
+function _get_larcal_props(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; kwargs...)
+    _get_larcal_props(data, sel; kwargs...)[Symbol(detector)]
+end
+
+function _get_larcal_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol; kwargs...)
+    ecal_props::String = get(get(get(_get_larcal_props(data, sel, detector; kwargs...), e_filter, PropDict()), :cal, PropDict()), :func, "trig_max .* (NaN*e)")
+    return ecal_props
+end
+
+function _get_larcal_dc_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol; kwargs...)
+    dataprod_lar = _dataprod_lar_cal(data, sel, detector; kwargs...)
+    let Δt_pos_dc_tag = dataprod_lar.Δt_pos_dc_tag, dc_tag_interval = ClosedInterval(dataprod_lar.dc_tag_interval...)
+        @pf [any(  abs.($pos_dc .- p) .< Δt_pos_dc_tag  .&&  $max_dc .∈ dc_tag_interval) for p in $pos]
+    end
+    
+end
+
+function _get_larcal_dc_sel_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol; kwargs...)
+    dataprod_lar_filter = _dataprod_lar_cal(data, sel, detector; kwargs...).energy_types[e_filter]
+    PropSelFunction{Symbol.((e_filter, dataprod_lar_filter.pos, dataprod_lar_filter.dc, dataprod_lar_filter.dc_pos)), (:max, :pos, :max_dc, :pos_dc)}()
 end
 
 
@@ -265,17 +300,40 @@ end
 Get the LAr/SPMS calibration function for the given data, validity selection
 and detector.
 """
-function get_spm_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    larcal_props = _get_larcal_props(data, sel, detector)
-
-    a::Float64 = get(larcal_props, :a, NaN)
-    m::Float64 = get(larcal_props, :m, NaN)
-
-    let a = a, m = m
-        @pf (
-            trig_pe = $trig_max .* m .+ a,
-            trig_is_dc = [any(abs.($trig_pos_DC .- pos) .< 100u"ns") for pos in $trig_pos],
+function get_spm_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars)
+    let energies = keys(_dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types), energies_cal = Symbol.(string.(keys(_dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types)) .* "_cal")
+        ljl_propfunc(
+            Dict{Symbol, String}(
+                energies_cal .=> _get_larcal_propfunc_str.(Ref(data), Ref(sel), Ref(detector), energies; pars_type=pars_type)
+            )
         )
     end
 end
 export get_spm_cal_propfunc
+
+"""
+    get_spm_dc_sel_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+
+Get the LAr/SPMS DC calibration selector function for the given data, validity selection
+and detector.
+"""
+function get_spm_dc_sel_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars)
+    let energies = keys(_dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types), energies_dc = Symbol.(string.(keys(_dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types)) .* "_is_dc")
+        NamedTuple{Tuple(energies_dc)}(_get_larcal_dc_sel_propfunc.(Ref(data), Ref(sel), Ref(detector), energies; pars_type=pars_type))
+    end
+end
+export get_spm_dc_sel_propfunc
+
+
+"""
+    get_spm_dc_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+
+Get the LAr/SPMS DC calibration function for the given data, validity selection
+and detector.
+"""
+function get_spm_dc_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars)
+    let energies = keys(_dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types), energies_dc = Symbol.(string.(keys(_dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types)) .* "_is_dc")
+        NamedTuple{Tuple(energies_dc)}(_get_larcal_dc_propfunc.(Ref(data), Ref(sel), Ref(detector), energies; pars_type=pars_type))
+    end
+end
+export get_spm_dc_cal_propfunc
