@@ -35,10 +35,13 @@ using TypedTables
 import Markdown
 using MIMEs: mime_from_extension
 
+export HPGeEnvironment
+
 include("legend_report.jl")
 include("status_types.jl")
 include("atomic_fcreate.jl")
 include("filekey.jl")
+include("hpge_environment.jl")
 include("dataset.jl")
 include("data_config.jl")
 include("props_db.jl")
