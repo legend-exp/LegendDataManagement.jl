@@ -135,3 +135,15 @@ function get_spms_evt_chsel_propfunc(data::LegendData, sel::AnyValiditySelection
 end
 export get_spms_evt_chsel_propfunc
 
+
+"""
+    get_spms_evt_lar_cut_props(data::LegendData, sel::AnyValiditySelection)
+
+Get the SiPM LAr cut properties.
+"""
+function get_spms_evt_lar_cut_props(data::LegendData, sel::AnyValiditySelection)
+    _dataprod_evt(data, sel, :spms).lar_cut
+end
+export get_spms_evt_lar_cut_props
+
+

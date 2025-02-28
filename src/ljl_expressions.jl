@@ -65,6 +65,7 @@ const _ljlexpr_units = IdDict{Symbol,Expr}([
     :MeV => :(u"MeV"),
     :keV => :(u"keV"),
     :eV => :(u"eV"),
+    :e => :(u"e_au"),
 ])
 _ljl_expr_unitmap(sym::Symbol) = get(_ljlexpr_units, sym, sym)
 
