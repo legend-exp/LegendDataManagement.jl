@@ -60,6 +60,7 @@ export get_ged_cal_propfunc
 
 
 ### HPGe PSD calibration functions
+# A/E
 const _cached_get_aoecal_props = LRU{Tuple{UInt, AnyValiditySelection, Symbol, Symbol}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
 
 function _get_aoecal_props(data::LegendData, sel::AnyValiditySelection; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
@@ -78,6 +79,25 @@ function _get_aoe_cal_propfunc_str(data::LegendData, sel::AnyValiditySelection, 
     return aoecal_props
 end
 
+# LQ
+const _cached_get_lqcal_props = LRU{Tuple{UInt, AnyValiditySelection, Symbol, Symbol}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
+
+function _get_lqcal_props(data::LegendData, sel::AnyValiditySelection; pars_type::Symbol=:ppars, pars_cat::Symbol=:lq)
+    key = (objectid(data), sel, pars_type, pars_cat)
+    get!(_cached_get_lqcal_props, key) do
+        _get_cal_values(dataprod_parameters(data)[pars_type][pars_cat], sel)
+    end
+end
+
+function _get_lqcal_props(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:lq)
+    get(_get_lqcal_props(data, sel; pars_type=pars_type, pars_cat=pars_cat), Symbol(detector), PropDict())
+end
+
+function _get_lq_cal_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, lq_type::Symbol; pars_type::Symbol=:ppars, pars_cat::Symbol=:lq)
+    lqcal_props::String = get(_get_lqcal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat)[lq_type], :func, "lq * NaN")
+    return lqcal_props
+end
+
 const _cached_dataprod_psd = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
 
 function _dataprod_psd(data::LegendData, sel::AnyValiditySelection)
@@ -93,6 +113,12 @@ function _dataprod_aoe(data::LegendData, sel::AnyValiditySelection, detector::De
     merge(dataprod_aoe_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_aoe_config, :p, PropDict()), dataprod_aoe_config), detector, PropDict()))
 end
 
+function _dataprod_lq(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars)
+    dataprod_lq_config = _dataprod_psd(data, sel).lq
+    @assert pars_type in (:ppars, :rpars) "pars_type must be either :ppars or :rpars"
+    merge(dataprod_lq_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_lq_config, :p, PropDict()), dataprod_lq_config), detector, PropDict()))
+end
+
 """
     get_ged_psd_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
 
@@ -102,12 +128,19 @@ detector.
 Note: Caches configuration/calibration data internally, use a fresh `data`
 object if on-disk configuration/calibration data may have changed.
 """
-function get_ged_psd_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
-    let aoe_types = collect(keys(_dataprod_aoe(data, sel, detector; pars_type=pars_type).aoe_funcs)), aoe_classifier = Symbol.(string.(keys(_dataprod_aoe(data, sel, detector; pars_type=pars_type).aoe_funcs)) .* "_classifier")
+function get_ged_psd_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; aoe_pars_type::Symbol=:ppars, aoe_pars_cat::Symbol=:aoe, lq_pars_type::Symbol=:ppars, lq_pars_cat::Symbol=:lq)
+    let aoe_types = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=pars_type).aoe_types), aoe_classifier = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=pars_type).aoe_types .* "_classifier"), lq_types = Symbol.(_dataprod_lq(data, sel, detector; pars_type=pars_type).lq_types), lq_classifier = Symbol.(_dataprod_lq(data, sel, detector; pars_type=pars_type).lq_types .* "_classifier")
 
-        ljl_propfunc(Dict{Symbol, String}(
-            aoe_classifier .=> _get_aoe_cal_propfunc_str.(Ref(data), Ref(sel), Ref(detector), aoe_types; pars_type=pars_type, pars_cat=pars_cat)
-        ))
+        ljl_propfunc(
+            merge(
+                Dict{Symbol, String}(
+                    aoe_classifier .=> _get_aoe_cal_propfunc_str.(Ref(data), Ref(sel), Ref(detector), aoe_types; pars_type=aoe_pars_type, pars_cat=aoe_pars_cat)
+                ),
+                Dict{Symbol, String}(
+                    lq_classifier .=> _get_lq_cal_propfunc_str.(Ref(data), Ref(sel), Ref(detector), lq_types; pars_type=lq_pars_type, pars_cat=lq_pars_cat)
+                )
+            )
+        )
     end
 end
 export get_ged_psd_propfunc
@@ -242,6 +275,28 @@ function get_ged_aoe_cut_propfunc(data::LegendData, sel::AnyValiditySelection, d
     end
 end
 export get_ged_aoe_cut_propfunc
+
+
+
+
+
+
+
+
+"""
+    LegendDataManagement.dataprod_pars_lq_window(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+
+Get the LQ cut window for the given data, validity selection and detector.
+"""
+function dataprod_pars_lq_window(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, lq_classifier::Symbol; pars_type::Symbol=:ppars, pars_cat::Symbol=:lq)
+    lqcut_lo::Float64 = get(_get_lqcal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat)[lq_classifier], :lowcut, -Inf)
+    lqcut_hi::Float64 = get(_get_lqcal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat)[lq_classifier], :highcut, Inf)
+    ClosedInterval(lqcut_lo, lqcut_hi)
+end
+
+
+
+
 
 
 
