@@ -246,11 +246,11 @@ export dataprod_pars_aoe_window
 
 
 function _get_ged_aoe_lowcut_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, aoe_classifier::Symbol; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
-    "$(aoe_classifier) > $(leftendpoint(dataprod_pars_aoe_window(data, sel, detector, aoe_classifier; pars_type=pars_type, pars_cat=pars_cat)))"
+    "$(aoe_classifier) < $(leftendpoint(dataprod_pars_aoe_window(data, sel, detector, aoe_classifier; pars_type=pars_type, pars_cat=pars_cat)))"
 end
 
 function _get_ged_aoe_dscut_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, aoe_classifier::Symbol; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
-    "$(aoe_classifier) > $(leftendpoint(dataprod_pars_aoe_window(data, sel, detector, aoe_classifier; pars_type=pars_type, pars_cat=pars_cat))) && $(aoe_classifier) < $(rightendpoint(dataprod_pars_aoe_window(data, sel, detector, aoe_classifier; pars_type=pars_type, pars_cat=pars_cat)))"
+    "$(aoe_classifier) < $(leftendpoint(dataprod_pars_aoe_window(data, sel, detector, aoe_classifier; pars_type=pars_type, pars_cat=pars_cat))) && $(aoe_classifier) > $(rightendpoint(dataprod_pars_aoe_window(data, sel, detector, aoe_classifier; pars_type=pars_type, pars_cat=pars_cat)))"
 end
 
 """
