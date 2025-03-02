@@ -129,7 +129,7 @@ Note: Caches configuration/calibration data internally, use a fresh `data`
 object if on-disk configuration/calibration data may have changed.
 """
 function get_ged_psd_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; aoe_pars_type::Symbol=:ppars, aoe_pars_cat::Symbol=:aoe, lq_pars_type::Symbol=:ppars, lq_pars_cat::Symbol=:lq)
-    let aoe_types = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=aoe_pars_type).aoe_types), aoe_classifier = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=lq_pars_type).aoe_types .* "_classifier"), lq_types = Symbol.(_dataprod_lq(data, sel, detector; pars_type=lq_pars_type).lq_types), lq_classifier = Symbol.(_dataprod_lq(data, sel, detector; pars_type=lq_pars_type).lq_types .* "_classifier")
+    let aoe_types = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=aoe_pars_type).aoe_types), aoe_classifier = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=aoe_pars_type).aoe_types .* "_classifier"), lq_types = Symbol.(_dataprod_lq(data, sel, detector; pars_type=lq_pars_type).lq_types), lq_classifier = Symbol.(_dataprod_lq(data, sel, detector; pars_type=lq_pars_type).lq_types .* "_classifier")
 
         ljl_propfunc(
             merge(
