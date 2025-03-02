@@ -129,7 +129,7 @@ Note: Caches configuration/calibration data internally, use a fresh `data`
 object if on-disk configuration/calibration data may have changed.
 """
 function get_ged_psd_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; aoe_pars_type::Symbol=:ppars, aoe_pars_cat::Symbol=:aoe, lq_pars_type::Symbol=:ppars, lq_pars_cat::Symbol=:lq)
-    let aoe_types = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=pars_type).aoe_types), aoe_classifier = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=pars_type).aoe_types .* "_classifier"), lq_types = Symbol.(_dataprod_lq(data, sel, detector; pars_type=pars_type).lq_types), lq_classifier = Symbol.(_dataprod_lq(data, sel, detector; pars_type=pars_type).lq_types .* "_classifier")
+    let aoe_types = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=aoe_pars_type).aoe_types), aoe_classifier = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=lq_pars_type).aoe_types .* "_classifier"), lq_types = Symbol.(_dataprod_lq(data, sel, detector; pars_type=lq_pars_type).lq_types), lq_classifier = Symbol.(_dataprod_lq(data, sel, detector; pars_type=lq_pars_type).lq_types .* "_classifier")
 
         ljl_propfunc(
             merge(
@@ -250,7 +250,7 @@ function _get_ged_aoe_lowcut_propfunc_str(data::LegendData, sel::AnyValiditySele
 end
 
 function _get_ged_aoe_dscut_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, aoe_classifier::Symbol; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
-    "$(aoe_classifier) < $(leftendpoint(dataprod_pars_aoe_window(data, sel, detector, aoe_classifier; pars_type=pars_type, pars_cat=pars_cat))) && $(aoe_classifier) > $(rightendpoint(dataprod_pars_aoe_window(data, sel, detector, aoe_classifier; pars_type=pars_type, pars_cat=pars_cat)))"
+    "$(aoe_classifier) < $(leftendpoint(dataprod_pars_aoe_window(data, sel, detector, aoe_classifier; pars_type=pars_type, pars_cat=pars_cat))) || $(aoe_classifier) > $(rightendpoint(dataprod_pars_aoe_window(data, sel, detector, aoe_classifier; pars_type=pars_type, pars_cat=pars_cat)))"
 end
 
 """
@@ -277,27 +277,60 @@ end
 export get_ged_aoe_cut_propfunc
 
 
-
-
-
-
-
-
 """
-    LegendDataManagement.dataprod_pars_lq_window(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    LegendDataManagement.dataprod_pars_lq_window(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, lq_classifier::Symbol; pars_type::Symbol=:ppars, pars_cat::Symbol=:lq)
 
 Get the LQ cut window for the given data, validity selection and detector.
 """
 function dataprod_pars_lq_window(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, lq_classifier::Symbol; pars_type::Symbol=:ppars, pars_cat::Symbol=:lq)
     lqcut_lo::Float64 = get(_get_lqcal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat)[lq_classifier], :lowcut, -Inf)
-    lqcut_hi::Float64 = get(_get_lqcal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat)[lq_classifier], :highcut, Inf)
+    lqcut_hi::Float64 = get(_get_lqcal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat)[lq_classifier], :cut, Inf)
     ClosedInterval(lqcut_lo, lqcut_hi)
 end
 
+function _get_ged_lq_highcut_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, lq_classifier::Symbol; pars_type::Symbol=:ppars, pars_cat::Symbol=:lq)
+    "$(lq_classifier) > $(rightendpoint(dataprod_pars_lq_window(data, sel, detector, lq_classifier; pars_type=pars_type, pars_cat=pars_cat)))"
+end
+
+function _get_ged_lq_dscut_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, lq_classifier::Symbol; pars_type::Symbol=:ppars, pars_cat::Symbol=:lq)
+    "$(lq_classifier) < $(leftendpoint(dataprod_pars_lq_window(data, sel, detector, lq_classifier; pars_type=pars_type, pars_cat=pars_cat))) || $(lq_classifier) > $(rightendpoint(dataprod_pars_lq_window(data, sel, detector, lq_classifier; pars_type=pars_type, pars_cat=pars_cat)))"
+end
+
+"""
+    LegendDataManagement.get_ged_lq_cut_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:lq)
+
+Get the LQ cut propfuncs for the given data, validity selection and detector.
+"""
+function get_ged_lq_cut_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:lq)
+    let lq_classifiers = Symbol.(_dataprod_lq(data, sel, detector; pars_type=pars_type).lq_classifiers), lq_high_cut = Symbol.(_dataprod_lq(data, sel, detector; pars_type=pars_type).lq_classifiers .* "_high_cut"),
+        lq_ds_cut = Symbol.(_dataprod_lq(data, sel, detector; pars_type=pars_type).lq_classifiers .* "_ds_cut")
+
+        ljl_propfunc(
+            merge(
+                Dict{Symbol, String}(
+                    lq_high_cut .=> _get_ged_lq_highcut_propfunc_str.(Ref(data), Ref(sel), Ref(detector), lq_classifiers; pars_type=pars_type, pars_cat=pars_cat)
+                ),
+                Dict{Symbol, String}(
+                    lq_ds_cut .=> _get_ged_lq_dscut_propfunc_str.(Ref(data), Ref(sel), Ref(detector), lq_classifiers; pars_type=pars_type, pars_cat=pars_cat)
+                )
+            )
+        )
+    end
+end
+export get_ged_lq_cut_propfunc
 
 
+"""
+    get_ged_psd_classifier_propfunc(data::LegendData, sel::AnyValiditySelection)
 
-
+Get the PSD cut propfuncs for the given data and validity selection.
+"""
+function get_ged_psd_classifier_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars)
+    dataprod_psd_config = _dataprod_psd(data, sel).psd
+    @assert pars_type in (:ppars, :rpars) "pars_type must be either :ppars or :rpars"
+    ljl_propfunc(merge(dataprod_psd_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_psd_config, :p, PropDict()), dataprod_psd_config), detector, PropDict())).psd_classifier)
+end
+export get_ged_psd_classifier_propfunc
 
 
 ### SiPM LAr cut functions
