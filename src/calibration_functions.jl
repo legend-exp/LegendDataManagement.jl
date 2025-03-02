@@ -19,7 +19,7 @@ function _get_ecal_props(data::LegendData, sel::AnyValiditySelection, detector::
 end
 
 function _get_e_cal_propsfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol; kwargs...)
-    ecal_props::String = get(get(get(_get_ecal_props(data, sel, detector; kwargs...), e_filter, PropDict()), :cal, PropDict()), :func, "e_max * NaN*keV")
+    ecal_props::String = get(get(get(_get_ecal_props(data, sel, detector; kwargs...), e_filter, PropDict()), :cal, PropDict()), :func, "$(e_filter) * NaN*keV")
     return ecal_props
 end
 
@@ -75,7 +75,7 @@ function _get_aoecal_props(data::LegendData, sel::AnyValiditySelection, detector
 end
 
 function _get_aoe_cal_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, aoe_type::Symbol; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
-    aoecal_props::String = get(_get_aoecal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat)[aoe_type], :func, "a_raw * NaN")
+    aoecal_props::String = get(_get_aoecal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat)[aoe_type], :func, "$(aoe_type) * NaN")
     return aoecal_props
 end
 
@@ -94,7 +94,7 @@ function _get_lqcal_props(data::LegendData, sel::AnyValiditySelection, detector:
 end
 
 function _get_lq_cal_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, lq_type::Symbol; pars_type::Symbol=:ppars, pars_cat::Symbol=:lq)
-    lqcal_props::String = get(_get_lqcal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat)[lq_type], :func, "lq * NaN")
+    lqcal_props::String = get(_get_lqcal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat)[lq_type], :func, "$(lq_type) * NaN")
     return lqcal_props
 end
 
@@ -364,7 +364,7 @@ function _get_larcal_props(data::LegendData, sel::AnyValiditySelection, detector
 end
 
 function _get_larcal_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol; kwargs...)
-    ecal_props::String = get(get(get(_get_larcal_props(data, sel, detector; kwargs...), e_filter, PropDict()), :cal, PropDict()), :func, "trig_max .* (NaN*e)")
+    ecal_props::String = get(get(get(_get_larcal_props(data, sel, detector; kwargs...), e_filter, PropDict()), :cal, PropDict()), :func, "$(e_filter) .* (NaN*e)")
     return ecal_props
 end
 
