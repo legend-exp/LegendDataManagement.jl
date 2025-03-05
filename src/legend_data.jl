@@ -248,8 +248,8 @@ const _cached_dataset = LRU{Tuple{UInt, Vector{<:DataCategoryLike}, DataTierLike
 
 function search_disk(::Type{DataSet}, data::LegendData; search_categories::Vector{<:DataCategoryLike} = DataCategory.([:cal, :phy]), search_tier::DataTierLike = DataTier(:raw), only_analysis_runs::Bool=true, save_filekeys::Bool=true, ignore_save_tier::Bool=false, save_tier::DataTierLike=DataTier(:jlfks))
     key = (objectid(data), search_categories, search_tier, save_tier)
-    if ignore_save_tier
-        delete!(key, ignore_save_tier)
+    if ignore_save_tier && haskey(_cached_dataset, key)
+        delete!(_cached_dataset, key)
     end
     get!(_cached_dataset, key) do
         DataSet(let rinfo = runinfo(data)
