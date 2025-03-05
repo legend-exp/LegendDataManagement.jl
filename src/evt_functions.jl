@@ -46,6 +46,16 @@ function get_ged_evt_hitchsel_propfunc(data::LegendData, sel::AnyValiditySelecti
 end
 export get_ged_evt_hitchsel_propfunc
 
+"""
+    get_ged_evt_is_valid_hit_properties(data::LegendData, sel::AnyValiditySelection)
+
+Get the hit Ge-detector `is_valid_hit` selection properties.
+"""
+function get_ged_evt_is_valid_hit_properties(data::LegendData, sel::AnyValiditySelection)
+    Symbol.(_dataprod_evt(data, sel, :geds).is_valid_hit_properties)
+end
+export get_ged_evt_is_valid_hit_properties
+
 
 """
     get_ged_evt_kwargs(data::LegendData, sel::AnyValiditySelection)
