@@ -136,6 +136,17 @@ end
 export get_spms_evt_chdata_propfunc
 
 """
+    get_spms_evt_kwargs(data::LegendData, sel::AnyValiditySelection)
+
+Get the SiPM-detector evt kwargs.
+"""
+function get_spms_evt_kwargs(data::LegendData, sel::AnyValiditySelection)
+    kwargs = _dataprod_evt(data, sel, :spms).kwargs
+    NamedTuple([(k, if v isa String Symbol(v) else v end) for (k, v) in pairs(kwargs)])
+end
+export get_spms_evt_kwargs
+
+"""
     get_spms_evt_chsel_propfunc(data::LegendData, sel::AnyValiditySelection)
 
 Get the SiPM channel selection PropertyFunction.
