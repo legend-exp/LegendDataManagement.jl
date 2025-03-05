@@ -333,7 +333,7 @@ end
 export get_ged_psd_classifier_propfunc
 
 
-### SiPM LAr cut functions
+### SiPM LAr cal functions
 
 const _cached_dataprod_spms_cal = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
 
@@ -388,11 +388,11 @@ end
 Get the LAr/SPMS calibration function for the given data, validity selection
 and detector.
 """
-function get_spm_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars)
+function get_spm_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:sipmcal)
     let energies = keys(_dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types), energies_cal = Symbol.(string.(keys(_dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types)) .* "_cal")
         ljl_propfunc(
             Dict{Symbol, String}(
-                energies_cal .=> _get_larcal_propfunc_str.(Ref(data), Ref(sel), Ref(detector), energies; pars_type=pars_type)
+                energies_cal .=> _get_larcal_propfunc_str.(Ref(data), Ref(sel), Ref(detector), energies; pars_type=pars_type, pars_cat=pars_cat)
             )
         )
     end
@@ -425,3 +425,6 @@ function get_spm_dc_cal_propfunc(data::LegendData, sel::AnyValiditySelection, de
     end
 end
 export get_spm_dc_cal_propfunc
+
+
+
