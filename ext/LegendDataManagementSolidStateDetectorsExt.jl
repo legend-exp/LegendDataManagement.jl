@@ -19,35 +19,27 @@ LegendDataManagement provides an extension for SolidStateDetectors, a
 `SolidStateDetector` can be constructed from LEGEND metadata using the
 methods above.
 """
-function SolidStateDetectors.SolidStateDetector(data::LegendData, detector::DetectorIdLike)
-    SolidStateDetectors.SolidStateDetector{_SSDDefaultNumtype}(data, detector)
+function SolidStateDetectors.SolidStateDetector(data::LegendData, meta::Union{<:String, <:AbstractDict, <:DetectorIdLike}, env::HPGeEnvironment = HPGeEnvironment())
+    SolidStateDetector{_SSDDefaultNumtype}(data, meta, env)
 end
 
-function SolidStateDetectors.SolidStateDetector{T}(data::LegendData, detector::DetectorIdLike) where {T<:AbstractFloat}
+function SolidStateDetectors.SolidStateDetector{T}(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment()) where {T<:AbstractFloat}
     detector_props = getproperty(data.metadata.hardware.detectors.germanium.diodes, Symbol(detector))
     xtal_props = getproperty(data.metadata.hardware.detectors.germanium.crystals, Symbol(string(detector)[1:end-1]))
-    SolidStateDetector{T}(LegendData, detector_props, xtal_props)
+    SolidStateDetector{T}(LegendData, detector_props, xtal_props, env)
 end
 
-function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, filename::String) where {T<:AbstractFloat}
-    SolidStateDetector{T}(LegendData, readprops(filename, subst_pathvar = false, subst_env = false, trim_null = false))
+function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, filename::String, env::HPGeEnvironment = HPGeEnvironment()) where {T<:AbstractFloat}
+    SolidStateDetector{T}(LegendData, readprops(filename, subst_pathvar = false, subst_env = false, trim_null = false), env)
 end
 
-function SolidStateDetectors.SolidStateDetector(::Type{LegendData}, filename::String)
-    SolidStateDetector{_SSDDefaultNumtype}(LegendData, filename)
+function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::AbstractDict, env::HPGeEnvironment = HPGeEnvironment()) where {T<:AbstractFloat}
+    SolidStateDetector{T}(LegendData, convert(PropDict, meta), LegendDataManagement.NoSuchPropsDBEntry("",[]), env)
 end
 
-function SolidStateDetectors.SolidStateDetector(::Type{LegendData}, meta::AbstractDict)
-    SolidStateDetectors.SolidStateDetector{_SSDDefaultNumtype}(LegendData, meta)
-end
-
-function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::AbstractDict) where {T<:AbstractFloat}
-    SolidStateDetectors.SolidStateDetector{T}(LegendData, convert(PropDict, meta), LegendDataManagement.NoSuchPropsDBEntry("",[]))
-end
-
-function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}) where {T<:AbstractFloat}
-    config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta)
-    return SolidStateDetector{T}(config_dict, SolidStateDetectors.construct_units(config_dict))
+function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment()) where {T<:AbstractFloat}
+    config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta, env)
+    SolidStateDetector{T}(config_dict, SolidStateDetectors.construct_units(config_dict))
 end
 
 """
@@ -59,39 +51,30 @@ LegendDataManagement provides an extension for SolidStateDetectors, a
 `Simulation` can be constructed from LEGEND metadata using the
 methods above.
 """
-function SolidStateDetectors.Simulation(data::LegendData, detector::DetectorIdLike)
-    SolidStateDetectors.Simulation{_SSDDefaultNumtype}(data, detector)
+function SolidStateDetectors.Simulation(::Type{LegendData}, meta::Union{<:String, <:AbstractDict, <:DetectorIdLike}, env::HPGeEnvironment = HPGeEnvironment())
+    Simulation{_SSDDefaultNumtype}(LegendData, meta, env)
 end
 
-function SolidStateDetectors.Simulation{T}(data::LegendData, detector::DetectorIdLike) where {T<:AbstractFloat}
+function SolidStateDetectors.Simulation{T}(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment()) where {T<:AbstractFloat}
     detector_props = getproperty(data.metadata.hardware.detectors.germanium.diodes, Symbol(detector))
     xtal_props = getproperty(data.metadata.hardware.detectors.germanium.crystals, Symbol(string(detector)[1:end-1]))
-    Simulation{T}(LegendData, detector_props, xtal_props)
+    Simulation{T}(LegendData, detector_props, xtal_props, env)
 end
 
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, filename::String) where {T<:AbstractFloat}
-    Simulation{T}(LegendData, readprops(filename, subst_pathvar = false, subst_env = false, trim_null = false))
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, filename::String, env::HPGeEnvironment = HPGeEnvironment()) where {T<:AbstractFloat}
+    Simulation{T}(LegendData, readprops(filename, subst_pathvar = false, subst_env = false, trim_null = false), env)
 end
 
-function SolidStateDetectors.Simulation(::Type{LegendData}, filename::String)
-    Simulation{_SSDDefaultNumtype}(LegendData, filename)
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::AbstractDict, env::HPGeEnvironment = HPGeEnvironment()) where {T<:AbstractFloat}
+    Simulation{T}(LegendData, convert(PropDict, meta), LegendDataManagement.NoSuchPropsDBEntry("", []), env)
 end
 
-function SolidStateDetectors.Simulation(::Type{LegendData}, meta::AbstractDict)
-    SolidStateDetectors.Simulation{_SSDDefaultNumtype}(LegendData, meta)
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment()) where {T<:AbstractFloat}
+    config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta, env)
+    Simulation{T}(config_dict)
 end
 
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::AbstractDict) where {T<:AbstractFloat}
-    SolidStateDetectors.Simulation{T}(LegendData, convert(PropDict, meta), LegendDataManagement.NoSuchPropsDBEntry("", []))
-end
-
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}) where {T<:AbstractFloat}
-    config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta)
-    return Simulation{T}(config_dict)
-end
-
-
-function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::X; dicttype = Dict{String,Any}) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
+function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::X, env::HPGeEnvironment = HPGeEnvironment(); dicttype = Dict{String,Any}) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
 
     # Not all possible configurations are yet implemented!
     # https://github.com/legend-exp/legend-metadata/blob/main/hardware/detectors/detector-metadata_1.pdf
@@ -139,7 +122,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
                 )
             )
         ),
-        "medium" => "vacuum",
+        "medium" => env.medium,
         "detectors" => []
     )
 
@@ -151,7 +134,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
             ),
             # "impurity_density" => dicttype("parameters" => Vector()),
             "geometry" => dicttype(),
-            "temperature" => 78
+            "temperature" => ustrip(u"K", env.temperature)
         ),
         "contacts" => []
         ))

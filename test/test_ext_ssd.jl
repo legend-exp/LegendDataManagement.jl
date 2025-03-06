@@ -35,4 +35,13 @@ include("testing_utils.jl")
             @test !isfile(lh5name)
         end
     end
+
+    @testset "Test HPGeEnvironment" begin
+        detname = :V99000A
+        env = LegendDataManagement.HPGeEnvironment("LAr", 87u"K")
+        sim = Simulation{Float64}(l200, detname, env)
+        @test sim isa Simulation
+        @test sim.medium == SolidStateDetectors.material_properties[:LAr]
+        @test sim.detector.semiconductor.temperature == 87
+    end
 end
