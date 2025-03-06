@@ -427,4 +427,32 @@ end
 export get_spm_dc_cal_propfunc
 
 
+### PMT Muon cal functions
 
+
+const _cached_get_pmtcal_props = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
+
+function _get_pmtcal_props(data::LegendData, sel::AnyValiditySelection; pars_type::Symbol=:rpars, pars_cat::Symbol=:pmtcal)
+    key = (objectid(data), sel)
+    get!(_cached_get_pmtcal_props, key) do
+        mkpath(data_path(dataprod_parameters(data)[pars_type][pars_cat]))
+        _get_cal_values(dataprod_parameters(data)[pars_type][pars_cat], sel)
+    end
+end
+
+function _get_pmtcal_props(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; kwargs...)
+    _get_pmtcal_props(data, sel; kwargs...)[Symbol(detector)]
+end
+
+"""
+    get_pmt_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+
+Get the PMT calibration function for the given data, validity selection
+and detector.
+"""
+function get_pmt_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:pmtcal)
+    let e_cal_props = get(get(_get_pmtcal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat), :cal, PropDict()), :func, "e_fc .* (NaN*e)")
+        ljl_propfunc(e_cal_props)
+    end
+end
+export get_pmt_cal_propfunc
