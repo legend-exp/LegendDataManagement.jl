@@ -27,17 +27,30 @@ get_pltfilename(data::LegendData, filekey::FileKey, ch::ChannelIdOrDetectorIDLik
 get_pltfilename(data::LegendData, partition::DataPartitionLike, setup::ExpSetupLike, category::DataCategoryLike, ch::ChannelIdOrDetectorIDLike, process::Symbol) = joinpath(get_pltfolder(data, partition, category, process, ch), format("{}-{}-{}-{}-{}.png", string(setup), string(partition), string(category), string(ch), string(process)))
 
 """
-    get_plottitle(setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, det::DetectorIdLike, process::String; additiional_type::String="")
-    get_plottitle(filekey::FileKey, det::DetectorIdLike, process::String; kwargs...)
-    get_plottitle(setup::ExpSetupLike, partition::DataPartitionLike, category::DataCategoryLike, det::DetectorIdLike, process::String; additiional_type::String="")
+    get_plottitle(setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, det::DetectorIdLike, process::AbstractString; additional_type::AbstractString="")
+    get_plottitle(filekey::FileKey, det::DetectorIdLike, process::AbstractString; kwargs...)
+    get_plottitle(setup::ExpSetupLike, partition::DataPartitionLike, category::DataCategoryLike, det::DetectorIdLike, process::AbstractString; additional_type::AbstractString="")
+    get_plottitle(filekey::FileKey, partition::DataPartitionLike, det::DetectorIdLike, process::AbstractString; kwargs...)
+
 Get the title for a plot.
 """
 function get_plottitle end
 export get_plottitle
-get_plottitle(setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, det::DetectorIdLike, process::String; additiional_type::String="") = "$(string(det)) $additiional_type $process  ($(string(setup))-$(string(period))-$(string(run))-$(string(category)))"
-get_plottitle(filekey::FileKey, det::DetectorIdLike, process::String; kwargs...) = get_plottitle(filekey.setup, filekey.period, filekey.run, filekey.category, det, process; kwargs...)
-get_plottitle(setup::ExpSetupLike, partition::DataPartitionLike, category::DataCategoryLike, det::DetectorIdLike, process::String; additiional_type::String="") = "$(string(det)) $additiional_type $process  ($(string(setup))-$(string(partition))-$(string(category)))"
-get_plottitle(filekey::FileKey, partition::DataPartitionLike, det::DetectorIdLike, process::String; kwargs...) = get_plottitle(filekey.setup, partition, filekey.category, det, process; kwargs...)
+_get_plottitle(setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, det::DetectorIdLike, process::AbstractString; additional_type::AbstractString="") = join((i for i in strip.((string(det), additional_type, process, "($(string(setup))-$(string(period))-$(string(run))-$(string(category)))")) if !isempty(i)), " ")
+_get_plottitle(filekey::FileKey, det::DetectorIdLike, process::AbstractString; kwargs...) = _get_plottitle(filekey.setup, filekey.period, filekey.run, filekey.category, det, process; kwargs...)
+_get_plottitle(setup::ExpSetupLike, partition::DataPartitionLike, category::DataCategoryLike, det::DetectorIdLike, process::AbstractString; additional_type::AbstractString="") = join((i for i in strip.((string(det), additional_type, process, "($(string(setup))-$(string(partition))-$(string(category)))")) if !isempty(i)), " ")
+_get_plottitle(filekey::FileKey, partition::DataPartitionLike, det::DetectorIdLike, process::AbstractString; kwargs...) = _get_plottitle(filekey.setup, partition, filekey.category, det, process; kwargs...)
+
+# deprecate typo in old keyword argument (additiional_type)
+function get_plottitle(args...; additiional_type::Union{Nothing, <:AbstractString} = nothing, kwargs...) 
+    additional_type = if !isnothing(additiional_type)
+        Base.depwarn("The keyword argument `additiional_type` is deprecated, use `additional_type` instead.", :get_plottitle, force=true)
+        additiional_type
+    else
+        get(kwargs, :additional_type, "")
+    end
+    _get_plottitle(args...; additional_type, kwargs...)
+end
 
 
 """
