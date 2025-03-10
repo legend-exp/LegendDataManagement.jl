@@ -128,7 +128,7 @@ export get_aux_evt_chsel_propfunc
 """
     get_spms_evt_chdata_propfunc(data::LegendData, sel::AnyValiditySelection)
 
-Get the Ge-detector channel data output PropertyFunction.
+Get the SiPM-detector channel data output PropertyFunction.
 """
 function get_spms_evt_chdata_propfunc(data::LegendData, sel::AnyValiditySelection)
     ljl_propfunc(_dataprod_evt(data, sel, :spms).chdata_output)
@@ -168,3 +168,57 @@ end
 export get_spms_evt_lar_cut_props
 
 
+### PMTS
+
+"""
+    get_pmts_evt_chdata_propfunc(data::LegendData, sel::AnyValiditySelection)
+
+Get the PMT-detector channel data output PropertyFunction.
+"""
+function get_pmts_evt_chdata_propfunc(data::LegendData, sel::AnyValiditySelection)
+    ljl_propfunc(_dataprod_evt(data, sel, :pmts).chdata_output)
+end
+export get_pmts_evt_chdata_propfunc
+
+"""
+    get_pmts_evt_chsel_propfunc(data::LegendData, sel::AnyValiditySelection)
+
+Get the PMT channel selection PropertyFunction.
+"""
+function get_pmts_evt_chsel_propfunc(data::LegendData, sel::AnyValiditySelection)
+    ljl_propfunc(_dataprod_evt(data, sel, :pmts).channels)
+end
+export get_pmts_evt_chsel_propfunc
+
+
+"""
+    get_pmts_evt_kwargs(data::LegendData, sel::AnyValiditySelection)
+
+Get the PMT evt kwargs.
+"""
+function get_pmts_evt_kwargs(data::LegendData, sel::AnyValiditySelection)
+    kwargs = _dataprod_evt(data, sel, :pmts).kwargs
+    NamedTuple([(k, if v isa String Symbol(v) else v end) for (k, v) in pairs(kwargs)])
+end
+export get_pmts_evt_kwargs
+
+"""
+    get_pmts_evt_muon_cut_props(data::LegendData, sel::AnyValiditySelection)
+
+Get the PMT muon cut properties.
+"""
+function get_pmts_evt_muon_cut_props(data::LegendData, sel::AnyValiditySelection)
+    _dataprod_evt(data, sel, :pmts).muon_cut
+end
+export get_pmts_evt_muon_cut_props
+
+
+"""
+    get_pmts_evt_evtdata_propfunc(data::LegendData, sel::AnyValiditySelection)
+
+Get the PMT-detector channel data output PropertyFunction.
+"""
+function get_pmts_evt_evtdata_propfunc(data::LegendData, sel::AnyValiditySelection)
+    ljl_propfunc(get_pmts_evt_muon_cut_props(data, sel).evtdata_output)
+end
+export get_pmts_evt_evtdata_propfunc
