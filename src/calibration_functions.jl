@@ -429,13 +429,32 @@ export get_spm_dc_cal_propfunc
 
 ### PMT Muon cal functions
 
+const _cached_dataprod_pmt_cal = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
+
+function _dataprod_pmt_cal(data::LegendData, sel::AnyValiditySelection)
+    key = (objectid(data), sel)
+    get!(_cached_dataprod_pmt_cal, key) do
+        dataprod_config(data).pmt(sel)
+    end
+end
+
+function _dataprod_muon_cal(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:rpars)
+    @assert pars_type in (:ppars, :rpars) "pars_type must be either :ppars or :rpars"
+    dataprod_muon_config = _dataprod_pmt_cal(data, sel).muon
+    merge(dataprod_muon_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_muon_config, :p, PropDict()), dataprod_muon_config), detector, PropDict()))
+end
+
+function _get_pmt_is_physical_trig_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol; kwargs...)
+    is_physical_trig_props::String = _dataprod_muon_cal(data, sel, detector; kwargs...).energy_types[e_filter].is_physical_trig
+    return is_physical_trig_props
+end
 
 const _cached_get_pmtcal_props = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
 
 function _get_pmtcal_props(data::LegendData, sel::AnyValiditySelection; pars_type::Symbol=:rpars, pars_cat::Symbol=:pmtcal)
     key = (objectid(data), sel)
+    mkpath(data_path(dataprod_parameters(data)[pars_type][pars_cat]))
     get!(_cached_get_pmtcal_props, key) do
-        mkpath(data_path(dataprod_parameters(data)[pars_type][pars_cat]))
         _get_cal_values(dataprod_parameters(data)[pars_type][pars_cat], sel)
     end
 end
@@ -444,15 +463,42 @@ function _get_pmtcal_props(data::LegendData, sel::AnyValiditySelection, detector
     _get_pmtcal_props(data, sel; kwargs...)[Symbol(detector)]
 end
 
+function _get_pmtcal_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol; kwargs...)
+    ecal_props::String = get(get(get(_get_pmtcal_props(data, sel, detector; kwargs...), e_filter, PropDict()), :cal, PropDict()), :func, "e_fc .* (NaN*e)")
+    return ecal_props
+end
+
+
 """
     get_pmt_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
 
 Get the PMT calibration function for the given data, validity selection
 and detector.
 """
-function get_pmt_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:pmtcal)
-    let e_cal_props = get(get(_get_pmtcal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat), :cal, PropDict()), :func, "e_fc .* (NaN*e)")
-        ljl_propfunc(e_cal_props)
+function get_pmt_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:rpars, pars_cat::Symbol=:pmtcal)
+    let energies = keys(_dataprod_muon_cal(data, sel, detector; pars_type=pars_type).energy_types), energies_cal = Symbol.(string.(keys(_dataprod_muon_cal(data, sel, detector; pars_type=pars_type).energy_types)) .* "_cal")
+        ljl_propfunc(
+            Dict{Symbol, String}(
+                energies_cal .=> _get_pmtcal_propfunc_str.(Ref(data), Ref(sel), Ref(detector), energies; pars_type=pars_type, pars_cat=pars_cat)
+            )
+        )
     end
 end
 export get_pmt_cal_propfunc
+
+
+"""
+    get_pmt_is_physical_trig_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+
+Get the PMT physical trigger condition for the given data and validity selection.
+"""
+function get_pmt_is_physical_trig_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type=:rpars)
+    let energies = keys(_dataprod_muon_cal(data, sel, detector; pars_type=pars_type).energy_types), energies_is_physical_trig = Symbol.(string.(keys(_dataprod_muon_cal(data, sel, detector; pars_type=pars_type).energy_types)) .* "_is_physical_trig")
+        ljl_propfunc(
+            Dict{Symbol, String}(
+                energies_is_physical_trig .=> _get_pmt_is_physical_trig_propfunc_str.(Ref(data), Ref(sel), Ref(detector), energies; pars_type=pars_type)
+            )
+        )
+    end
+end
+export get_pmt_is_physical_trig_propfunc
