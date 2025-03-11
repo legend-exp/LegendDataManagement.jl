@@ -48,7 +48,7 @@ Note: Caches configuration/calibration data internally, use a fresh `data`
 object if on-disk configuration/calibration data may have changed.
 """
 function get_ged_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:rpars, pars_cat::Symbol=:ecal)
-    let energies = Symbol.(_dataprod_ged_cal(data, sel, detector; pars_type=pars_type).energy_types), energies_cal = Symbol.(_dataprod_ged_cal(data, sel, detector; pars_type=pars_type).energy_types .* "_cal")
+    let energies = Symbol.(_dataprod_ged_cal(data, sel, detector; pars_type=pars_type).energy_types), energies_cal = Symbol.(string.(energies) .* "_cal")
 
         ljl_propfunc(Dict{Symbol, String}(
             energies_cal .=> _get_e_cal_propsfunc_str.(Ref(data), Ref(sel), Ref(detector), energies; pars_type=pars_type, pars_cat=pars_cat)
@@ -129,7 +129,7 @@ Note: Caches configuration/calibration data internally, use a fresh `data`
 object if on-disk configuration/calibration data may have changed.
 """
 function get_ged_psd_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; aoe_pars_type::Symbol=:ppars, aoe_pars_cat::Symbol=:aoe, lq_pars_type::Symbol=:ppars, lq_pars_cat::Symbol=:lq)
-    let aoe_types = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=aoe_pars_type).aoe_types), aoe_classifier = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=aoe_pars_type).aoe_types .* "_classifier"), lq_types = Symbol.(_dataprod_lq(data, sel, detector; pars_type=lq_pars_type).lq_types), lq_classifier = Symbol.(_dataprod_lq(data, sel, detector; pars_type=lq_pars_type).lq_types .* "_classifier")
+    let aoe_types = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=aoe_pars_type).aoe_types), aoe_classifier = Symbol.(string.(aoe_types) .* "_classifier"), lq_types = Symbol.(_dataprod_lq(data, sel, detector; pars_type=lq_pars_type).lq_types), lq_classifier = Symbol.(string.(lq_types) .* "_classifier")
 
         ljl_propfunc(
             merge(
@@ -259,13 +259,13 @@ end
 Get the A/E cut propfuncs for the given data, validity selection and detector.
 """
 function get_ged_aoe_cut_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
-    let aoe_classifiers = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=pars_type).aoe_classifiers), aeo_low_cut = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=pars_type).aoe_classifiers .* "_low_cut"),
-        aoe_ds_cut = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=pars_type).aoe_classifiers .* "_ds_cut")
+    let aoe_classifiers = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=pars_type).aoe_classifiers), aoe_low_cut = Symbol.(string.(aoe_classifiers) .* "_low_cut"),
+        aoe_ds_cut = Symbol.(string.(aoe_classifiers) .* "_ds_cut")
 
         ljl_propfunc(
             merge(
                 Dict{Symbol, String}(
-                    aeo_low_cut .=> _get_ged_aoe_lowcut_propfunc_str.(Ref(data), Ref(sel), Ref(detector), aoe_classifiers; pars_type=pars_type, pars_cat=pars_cat)
+                    aoe_low_cut .=> _get_ged_aoe_lowcut_propfunc_str.(Ref(data), Ref(sel), Ref(detector), aoe_classifiers; pars_type=pars_type, pars_cat=pars_cat)
                 ),
                 Dict{Symbol, String}(
                     aoe_ds_cut .=> _get_ged_aoe_dscut_propfunc_str.(Ref(data), Ref(sel), Ref(detector), aoe_classifiers; pars_type=pars_type, pars_cat=pars_cat)
@@ -302,8 +302,8 @@ end
 Get the LQ cut propfuncs for the given data, validity selection and detector.
 """
 function get_ged_lq_cut_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:lq)
-    let lq_classifiers = Symbol.(_dataprod_lq(data, sel, detector; pars_type=pars_type).lq_classifiers), lq_high_cut = Symbol.(_dataprod_lq(data, sel, detector; pars_type=pars_type).lq_classifiers .* "_high_cut"),
-        lq_ds_cut = Symbol.(_dataprod_lq(data, sel, detector; pars_type=pars_type).lq_classifiers .* "_ds_cut")
+    let lq_classifiers = Symbol.(_dataprod_lq(data, sel, detector; pars_type=pars_type).lq_classifiers), lq_high_cut = Symbol.(string.(lq_classifiers) .* "_high_cut"),
+        lq_ds_cut = Symbol.(string.(lq_classifiers) .* "_ds_cut")
 
         ljl_propfunc(
             merge(
