@@ -157,7 +157,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     ch_keys = _lh5_data_open(data, rsel[1], rsel[2], "") do h
         keys(h)
     end
-    filter!(x -> _is_valid_channel_or_tier(data, rsel[2], x), ch_keys)
+    ch_keys = filter(x -> _is_valid_channel_or_tier(data, rsel[2], x), ch_keys)
     @debug "Found keys: $ch_keys"
     if length(ch_keys) == 1
         if string(only(ch_keys)) == string(rsel[1])
@@ -168,7 +168,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
             throw(ArgumentError("No tier channel or detector found in $(basename(string(h.data_store)))"))
         end
     else
-        NamedTuple{Tuple(Symbol.(ch_keys))}([LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], ch); kwargs...) for ch in ch_keys]...)
+        NamedTuple{Tuple(Symbol.(ch_keys))}([LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], ch); kwargs...) for ch in ch_keys])
     end
 end
 
