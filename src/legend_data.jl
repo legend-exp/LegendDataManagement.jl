@@ -354,11 +354,21 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
             ann_status::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("ann"), :unknown))
             coax_rt_status::Symbol = Symbol(get(get(get(dpcfg[k], :psd, PropDict()), :status, PropDict()), Symbol("coax_rt"), :unknown))
             is_bb_like::String = replace(get(get(dpcfg[k], :psd, PropDict()), :is_bb_like, ""), "&" => "&&") 
+            psd_usability::Symbol = if ifelse(occursin("low_aoe", is_bb_like), low_aoe_status == :valid, true) && 
+                                    ifelse(occursin("high_aoe", is_bb_like), high_aoe_status == :valid, true) &&
+                                    ifelse(occursin("lq", is_bb_like), lq_status == :valid, true) &&
+                                    ifelse(occursin("ann", is_bb_like), ann_status == :valid, true) &&
+                                    ifelse(occursin("coax_rt", is_bb_like), coax_rt_status == :valid, true) && 
+                                    !(is_bb_like == "missing")
+                                    :on
+                                else
+                                    :off
+                                end
 
             location::Symbol, detstring::Int, position::Int, fiber::StaticString{8} = _convert_location(chmap[k].location)
 
             c = (;
-                detector, channel, fcid, rawid, system, processable, usability, is_blinded, low_aoe_status, high_aoe_status, lq_status, ann_status, coax_rt_status, is_bb_like, det_type,
+                detector, channel, fcid, rawid, system, processable, usability, is_blinded, psd_usability, low_aoe_status, high_aoe_status, lq_status, ann_status, coax_rt_status, is_bb_like, det_type,
                 location, detstring, fiber, position
             )
 
