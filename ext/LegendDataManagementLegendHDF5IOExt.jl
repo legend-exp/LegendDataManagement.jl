@@ -134,9 +134,9 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
             end
         elseif f isa PropSelFunction
             if !isempty(string((ch)))
-                _load_all_keys(getproperties(_propfunc_columnnames(f)...)(h[ch, tier]), n_evts)
+                _load_all_keys(getproperties(_propfunc_columnnames(f))(h[ch, tier]), n_evts)
             else
-                _load_all_keys(getproperties(_propfunc_columnnames(f)...)(h[tier]), n_evts)
+                _load_all_keys(getproperties(_propfunc_columnnames(f))(h[tier]), n_evts)
             end
         else
             result = if !isempty(string((ch)))
