@@ -33,7 +33,7 @@ get_exposure(l200, :V00050A, DataPartition(1))
 """
 function get_exposure(data::LegendData, det::DetectorIdLike, period::DataPeriodLike, run::DataRunLike; kwargs...)
     rinfo = runinfo(data, period, run)
-    _get_exposure(data, det, rinfo; kwargs...)
+    get_exposure(data, det, rinfo; kwargs...)
 end
 
 Base.Broadcast.broadcasted(f::typeof(get_exposure), data::LegendData, detectors::Vector{<:DetectorIdLike}, period::DataPeriodLike, run::DataRunLike; kwargs...) = broadcast(det -> f(data, det, period, run; kwargs...), detectors)
@@ -41,14 +41,14 @@ get_exposure(data, det::Vector{<:DetectorIdLike}, period::DataPeriodLike, run::D
 
 function get_exposure(data::LegendData, det::DetectorIdLike, period::DataPeriod; kwargs...)
     rinfo = runinfo(data, period)
-    _get_exposure(data, det, rinfo; kwargs...)
+    get_exposure(data, det, rinfo; kwargs...)
 end
 
 function get_exposure(data::LegendData, det::DetectorIdLike, part::DataPartition; cat::DataCategoryLike=:phy, kwargs...)
     part_dict = partitioninfo(data, det)
     if haskey(part_dict, part)
         rinfo = partitioninfo(data, det, part; category=cat)
-        return _get_exposure(data, det, rinfo; cat=cat, kwargs...)
+        return get_exposure(data, det, rinfo; cat=cat, kwargs...)
     end
     
     #default if partition does not exist
@@ -59,7 +59,7 @@ function get_exposure(data::LegendData, det::DetectorIdLike, sel::Union{Abstract
     selectors = (DataPartition, DataPeriod)
     for SEL in selectors
         if _can_convert_to(SEL, sel)
-            return _get_exposure(data, det, SEL(sel); kwargs...)
+            return get_exposure(data, det, SEL(sel); kwargs...)
         end
     end
     throw(ArgumentError("The selector $(sel) cannot be converted to type: $(selectors)"))
@@ -69,7 +69,7 @@ Base.Broadcast.broadcasted(f::typeof(get_exposure), data::LegendData, detectors:
 get_exposure(data, det::Vector{<:DetectorIdLike}, sel; kwargs...) = sum(get_exposure.(Ref(data), det, Ref(sel); kwargs...))
 
 ### TODO: determine livetimes from data files instead of metadata
-function _get_exposure(data::LegendData, det::DetectorIdLike, rinfo::Table; is_analysis_run::Bool=true, cat::DataCategoryLike=:phy, check_pf::PropertyFunction=@pf $detector == DetectorId(det))
+function get_exposure(data::LegendData, det::DetectorIdLike, rinfo::Table; is_analysis_run::Bool=true, cat::DataCategoryLike=:phy, check_pf::PropertyFunction=@pf $detector == DetectorId(det))
 
     # check that the DataCategory is valid
     if !(_can_convert_to(DataCategory, cat) && hasproperty(rinfo, DataCategory(cat).label))
