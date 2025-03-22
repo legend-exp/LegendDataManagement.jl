@@ -31,21 +31,24 @@ get_exposure(l200, :V00050A, DataPartition(1))
 ````
 
 """
-function get_exposure(data::LegendData, det::DetectorIdLike, period::DataPeriodLike, run::DataRunLike; is_analysis_run::Bool=true, cat::DataCategoryLike=:phy)
+function get_exposure(data::LegendData, det::DetectorIdLike, period::DataPeriodLike, run::DataRunLike; kwargs...)
     rinfo = runinfo(data, period, run)
-    _get_exposure(data, det, rinfo, is_analysis_run, cat)
+    _get_exposure(data, det, rinfo; kwargs...)
 end
 
-function get_exposure(data::LegendData, det::DetectorIdLike, period::DataPeriod; is_analysis_run::Bool=true, cat::DataCategoryLike=:phy)
+Base.Broadcast.broadcasted(f::typeof(get_exposure), data::LegendData, detectors::Vector{<:DetectorIdLike}, period::DataPeriodLike, run::DataRunLike; kwargs...) = broadcast(det -> f(data, det, period, run; kwargs...), detectors)
+get_exposure(data, det::Vector{<:DetectorIdLike}, period::DataPeriodLike, run::DataRunLike; kwargs...) = sum(get_exposure.(Ref(data), det, Ref(period), Ref(run); kwargs...))
+
+function get_exposure(data::LegendData, det::DetectorIdLike, period::DataPeriod; kwargs...)
     rinfo = runinfo(data, period)
-    _get_exposure(data, det, rinfo, is_analysis_run, cat)
+    _get_exposure(data, det, rinfo; kwargs...)
 end
 
-function get_exposure(data::LegendData, det::DetectorIdLike, part::DataPartition; is_analysis_run::Bool=true, cat::DataCategoryLike=:phy)
+function get_exposure(data::LegendData, det::DetectorIdLike, part::DataPartition; cat::DataCategoryLike=:phy, kwargs...)
     part_dict = partitioninfo(data, det)
     if haskey(part_dict, part)
         rinfo = partitioninfo(data, det, part; category=cat)
-        return _get_exposure(data, det, rinfo, is_analysis_run, cat)
+        return _get_exposure(data, det, rinfo; cat=cat, kwargs...)
     end
     
     #default if partition does not exist
@@ -62,9 +65,11 @@ function get_exposure(data::LegendData, det::DetectorIdLike, sel::Union{Abstract
     throw(ArgumentError("The selector $(sel) cannot be converted to type: $(selectors)"))
 end
 
+Base.Broadcast.broadcasted(f::typeof(get_exposure), data::LegendData, detectors::Vector{<:DetectorIdLike}, sel; kwargs...) = broadcast(det -> f(data, det, sel; kwargs...), detectors)
+get_exposure(data, det::Vector{<:DetectorIdLike}, sel; kwargs...) = sum(get_exposure.(Ref(data), det, Ref(sel); kwargs...))
 
 ### TODO: determine livetimes from data files instead of metadata
-function _get_exposure(data::LegendData, det::DetectorIdLike, rinfo::Table, is_analysis_run::Bool=true, cat::DataCategoryLike=:phy)
+function _get_exposure(data::LegendData, det::DetectorIdLike, rinfo::Table; is_analysis_run::Bool=true, cat::DataCategoryLike=:phy, check_pf::PropertyFunction=@pf $detector == DetectorId(det))
 
     # check that the DataCategory is valid
     if !(_can_convert_to(DataCategory, cat) && hasproperty(rinfo, DataCategory(cat).label))
@@ -88,12 +93,15 @@ function _get_exposure(data::LegendData, det::DetectorIdLike, rinfo::Table, is_a
         # read in the channelinfo
         filekey = first(filekeys)
         chinfo = channelinfo(data, filekey, det, extended = true, verbose = false)
-        chinfo.mass * chinfo.enrichment * chinfo.active_volume / chinfo.total_volume
+        if check_pf(chinfo)
+            chinfo.mass
+        else
+            0.0u"kg"
+        end
     else
         0.0u"kg"
     end
     
     return uconvert(u"kg*yr", livetime * mass)
 end
-
 export get_exposure
