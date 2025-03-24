@@ -78,30 +78,16 @@ function get_exposure(data::LegendData, det::DetectorIdLike, rinfo::Table; is_an
     cat_label::Symbol = Symbol(DataCategory(cat))
 
     # determine livetime
-    rinfo_cat = getproperty(rinfo, cat_label)
-    livetimes = getproperty.(rinfo_cat, :livetime)
-    
-    if is_analysis_run
-        livetimes = livetimes .* getproperty(rinfo_cat, :is_analysis_run)
-    end
-    # sum up all livetimes (excluding NaN values)
-    livetime = !isempty(livetimes) ? sum((livetimes .* .!isnan.(livetimes))) : 0.0u"s"
-
-    # determine the mass of 76Ge
-    filekeys = getproperty.(rinfo_cat, :startkey)
-    mass = if !iszero(livetime) && !isempty(filekeys)
-        # read in the channelinfo
-        filekey = first(filekeys)
+    rinfo_cat = getproperty(rinfo, cat_label) 
+    exposure = 0.0u"kg * yr" 
+    for r in rinfo_cat
+        filekey = r.startkey
         chinfo = channelinfo(data, filekey, det, extended = true, verbose = false)
         if check_pf(chinfo)
-            chinfo.mass
-        else
-            0.0u"kg"
+            exposure += uconvert(u"kg * yr", chinfo.mass * r.livetime)
         end
-    else
-        0.0u"kg"
-    end
-    
-    return uconvert(u"kg*yr", livetime * mass)
+    end   
+    return exposure
 end
+  
 export get_exposure
