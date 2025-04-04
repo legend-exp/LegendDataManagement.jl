@@ -2,9 +2,7 @@
 
 using LegendTestData
 
-joinpath(legend_test_data_path(), "data", "legend")
-
-testdata_dir = joinpath(legend_test_data_path(), "data", "legend")
+testdata_dir = joinpath(legend_test_data_path(), "data", "legend_old")
 ENV["LEGEND_DATA_CONFIG"] = joinpath(testdata_dir, "config.json")
 
 normalize_path(path::AbstractString) = replace(path, "\\" => "/")
