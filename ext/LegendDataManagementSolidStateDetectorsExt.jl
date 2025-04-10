@@ -85,13 +85,17 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
     # https://github.com/legend-exp/legend-metadata/blob/main/hardware/detectors/detector-metadata_6.pdf
     # https://github.com/legend-exp/legend-metadata/blob/main/hardware/detectors/detector-metadata_7.pdf
 
-    gap = 1.0
+    gap = 1.0 # to ensure negative volumes do not match at surfaces
 
-    dl_thickness_in_mm = :dl_thickness_in_mm in keys(meta.geometry) ? meta.geometry.dl_thickness_in_mm : 0
+    dl_thickness_in_mm = :dl_thickness_in_mm in keys(meta.characterization.manufacturer) ? meta.characterization.manufacturer.dl_thickness_in_mm : 0
     li_thickness =  dl_thickness_in_mm
+    pp_thickness = 0.1
 
     crystal_radius = meta.geometry.radius_in_mm
     crystal_height = meta.geometry.height_in_mm
+
+    pp_radius = meta.geometry.pp_contact.radius_in_mm
+    pp_depth = meta.geometry.pp_contact.depth_in_mm
     
     is_coax = meta.type == "coax"
 
@@ -161,6 +165,15 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
                 "origin" => [0, 0, is_coax ? borehole_depth/2 - gap : crystal_height - borehole_depth/2 + gap]
             )))
         end
+
+        ## pp dimple
+        if pp_depth > 0
+            push!(semiconductor_geometry_subtractions, dicttype("cone" => dicttype(
+                "r" => pp_radius,
+                "h" => pp_depth + 2*gap,
+                "origin" => [0, 0, pp_depth / 2 - gap]
+            )))
+        end
         
         # borehole taper
         has_borehole_taper = haskey(meta.geometry.taper, :borehole)
@@ -183,19 +196,18 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
                 error("Coax detectors should not have borehole tapers")
             end
             if has_borehole_taper
-                r_center = borehole_radius + borehole_taper_radius / 2
-                hZ = borehole_taper_height/2
+                hZ = borehole_taper_height + 2*gap
                 Δr = hZ * tand(borehole_taper_angle)         
-                r_out_bot = r_center - Δr
-            r_out_top = r_center + Δr * (1 + 2*gap/hZ)
-            push!(semiconductor_geometry_subtractions, dicttype("cone" => dicttype(
-                "r" => dicttype(
-                    "bottom" => r_out_bot,
-                    "top" => r_out_top
-                ),
-                "h" => 2 * hZ,
-                "origin" => [0, 0, crystal_height - borehole_taper_height / 2 + gap]
-            )))
+                r_out_bot = borehole_radius
+                r_out_top = borehole_radius + Δr
+                push!(semiconductor_geometry_subtractions, dicttype("cone" => dicttype(
+                    "r" => dicttype(
+                        "bottom" => r_out_bot,
+                        "top" => r_out_top
+                    ),
+                    "h" => hZ,
+                    "origin" => [0, 0, crystal_height - borehole_taper_height/2 + gap]
+                )))
             end
         end
 
@@ -315,10 +327,9 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
 
     ### P+ CONTACT ###
 
-    pp_radius = meta.geometry.pp_contact.radius_in_mm
-    pp_depth = meta.geometry.pp_contact.depth_in_mm
     push!(config_dict["detectors"][1]["contacts"], dicttype(
         "material" => "HPGe",
+        "name" => "p+ contact",
         "geometry" => dicttype(),
         "id" => 1,
         "potential" => 0
@@ -347,11 +358,29 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
             ))
         ])
     else
-        dicttype("cone" => dicttype(
-            "r" => pp_radius,
-            "h" => pp_depth,
-            "origin" => [0, 0, pp_depth / 2]
-        ))
+        if pp_depth > 0
+            dicttype("union" => [
+                dicttype("cone" => dicttype(
+                    "r" => pp_radius + pp_thickness,
+                    "h" => pp_thickness,
+                    "origin" => [0, 0, pp_depth + pp_thickness / 2]
+                )),
+                dicttype("cone" => dicttype(
+                    "r" => dicttype(
+                        "from" => pp_radius,
+                        "to" => pp_radius + pp_thickness
+                    ),
+                    "h" => pp_depth,
+                    "origin" => [0, 0, pp_depth / 2]
+                ))
+            ])
+        else
+            dicttype("cone" => dicttype(
+                "r" => pp_radius,
+                "h" => pp_thickness,
+                "origin" => [0, 0, pp_thickness / 2]
+            ))
+        end
     end
 
 
@@ -359,6 +388,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
 
     push!(config_dict["detectors"][1]["contacts"], dicttype(
         "material" => "HPGe",
+        "name" => "n+ contact",
         "geometry" => dicttype("union" => []),
         "id" => 2,
         "potential" => meta.characterization.manufacturer.recommended_voltage_in_V
@@ -401,6 +431,21 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
                 ),
                 "h" => h,
                 "origin" => [0, 0, crystal_height - top_taper_height / 2]
+            )))
+            h =  Δr_li_thickness / tand(top_taper_angle)
+            push!(mantle_contact_parts, dicttype("cone" => dicttype(
+                "r" => dicttype(
+                    "top" => dicttype(
+                        "from" => r_bot - Δr_li_thickness,
+                        "to" => r_bot
+                    ),
+                    "bottom" => dicttype(
+                        "from" => r_bot,
+                        "to" => r_bot
+                    )
+                ),
+                "h" => h,
+                "origin" => [0, 0, crystal_height - top_taper_height - h / 2]
             )))
         end
 
@@ -449,7 +494,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
             r = borehole_radius + li_thickness
             push!(mantle_contact_parts, dicttype("cone" => dicttype(
                 "r" => r,
-                "h" => li_thickness / 2,
+                "h" => li_thickness,
                 "origin" => [0, 0, crystal_height - borehole_depth - li_thickness / 2]
             )))
         end
@@ -491,6 +536,21 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
                 "h" => h,
                 "origin" => [0, 0, h / 2]
             )))
+            h =  Δr_li_thickness / tand(bot_taper_angle)
+            push!(mantle_contact_parts, dicttype("cone" => dicttype(
+                "r" => dicttype(
+                    "bottom" => dicttype(
+                        "from" => r_top - Δr_li_thickness,
+                        "to" => r_top
+                    ),
+                    "top" => dicttype(
+                        "from" => r_top,
+                        "to" => r_top
+                    )
+                ),
+                "h" => h,
+                "origin" => [0, 0, bot_taper_height + h / 2]
+            )))
         end
 
         if has_groove && groove_outer_radius > 0
@@ -509,12 +569,24 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         
         mantle_contact_parts
     end
-
- 
-    config_dict["detectors"][1]["semiconductor"]["impurity_density"] = dicttype(
-        "name" => "constant", 
-        "value" => "-1e9cm^-3"
-    )
+    
+    config_dict["detectors"][1]["semiconductor"]["impurity_density"] = if :impurity_curve in keys(xtal_meta)
+        #if xtal_meta.impurity_curve
+        dicttype(
+            "name" => "linear_exponential_boule", 
+            "a" => xtal_meta.impurity_curve.a * 1e6, ## 1e9cm^-3 -> mm^-3
+            "b" => xtal_meta.impurity_curve.b * 1e6, ## 1e9cm^-3 * mm^-1 -> mm^-4
+            "c" => xtal_meta.impurity_curve.c * 1e6, ## 1e9cm^-3 -> mm^-3
+            "L" => xtal_meta.impurity_curve.L, ## already in mm
+            "tau" => xtal_meta.impurity_curve.tau, ## already in mm
+            "det_z0" => xtal_meta.impurity_curve.det_z0, ## already in mm
+        )
+    else
+        dicttype(
+            "name" => "constant", 
+            "value" => "-1e9cm^-3",
+        )
+    end
 
     # evaluate "include" statements - needed for the charge drift model
     SolidStateDetectors.scan_and_merge_included_json_files!(config_dict, "")
