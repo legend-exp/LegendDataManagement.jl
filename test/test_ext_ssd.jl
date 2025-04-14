@@ -14,6 +14,8 @@ include("testing_utils.jl")
     l200 = LegendData(:l200)
     for detname in (:V99000A, :B99000A, :C99000A, :P99000A)
         @testset "$(detname)" begin
+            det = SolidStateDetector(l200, detname)
+            @test det isa SolidStateDetector
             det = SolidStateDetector{Float64}(l200, detname) 
             @test det isa SolidStateDetector
             sim = Simulation{Float64}(l200, detname)
@@ -39,6 +41,8 @@ include("testing_utils.jl")
     @testset "Test HPGeEnvironment" begin
         detname = :V99000A
         env = LegendDataManagement.HPGeEnvironment("LAr", 87u"K")
+        sim = Simulation(l200, detname, env)
+        @test sim isa Simulation
         sim = Simulation{Float64}(l200, detname, env)
         @test sim isa Simulation
         @test sim.medium == SolidStateDetectors.material_properties[:LAr]
