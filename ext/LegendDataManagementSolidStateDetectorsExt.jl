@@ -51,30 +51,30 @@ LegendDataManagement provides an extension for SolidStateDetectors, a
 `Simulation` can be constructed from LEGEND metadata using the
 methods above.
 """
-function SolidStateDetectors.Simulation(::Type{LegendData}, meta::Union{<:String, <:AbstractDict, <:DetectorIdLike}, env::HPGeEnvironment = HPGeEnvironment())
-    Simulation{_SSDDefaultNumtype}(LegendData, meta, env)
+function SolidStateDetectors.Simulation(::Type{LegendData}, meta::Union{<:String, <:AbstractDict, <:DetectorIdLike}, env::HPGeEnvironment = HPGeEnvironment(), Vop::Union{Missing,Real} = missing)
+    Simulation{_SSDDefaultNumtype}(LegendData, meta, env, Vop)
 end
 
-function SolidStateDetectors.Simulation{T}(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment()) where {T<:AbstractFloat}
+function SolidStateDetectors.Simulation{T}(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(), Vop::Union{Missing,Real} = missing) where {T<:AbstractFloat}
     detector_props = getproperty(data.metadata.hardware.detectors.germanium.diodes, Symbol(detector))
     xtal_props = getproperty(data.metadata.hardware.detectors.germanium.crystals, Symbol(string(detector)[1:end-1]))
-    Simulation{T}(LegendData, detector_props, xtal_props, env)
+    Simulation{T}(LegendData, detector_props, xtal_props, env, Vop)
 end
 
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, filename::String, env::HPGeEnvironment = HPGeEnvironment()) where {T<:AbstractFloat}
-    Simulation{T}(LegendData, readprops(filename, subst_pathvar = false, subst_env = false, trim_null = false), env)
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, filename::String, env::HPGeEnvironment = HPGeEnvironment(), Vop::Union{Missing,Real} = missing) where {T<:AbstractFloat}
+    Simulation{T}(LegendData, readprops(filename, subst_pathvar = false, subst_env = false, trim_null = false), env, Vop)
 end
 
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::AbstractDict, env::HPGeEnvironment = HPGeEnvironment()) where {T<:AbstractFloat}
-    Simulation{T}(LegendData, convert(PropDict, meta), LegendDataManagement.NoSuchPropsDBEntry("", []), env)
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::AbstractDict, env::HPGeEnvironment = HPGeEnvironment(), Vop::Union{Missing,Real} = missing) where {T<:AbstractFloat}
+    Simulation{T}(LegendData, convert(PropDict, meta), LegendDataManagement.NoSuchPropsDBEntry("", []), env, Vop)
 end
 
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment()) where {T<:AbstractFloat}
-    config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta, env)
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(), Vop::Union{Missing,Real} = missing) where {T<:AbstractFloat}
+    config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta, env, Vop)
     Simulation{T}(config_dict)
 end
 
-function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::X, env::HPGeEnvironment = HPGeEnvironment(); dicttype = Dict{String,Any}) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
+function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::X, env::HPGeEnvironment = HPGeEnvironment(), Vop::Union{Missing,Real} = missing; dicttype = Dict{String,Any}) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
 
     # Not all possible configurations are yet implemented!
     # https://github.com/legend-exp/legend-metadata/blob/main/hardware/detectors/detector-metadata_1.pdf
@@ -391,7 +391,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         "name" => "n+ contact",
         "geometry" => dicttype("union" => []),
         "id" => 2,
-        "potential" => meta.characterization.manufacturer.recommended_voltage_in_V
+        "potential" => ismissing(Vop) ? meta.characterization.manufacturer.recommended_voltage_in_V : Vop
     ))
     config_dict["detectors"][1]["contacts"][2]["geometry"]["union"] = begin
         mantle_contact_parts = []
@@ -570,27 +570,54 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         mantle_contact_parts
     end
     
-    config_dict["detectors"][1]["semiconductor"]["impurity_density"] = if :impurity_curve in keys(xtal_meta)
-        #if xtal_meta.impurity_curve
-        dicttype(
-            "name" => "linear_exponential_boule", 
-            "a" => xtal_meta.impurity_curve.a * 1e6, ## 1e9cm^-3 -> mm^-3
-            "b" => xtal_meta.impurity_curve.b * 1e6, ## 1e9cm^-3 * mm^-1 -> mm^-4
-            "c" => xtal_meta.impurity_curve.c * 1e6, ## 1e9cm^-3 -> mm^-3
-            "L" => xtal_meta.impurity_curve.L, ## already in mm
-            "tau" => xtal_meta.impurity_curve.tau, ## already in mm
-            "det_z0" => xtal_meta.impurity_curve.det_z0, ## already in mm
-        )
+    slice = Symbol(meta.name[end])
+    config_dict["detectors"][1]["semiconductor"]["impurity_density"] = if :impurity_curve in keys(xtal_meta) && slice in keys(xtal_meta.slices)
+        if xtal_meta.impurity_curve.model == "linear_boule"
+            dicttype(
+                "name" => xtal_meta.impurity_curve.model, 
+                "a" => xtal_meta.impurity_curve.parameters.a * -1e6, ## 1e9cm^-3 -> mm^-3
+                "b" => xtal_meta.impurity_curve.parameters.b * -1e6, ## 1e9cm^-3 * mm^-1 -> mm^-4
+                "det_z0" => xtal_meta.slices[slice].detector_offset_in_mm, ## already in mm
+            )
+        elseif xtal_meta.impurity_curve.model == "parabolic_boule"
+            dicttype(
+                "name" => xtal_meta.impurity_curve.parameters.model, 
+                "a" => xtal_meta.impurity_curve.parameters.a * -1e6, ## 1e9cm^-3 -> mm^-3
+                "b" => xtal_meta.impurity_curve.parameters.b * -1e6, ## 1e9cm^-3 * mm^-1 -> mm^-4
+                "c" => xtal_meta.impurity_curve.parameters.c * -1e6, ## 1e9cm^-3 * mm^-2 -> mm^-5
+                "det_z0" => xtal_meta.slices[slice].detector_offset_in_mm, ## already in mm
+            )
+        elseif xtal_meta.impurity_curve.model == "linear_exponential_boule"
+            dicttype(
+                "name" => xtal_meta.impurity_curve.model, 
+                "a" => xtal_meta.impurity_curve.parameters.a * -1e6, ## 1e9cm^-3 -> mm^-3
+                "b" => xtal_meta.impurity_curve.parameters.b * -1e6, ## 1e9cm^-3 * mm^-1 -> mm^-4
+                "n" => xtal_meta.impurity_curve.parameters.n * -1e6, ## 1e9cm^-3 -> mm^-3
+                "l" => xtal_meta.impurity_curve.parameters.l, ## already in mm
+                "m" => xtal_meta.impurity_curve.parameters.m, ## already in mm
+                "det_z0" => xtal_meta.slices[slice].detector_offset_in_mm, ## already in mm
+            )
+        elseif xtal_meta.impurity_curve.model == "parabolic_exponential_boule"
+            dicttype(
+                "name" => xtal_meta.impurity_curve.model, 
+                "a" => xtal_meta.impurity_curve.parameters.a * -1e6, ## 1e9cm^-3 -> mm^-3
+                "b" => xtal_meta.impurity_curve.parameters.b * -1e6, ## 1e9cm^-3 * mm^-1 -> mm^-4
+                "c" => xtal_meta.impurity_curve.parameters.c * -1e6, ## 1e9cm^-3 * mm^-2 -> mm^-5
+                "n" => xtal_meta.impurity_curve.parameters.n * -1e6, ## 1e9cm^-3 -> mm^-3
+                "l" => xtal_meta.impurity_curve.parameters.l, ## already in mm
+                "m" => xtal_meta.impurity_curve.parameters.m, ## already in mm
+                "det_z0" => xtal_meta.slices[slice].detector_offset_in_mm, ## already in mm
+            )
+        end
     else
+        #@warn "No impurity curve found for the detector $(meta.name), using default constant value of -1e9cm^-3"
         dicttype(
             "name" => "constant", 
             "value" => "-1e9cm^-3",
         )
     end
-
     # evaluate "include" statements - needed for the charge drift model
     SolidStateDetectors.scan_and_merge_included_json_files!(config_dict, "")
-
     return config_dict
 end
 
