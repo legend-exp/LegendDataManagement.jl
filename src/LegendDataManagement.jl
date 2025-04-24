@@ -13,6 +13,7 @@ import Pkg
 
 using Glob
 using JSON
+using YAML
 using PropDicts
 using PropertyDicts
 using StructArrays

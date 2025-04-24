@@ -47,7 +47,7 @@ function _writevalidity_impl(props_db::LegendDataManagement.MaybePropsDB, fileke
         # get timestamp from filekey
         pars_validTimeStamp = string(filekey.time)
         # get validity filename and check if exists
-        validity_filename = joinpath(data_path(props_db), "validity.jsonl")
+        validity_filename = joinpath(data_path(props_db), validity_filename)
         mkpath(dirname(validity_filename))
         touch(validity_filename)
         # check if validity already written
