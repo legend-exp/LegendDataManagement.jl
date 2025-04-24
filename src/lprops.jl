@@ -88,7 +88,7 @@ export writelprops
 writelprops(io::IO, p::PropDict; multiline::Bool = true, indent::Int = 4) = writeprops(io, _lprops2props(p); multiline=multiline, indent=indent)
 writelprops(filename::AbstractString, p::PropDict; multiline::Bool = true, indent::Int = 4) = writeprops(filename, _lprops2props(p); multiline=multiline, indent=indent)
 
-writelprops(db::MaybePropsDB, key::Union{Symbol, DataSelector}, p::PropDict; kwargs...) = writelprops(joinpath(mkpath(data_path(db)), "$(string(key)).json"), p; kwargs...)
+writelprops(db::MaybePropsDB, key::Union{Symbol, DataSelector}, p::PropDict; kwargs...) = writelprops(joinpath(mkpath(data_path(db)), "$(string(key)).yaml"), p; kwargs...)
 
 
 """

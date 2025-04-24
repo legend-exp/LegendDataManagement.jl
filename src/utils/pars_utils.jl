@@ -71,8 +71,8 @@ function _writevalidity_impl(props_db::LegendDataManagement.MaybePropsDB, fileke
     end
 end
 writevalidity(props_db, filekey, apply::String; kwargs...) = writevalidity(props_db, filekey, [apply]; kwargs...)
-writevalidity(props_db, filekey, rsel::Tuple{DataPeriod, DataRun}; kwargs...) = writevalidity(props_db, filekey, "$(first(rsel))/$(last(rsel)).json"; kwargs...)
-writevalidity(props_db, filekey, part::DataPartition; kwargs...) = writevalidity(props_db, filekey, "$(part).json"; kwargs...)
+writevalidity(props_db, filekey, rsel::Tuple{DataPeriod, DataRun}; kwargs...) = writevalidity(props_db, filekey, "$(first(rsel))/$(last(rsel)).yaml"; kwargs...)
+writevalidity(props_db, filekey, part::DataPartition; kwargs...) = writevalidity(props_db, filekey, "$(part).yaml"; kwargs...)
 function writevalidity(props_db::LegendDataManagement.MaybePropsDB, validity::StructVector{@NamedTuple{period::DataPeriod, run::DataRun, filekey::FileKey, validity::String}}; kwargs...)
     # get unique runs and periods for the individual entries 
     runsel = unique([(row.period, row.run) for row in validity])
@@ -108,7 +108,7 @@ function get_partitionvalidity(data::LegendData, ch::ChannelIdLike, det::Detecto
     ch, det, part = ChannelId(ch), DetectorId(det), DataPartition(part)
     # get partition validity
     partinfo = partitioninfo(data, ch, part; category=cat)
-    Vector{@NamedTuple{period::DataPeriod, run::DataRun, filekey::FileKey, validity::String}}([(period = pinf.period, run = pinf.run, filekey = start_filekey(data, (pinf.period, pinf.run, cat)), validity = "$det/$(part).json") for pinf in partinfo])
+    Vector{@NamedTuple{period::DataPeriod, run::DataRun, filekey::FileKey, validity::String}}([(period = pinf.period, run = pinf.run, filekey = start_filekey(data, (pinf.period, pinf.run, cat)), validity = "$det/$(part).yaml") for pinf in partinfo])
 end
 export get_partitionvalidity
 
