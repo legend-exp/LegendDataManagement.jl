@@ -123,12 +123,8 @@ function _get_partitions(data::LegendData, label::Symbol; category::DataCategory
         end
     end
 
-    # recount partition numbers, starting at 1
-    # TODO: re-evaluate if this should be done or if DataPartition should be redefined
-    idx = invperm(sortperm(collect(keys(pd))))
-
     # create the Tables
-    IdDict(DataPartition.(idx) .=> Table.((filter(row -> (row.period, row.run) in pr && (category == :all || getproperty(row, category).is_analysis_run), rinfo) for pr in values(pd))))
+    IdDict(DataPartition.(keys(pd)) .=> Table.((filter(row -> (row.period, row.run) in pr && (category == :all || getproperty(row, category).is_analysis_run), rinfo) for pr in values(pd))))
 end
 
 

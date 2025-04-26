@@ -141,25 +141,31 @@ Example:
 
 ```julia
 partition = DataPartition(1)
+partition.cat = :calgroup
 partition.no == 1
-string(partition) == "partition01"
-DataPartition("partiton01") == partition
+partition.set == :a
+string(partition) == "calgroup001a"
+DataPartition(:calgroup001a) == partition
 ```
 """
 struct DataPartition <: DataSelector
     no::Int
+    set::Symbol
+    cat::Symbol
+    # fall back to default calgroups if only an Integer is given
+    DataPartition(no::Int, set::Symbol = :a, cat::Symbol = :calgroup) = new(no, set, cat)
 end
 export DataPartition
 
 @inline DataPartition(partition::DataPartition) = partition
-
-Base.:(==)(a::DataPartition, b::DataPartition) = a.no == b.no
-Base.isless(a::DataPartition, b::DataPartition) = isless(a.no, b.no)
+Base.:(==)(a::DataPartition, b::DataPartition) = a.no == b.no && a.set == b.set && a.cat == b.cat
+Base.isless(a::DataPartition, b::DataPartition) = isless(a.no, b.no) && isless(a.set, b.set)
 
 # ToDo: Improve implementation
-Base.print(io::IO, partition::DataPartition) = print(io, "part$(lpad(string(partition.no), 2, string(0)))")
+Base.print(io::IO, partition::DataPartition) = print(io, "$(partition.cat)$(lpad(string(partition.no), 3, string(0)))$(partition.set)")
+Base.show(io::IO, partition::DataPartition) = print(io, "DataPartition($partition)")
 
-const partition_expr = r"^part([0-9]{2})$"
+const partition_expr = r"^(part|calgroup|phygroup)([0-9]{2,3})([A-Za-z])$"
 
 _can_convert_to(::Type{DataPartition}, s::AbstractString) = !isnothing(match(partition_expr, s))
 _can_convert_to(::Type{DataPartition}, s::Symbol) = _can_convert_to(DataPartition, string(s))
@@ -168,10 +174,11 @@ _can_convert_to(::Type{DataPartition}, s) = false
 
 function DataPartition(s::AbstractString)
     m = match(partition_expr, s)
-    if (m == nothing)
+    if isnothing(m)
         throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data-partition name"))
     else
-        DataPartition(parse(Int, (m::RegexMatch).captures[1]))
+        cat, no, set = (m::RegexMatch).captures
+        DataPartition(parse(Int, no), Symbol(set), Symbol(cat))
     end
 end
 
@@ -186,7 +193,7 @@ Base.convert(::Type{DataPartition}, s::Symbol) = DataPartition(string(s))
 """
     DataPartitionLike = Union{DataPartition, Symbol, AbstractString}
 
-Anything that can represent a data partition, like `DataPartition(2)` or "partition02".
+Anything that can represent a data partition, like `DataPartition(:calgroup001a)` or "part02".
 """
 const DataPartitionLike = Union{DataPartition, Symbol, AbstractString}
 export DataPartitionLike
