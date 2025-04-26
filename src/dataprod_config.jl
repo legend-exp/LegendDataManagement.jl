@@ -242,18 +242,18 @@ end
 const _cached_analysis_runs = LRU{Tuple{UInt, DataCategoryLike}, StructVector{@NamedTuple{period::DataPeriod, run::DataRun}}}(maxsize = 10)
 function _analysis_runs(data::LegendData, cat::DataCategoryLike)
     Table(sort(get!(_cached_analysis_runs, (objectid(data), cat)) do
-        aruns = data.metadata.datasets.runlists.valid[Symbol(cat)]
-        periods_and_runs = [
+        aruns::PropDict = get(data.metadata.datasets.runlists.valid, Symbol(cat), PropDict())
+        periods_and_runs = Vector{@NamedTuple{period::DataPeriod, run::DataRun}}[
             map(run -> (period = DataPeriod(p), run = run), parse_runs(rs))
             for (p, rs) in aruns
         ]
-        flat_pr = vcat(periods_and_runs...)::Vector{@NamedTuple{period::DataPeriod, run::DataRun}}
+        flat_pr = collect(Iterators.flatten(periods_and_runs))::Vector{@NamedTuple{period::DataPeriod, run::DataRun}}
         StructArray(flat_pr)
     end))
 end
 
 """
-    analysis_runs(data::LegendData)
+    analysis_phy_runs(data::LegendData)
 
 Return cross-period physics analysis runs.
 """
@@ -262,7 +262,7 @@ export analysis_phy_runs
 
 
 """
-    analysis_runs(data::LegendData)
+    analysis_cal_runs(data::LegendData)
 
 Return cross-period calibration analysis runs.
 """
@@ -319,13 +319,7 @@ function runinfo(data::LegendData)
             function get_cat_entry(cat)
                 if haskey(ri, cat)
                     fk = ifelse(haskey(ri[cat], :start_key), FileKey(data.name, period, run, cat, Timestamp(get(ri[cat], :start_key, 1))), missing)
-                    is_ana_run = if cat == :phy
-                        (; period, run) in analysis_phy_runs(data) && !ismissing(fk)
-                    elseif cat == :cal 
-                        run in get(parts_default, period, [])
-                    else
-                        false
-                    end
+                    is_ana_run::Bool = (; period, run) in _analysis_runs(data, cat) && !ismissing(fk)
                     nttype((fk, get(ri[cat], :livetime_in_s, NaN)*u"s", Bool(is_ana_run)))
                 else
                     nttype((missing, NaN*u"s", Bool(false)))
