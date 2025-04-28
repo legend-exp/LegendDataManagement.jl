@@ -120,7 +120,7 @@ _load_all_keys(arr::AbstractArray, n_evts::Int=-1) = arr[:][if (n_evts < 1 || n_
 _load_all_keys(t::Table, n_evts::Int=-1) = t[:][if (n_evts < 1 || n_evts > length(t)) 1:length(t) else rand(1:length(t), n_evts) end]
 _load_all_keys(x, n_evts::Int=-1) = x
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, ChannelOrDetectorIdLike}; n_evts::Int=-1, ignore_missing::Bool=false, parallel::Bool=true, wpool::WorkerPool=default_worker_pool())
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, ChannelOrDetectorIdLike}; n_evts::Int=-1, ignore_missing::Bool=false, parallel::Bool=false, wpool::WorkerPool=default_worker_pool())
     tier, filekey, ch = DataTier(rsel[1]), rsel[2], if !isempty(string((rsel[3]))) _get_channelid(data, rsel[2], rsel[3]) else rsel[3] end
     _lh5_data_open(data, tier, filekey, ch) do h
         if !isempty(string((ch))) && !haskey(h, "$ch")
@@ -177,8 +177,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     end
 end
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, AbstractVector{FileKey}, ChannelOrDetectorIdLike}; parallel::Bool=true, wpool::WorkerPool=default_worker_pool(), kwargs...)    
-    # lflatten([LegendDataManagement.read_ldata(f, data, ifelse(!isempty(string(rsel[3])), (rsel[1], fk, rsel[3]),  (rsel[1], fk)); kwargs...) for fk in rsel[2]])
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, AbstractVector{FileKey}, ChannelOrDetectorIdLike}; parallel::Bool=false, wpool::WorkerPool=default_worker_pool(), kwargs...)    
     @everywhere begin
         @assert isdefined(Main, :LegendDataManagement) "Parallel read requires LegendDataManagement.jl and LegendHDF5IO.jl to be loaded on each worker.g. via `@everywhere using LegendDataManagement LegendHDF5IO`"
         @assert isdefined(Main, :LegendHDF5IO) "Parallel read requires LegendDataManagement.jl and LegendHDF5IO.jl to be loaded on each worker.g. via `@everywhere using LegendDataManagement LegendHDF5IO`"
@@ -259,8 +258,7 @@ end
 ### DataPartition
 const _partinfo_required_cols = NamedTuple{(:period, :run), Tuple{DataPeriod, DataRun}}
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, DataCategoryLike, Table{_partinfo_required_cols}, ChannelOrDetectorIdLike}; parallel::Bool=true, wpool::WorkerPool=default_worker_pool(), kwargs...)
-    # lflatten([LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], r.period, r.run, rsel[4]); kwargs...) for r in rsel[3]])
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, DataCategoryLike, Table{_partinfo_required_cols}, ChannelOrDetectorIdLike}; parallel::Bool=false, wpool::WorkerPool=default_worker_pool(), kwargs...)
     lflatten(if parallel
                 @debug "Parallel read with $(length(workers())) workers from $(length(rsel[3])) runs"
                 pmap(wpool, rsel[3]) do r
