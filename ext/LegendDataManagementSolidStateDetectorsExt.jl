@@ -618,10 +618,10 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
             )
         end
     else
-        #@warn "No impurity curve found for the detector $(meta.name), using default constant value of -1e9cm^-3"
+        @warn "No impurity curve found for the detector $(meta.name), using default constant value of 0"
         dicttype(
             "name" => "constant", 
-            "value" => "-1e9cm^-3",
+            "value" => 0,
         )
     end
     # evaluate "include" statements - needed for the charge drift model
