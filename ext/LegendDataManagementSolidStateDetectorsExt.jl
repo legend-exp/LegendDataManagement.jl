@@ -19,8 +19,12 @@ LegendDataManagement provides an extension for SolidStateDetectors, a
 `SolidStateDetector` can be constructed from LEGEND metadata using the
 methods above.
 """
-function SolidStateDetectors.SolidStateDetector(data::LegendData, meta::Union{<:String, <:AbstractDict, <:DetectorIdLike}, env::HPGeEnvironment = HPGeEnvironment())
-    SolidStateDetector{_SSDDefaultNumtype}(data, meta, env)
+function SolidStateDetectors.SolidStateDetector(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment())
+    SolidStateDetector{_SSDDefaultNumtype}(data, detector, env)
+end
+
+function SolidStateDetectors.SolidStateDetector(::LegendData, meta::Union{<:String, <:AbstractDict}, env::HPGeEnvironment = HPGeEnvironment())
+    SolidStateDetector{_SSDDefaultNumtype}(LegendData, meta, env)
 end
 
 function SolidStateDetectors.SolidStateDetector{T}(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment()) where {T<:AbstractFloat}
@@ -51,7 +55,11 @@ LegendDataManagement provides an extension for SolidStateDetectors, a
 `Simulation` can be constructed from LEGEND metadata using the
 methods above.
 """
-function SolidStateDetectors.Simulation(::Type{LegendData}, meta::Union{<:String, <:AbstractDict, <:DetectorIdLike}, env::HPGeEnvironment = HPGeEnvironment())
+function SolidStateDetectors.Simulation(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment())
+    Simulation{_SSDDefaultNumtype}(data, detector, env)
+end
+
+function SolidStateDetectors.Simulation(::Type{LegendData}, meta::Union{<:String, <:AbstractDict}, env::HPGeEnvironment = HPGeEnvironment())
     Simulation{_SSDDefaultNumtype}(LegendData, meta, env)
 end
 
