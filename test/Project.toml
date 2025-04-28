@@ -19,4 +19,4 @@ YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 [compat]
 Documenter = "1"
 LegendTestData = "0.3.0"
-YAML = "0.4.5"
+YAML = "0.4.6"
