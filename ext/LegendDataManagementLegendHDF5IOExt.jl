@@ -7,6 +7,7 @@ using LegendDataManagement: RunCategorySelLike
 using LegendHDF5IO
 using LegendDataTypes: fast_flatten, flatten_by_key
 using TypedTables, PropertyFunctions
+using Distributed
 
 const ChannelOrDetectorIdLike = Union{ChannelIdLike, DetectorIdLike}
 const AbstractDataSelectorLike = Union{AbstractString, Symbol, DataTierLike, DataCategoryLike, DataPeriodLike, DataRunLike, DataPartitionLike, ChannelOrDetectorIdLike}
@@ -108,6 +109,10 @@ function _lh5_data_open(f::Function, data::LegendData, tier::DataTierLike, filek
     end
 end
 
+_skipnothingmissing(xv::AbstractVector) = [x for x in skipmissing(xv) if !isnothing(x)]
+lflatten(x) = fast_flatten(collect(_skipnothingmissing(x)))
+lflatten(nt::AbstractVector{<:NamedTuple}) = flatten_by_key(collect(_skipnothingmissing(nt)))
+
 _propfunc_columnnames(f::PropSelFunction{cols}) where cols = cols
 
 _load_all_keys(nt::NamedTuple, n_evts::Int=-1) = if length(nt) == 1 _load_all_keys(nt[first(keys(nt))], n_evts) else NamedTuple{keys(nt)}(map(x -> _load_all_keys(nt[x], n_evts), keys(nt))) end
@@ -115,7 +120,7 @@ _load_all_keys(arr::AbstractArray, n_evts::Int=-1) = arr[:][if (n_evts < 1 || n_
 _load_all_keys(t::Table, n_evts::Int=-1) = t[:][if (n_evts < 1 || n_evts > length(t)) 1:length(t) else rand(1:length(t), n_evts) end]
 _load_all_keys(x, n_evts::Int=-1) = x
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, ChannelOrDetectorIdLike}; n_evts::Int=-1, ignore_missing::Bool=false)
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, ChannelOrDetectorIdLike}; n_evts::Int=-1, ignore_missing::Bool=false, parallel::Bool=true, wpool::WorkerPool=default_worker_pool())
     tier, filekey, ch = DataTier(rsel[1]), rsel[2], if !isempty(string((rsel[3]))) _get_channelid(data, rsel[2], rsel[3]) else rsel[3] end
     _lh5_data_open(data, tier, filekey, ch) do h
         if !isempty(string((ch))) && !haskey(h, "$ch")
@@ -172,16 +177,23 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     end
 end
 
-_skipnothingmissing(xv::AbstractVector) = [x for x in skipmissing(xv) if !isnothing(x)]
-lflatten(x) = fast_flatten(collect(_skipnothingmissing(x)))
-lflatten(nt::AbstractVector{<:NamedTuple}) = flatten_by_key(collect(_skipnothingmissing(nt)))
-
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, AbstractVector{FileKey}, ChannelOrDetectorIdLike}; kwargs...)
-    if !isempty(string(rsel[3]))
-        lflatten([LegendDataManagement.read_ldata(f, data, (rsel[1], fk, rsel[3]); kwargs...) for fk in rsel[2]])
-    else
-        lflatten([LegendDataManagement.read_ldata(f, data, (rsel[1], fk); kwargs...) for fk in rsel[2]])
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, AbstractVector{FileKey}, ChannelOrDetectorIdLike}; parallel::Bool=true, wpool::WorkerPool=default_worker_pool(), kwargs...)    
+    # lflatten([LegendDataManagement.read_ldata(f, data, ifelse(!isempty(string(rsel[3])), (rsel[1], fk, rsel[3]),  (rsel[1], fk)); kwargs...) for fk in rsel[2]])
+    @everywhere begin
+        @assert isdefined(Main, :LegendDataManagement) "Parallel read requires LegendDataManagement.jl and LegendHDF5IO.jl to be loaded on each worker.g. via `@everywhere using LegendDataManagement LegendHDF5IO`"
+        @assert isdefined(Main, :LegendHDF5IO) "Parallel read requires LegendDataManagement.jl and LegendHDF5IO.jl to be loaded on each worker.g. via `@everywhere using LegendDataManagement LegendHDF5IO`"
     end
+    lflatten(if parallel
+                @debug "Parallel read with $(length(workers())) workers from $(length(rsel[2])) filekeys"
+                pmap(wpool, rsel[2]) do fk
+                    LegendDataManagement.read_ldata(f, data, ifelse(!isempty(string(rsel[3])), (rsel[1], fk, rsel[3]),  (rsel[1], fk)); kwargs...)
+                end
+            else
+                @debug "Sequential read from $(length(rsel[2])) filekeys"
+                map(rsel[2]) do fk
+                    LegendDataManagement.read_ldata(f, data, ifelse(!isempty(string(rsel[3])), (rsel[1], fk, rsel[3]),  (rsel[1], fk)); kwargs...)
+                end
+            end)
 end
 LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, AbstractVector{FileKey}}; kwargs...) = 
     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], ""); kwargs...)
@@ -206,10 +218,10 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
 end
 
 LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPeriod}; kwargs...) =
-    LegendDataManagement.read_ldata(f, data, (DataTier(rsel[1]), DataCategory(rsel[2]), DataPeriod(rsel[3]), ""))
+    LegendDataManagement.read_ldata(f, data, (DataTier(rsel[1]), DataCategory(rsel[2]), DataPeriod(rsel[3]), ""); kwargs...)
 
 LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPeriod, DataRun}; kwargs...) = 
-    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], rsel[3], rsel[4], ""))
+    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], rsel[3], rsel[4], ""); kwargs...)
 
 
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPartition, ChannelOrDetectorIdLike}; kwargs...)
@@ -247,8 +259,20 @@ end
 ### DataPartition
 const _partinfo_required_cols = NamedTuple{(:period, :run), Tuple{DataPeriod, DataRun}}
 
-LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, DataCategoryLike, Table{_partinfo_required_cols}, ChannelOrDetectorIdLike}; kwargs...) =
-    lflatten([LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], r.period, r.run, rsel[4]); kwargs...) for r in rsel[3]])
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, DataCategoryLike, Table{_partinfo_required_cols}, ChannelOrDetectorIdLike}; parallel::Bool=true, wpool::WorkerPool=default_worker_pool(), kwargs...)
+    # lflatten([LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], r.period, r.run, rsel[4]); kwargs...) for r in rsel[3]])
+    lflatten(if parallel
+                @debug "Parallel read with $(length(workers())) workers from $(length(rsel[3])) runs"
+                pmap(wpool, rsel[3]) do r
+                    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], r.period, r.run, rsel[4]); parallel=true, wpool=wpool, kwargs...)
+                end
+            else
+                @debug "Sequential read from $(length(rsel[3])) runs"
+                map(rsel[r]) do r
+                    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], r.period, r.run, rsel[4]); parallel=false, kwargs...)
+                end
+            end)
+end
 
 LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, DataCategoryLike, Table{_partinfo_required_cols}}; kwargs...) =
     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], rsel[3], ""); kwargs...)
