@@ -179,8 +179,7 @@ end
 
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, AbstractVector{FileKey}, ChannelOrDetectorIdLike}; parallel::Bool=false, wpool::WorkerPool=default_worker_pool(), kwargs...)    
     @everywhere begin
-        @assert isdefined(Main, :LegendDataManagement) "Parallel read requires LegendDataManagement.jl and LegendHDF5IO.jl to be loaded on each worker.g. via `@everywhere using LegendDataManagement LegendHDF5IO`"
-        @assert isdefined(Main, :LegendHDF5IO) "Parallel read requires LegendDataManagement.jl and LegendHDF5IO.jl to be loaded on each worker.g. via `@everywhere using LegendDataManagement LegendHDF5IO`"
+        @assert isdefined(Main, :LegendDataManagement) && isdefined(Main, :LegendHDF5IO) "Parallel read requires LegendDataManagement.jl and LegendHDF5IO.jl to be loaded on each worker, e.g. via `@everywhere using LegendDataManagement LegendHDF5IO`"
     end
     lflatten(if parallel
                 @debug "Parallel read with $(length(workers())) workers from $(length(rsel[2])) filekeys"
@@ -266,7 +265,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
                 end
             else
                 @debug "Sequential read from $(length(rsel[3])) runs"
-                map(rsel[r]) do r
+                map(rsel[3]) do r
                     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], r.period, r.run, rsel[4]); parallel=false, kwargs...)
                 end
             end)
