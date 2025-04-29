@@ -95,6 +95,20 @@ det = chinfo[1].detector
 dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, det)
 ```
 In case, a `ChannelId` is missing in a file, the function will throw an `ArgumentError`. To avoid this and return `nothing` instead, you can use the `ignore_missing` keyword argument.
+
+It is possible to read in multiple files in parallel using the `Distributed` functionalities from within a session. You can activate parallel read with the `parallel` kwarg.
+``` julia
+dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), ch)
+dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), ch; parallel=true)
+```
+However, it is necessary that a worker allocation was already performed and the `LegendDataManagement` as well as `LegendHDF5IO` package is loaded on all workers, e.g. with
+``` julia
+using Distributed
+addprocs(4)
+@everywhere using LegendDataManagement, LegendHDF5IO
+```
+In addition, the `wpool`kwarg allows to parse a custome `WorkerPool` for more sophisticated load patterns.
+
 ## `SolidStateDetectors` extension
 
 LegendDataManagment provides an extension for [SolidStateDetectors](https://github.com/JuliaPhysics/SolidStateDetectors.jl). This makes it possible to create `SolidStateDetector` and `Simulation` instances from LEGEND metadata.
