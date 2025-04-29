@@ -261,7 +261,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     lflatten(if parallel
                 @debug "Parallel read with $(length(workers())) workers from $(length(rsel[3])) runs"
                 pmap(wpool, rsel[3]) do r
-                    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], r.period, r.run, rsel[4]); parallel=true, wpool=wpool, kwargs...)
+                    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], r.period, r.run, rsel[4]); parallel, wpool, kwargs...)
                 end
             else
                 @debug "Sequential read from $(length(rsel[3])) runs"
