@@ -27,7 +27,7 @@ Calculates the exposure of a detector in a given run/period/partition.
 l200 = LegendData(:l200)
 get_exposure(l200, :V00050A, DataPeriod(3), DataRun(0))
 get_exposure(l200, :V00050A, DataPeriod(3))
-get_exposure(l200, :V00050A, DataPartition(1))
+get_exposure(l200, :V00050A, DataPartition(:calgroup001a))
 ````
 
 """

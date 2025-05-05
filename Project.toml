@@ -30,6 +30,7 @@ TypedTables = "9d95f2ec-7b3d-5a63-8d20-e2491e220bb9"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 UnitfulAtomic = "a7773ee8-282e-5fa2-be4e-bd808c38a91a"
+YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [weakdeps]
 LegendDataTypes = "99e09c13-5545-5ee2-bfa2-77f358fb75d8"
@@ -75,4 +76,5 @@ TypedTables = "1.4"
 UUIDs = "<0.0.1, 1"
 Unitful = "1.11"
 UnitfulAtomic = "1"
+YAML = "0.4.5"
 julia = "1.10"

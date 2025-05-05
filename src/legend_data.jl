@@ -308,7 +308,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
     chinfo = get!(_cached_channelinfo, key) do
         chmap = data.metadata(sel).hardware.configuration.channelmaps
         diodmap = data.metadata.hardware.detectors.germanium.diodes
-        dpcfg = data.metadata(sel).dataprod.config.analysis
+        dpcfg = data.metadata(sel).datasets.statuses
         
         channel_keys = collect(keys(chmap))
 
