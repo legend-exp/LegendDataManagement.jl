@@ -398,9 +398,10 @@ function _get_md_property(@nospecialize(pd::PropsDB), s::Symbol)
     new_relpath = push!(copy(_rel_path(pd)), string(s))
 
     json_primary_filename, json_override_filename = _propsdb_fullpaths(pd, "$s.json")
-
     if isdir(joinpath(_base_path(pd), new_relpath...))
         _any_props(_base_path(pd), _override_base(pd), new_relpath, _validity_sel(pd))
+    elseif isdir(joinpath(_override_base(pd), new_relpath...))
+        _any_props(_override_base(pd), "", new_relpath, _validity_sel(pd))
     elseif ispath(json_primary_filename)
         _check_propery_access(pd, json_primary_filename)
         if ispath(json_override_filename)
