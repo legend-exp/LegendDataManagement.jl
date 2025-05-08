@@ -588,7 +588,12 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
     
     slice = Symbol(meta.name[end])
     config_dict["detectors"][1]["semiconductor"]["impurity_density"] = if haskey(PropDict(xtal_meta),:impurity_curve) && slice in keys(xtal_meta.slices)
-        if xtal_meta.impurity_curve.model == "linear_boule"
+        if xtal_meta.impurity_curve.model == "constant_boule"
+            dicttype(
+                "name" => "constant", 
+                "value" => xtal_meta.impurity_curve.parameters.value,
+            )
+        elseif xtal_meta.impurity_curve.model == "linear_boule"
             dicttype(
                 "name" => xtal_meta.impurity_curve.model, 
                 "a" => xtal_meta.impurity_curve.parameters.a * -1e6, ## 1e9cm^-3 -> mm^-3
