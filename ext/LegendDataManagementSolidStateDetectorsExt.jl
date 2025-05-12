@@ -103,7 +103,14 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
 
     gap = 1.0 # to ensure negative volumes do not match at surfaces
 
-    dl_thickness_in_mm = haskey(meta.characterization.manufacturer, :dl_thickness_in_mm) ? meta.characterization.manufacturer.dl_thickness_in_mm : 0
+    dl_thickness_in_mm = if haskey(meta.characterization, :combined_0vbb_analysis) && meta.characterization.combined_0vbb_analysis.fccd_in_mm.value > 0
+        meta.characterization.combined_0vbb_analysis.fccd_in_mm.value
+    elseif haskey(meta.characterization.manufacturer, :dl_thickness_in_mm) && meta.characterization.manufacturer.dl_thickness_in_mm > 0
+        meta.characterization.manufacturer.dl_thickness_in_mm
+    else
+        1.0 # default value
+    end
+    
     li_thickness =  dl_thickness_in_mm
     pp_thickness = 0.1
 
@@ -401,7 +408,14 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
 
 
     ### MANTLE CONTACT ###
-    Vop = haskey(meta.characterization.manufacturer, :recommended_voltage_in_V) ? meta.characterization.manufacturer.recommended_voltage_in_V : 5000
+    Vop = if haskey(meta.characterization.l200_site, :recommended_voltage_in_V) && meta.characterization.l200_site.recommended_voltage_in_V > 0
+        meta.characterization.l200_site.recommended_voltage_in_V
+    elseif haskey(meta.characterization.manufacturer, :recommended_voltage_in_V) && meta.characterization.manufacturer.recommended_voltage_in_V > 0
+        meta.characterization.manufacturer.recommended_voltage_in_V
+    else
+        5000.0 # default value
+    end
+
     push!(config_dict["detectors"][1]["contacts"], dicttype(
         "material" => "HPGe",
         "name" => "n+ contact",
