@@ -22,9 +22,12 @@ include("testing_utils.jl")
             @test sim isa Simulation
 
             # Compare active volume from SSD to active volume from LegendDataManagement
+            detector_props = getproperty(l200.metadata.hardware.detectors.germanium.diodes, detname)
+            fccd = detector_props.characterization.combined_0vbb_analysis.fccd_in_mm.value
+            
             SolidStateDetectors.apply_initial_state!(sim, ElectricPotential, Grid(sim, max_tick_distance = 0.1u"mm"))
             active_volume_ssd = SolidStateDetectors.get_active_volume(sim.point_types)
-            active_volume_ldm = LegendDataManagement.get_active_volume(l200.metadata.hardware.detectors.germanium.diodes[Symbol(detname)], 0.0)
+            active_volume_ldm = LegendDataManagement.get_active_volume(l200.metadata.hardware.detectors.germanium.diodes[Symbol(detname)], fccd)
             @test isapprox(active_volume_ssd, active_volume_ldm, rtol = 0.01)
 
             # The creation via config files allows to save Simulations to files using LegendHDF5IO
