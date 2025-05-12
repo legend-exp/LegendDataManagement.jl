@@ -93,14 +93,6 @@ end
 function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::X, env::HPGeEnvironment = HPGeEnvironment(); dicttype = Dict{String,Any}) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
 
     # Not all possible configurations are yet implemented!
-    # https://github.com/legend-exp/legend-metadata/blob/main/hardware/detectors/detector-metadata_1.pdf
-    # https://github.com/legend-exp/legend-metadata/blob/main/hardware/detectors/detector-metadata_2.pdf
-    # https://github.com/legend-exp/legend-metadata/blob/main/hardware/detectors/detector-metadata_3.pdf
-    # https://github.com/legend-exp/legend-metadata/blob/main/hardware/detectors/detector-metadata_4.pdf
-    # https://github.com/legend-exp/legend-metadata/blob/main/hardware/detectors/detector-metadata_5.pdf
-    # https://github.com/legend-exp/legend-metadata/blob/main/hardware/detectors/detector-metadata_6.pdf
-    # https://github.com/legend-exp/legend-metadata/blob/main/hardware/detectors/detector-metadata_7.pdf
-
     gap = 1.0 # to ensure negative volumes do not match at surfaces
 
     dl_thickness_in_mm = if haskey(meta.characterization, :combined_0vbb_analysis) && meta.characterization.combined_0vbb_analysis.fccd_in_mm.value > 0
