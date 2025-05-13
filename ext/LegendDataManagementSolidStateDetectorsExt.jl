@@ -95,9 +95,9 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
     # Not all possible configurations are yet implemented!
     gap = 1.0 # to ensure negative volumes do not match at surfaces
 
-    dl_thickness_in_mm = if haskey(meta.characterization, :combined_0vbb_analysis) && meta.characterization.combined_0vbb_analysis.fccd_in_mm.value > 0
+    dl_thickness_in_mm = if hasproperty(meta.characterization, :combined_0vbb_analysis) && meta.characterization.combined_0vbb_analysis.fccd_in_mm.value > 0
         meta.characterization.combined_0vbb_analysis.fccd_in_mm.value
-    elseif haskey(meta.characterization.manufacturer, :dl_thickness_in_mm) && meta.characterization.manufacturer.dl_thickness_in_mm > 0
+    elseif hasproperty(meta.characterization.manufacturer, :dl_thickness_in_mm) && meta.characterization.manufacturer.dl_thickness_in_mm > 0
         meta.characterization.manufacturer.dl_thickness_in_mm
     else
         1.0 # default value
@@ -167,7 +167,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
     semiconductor_geometry_subtractions = []
     begin
         # borehole
-        has_borehole = haskey(meta.geometry, :borehole)
+        has_borehole = hasproperty(meta.geometry, :borehole)
         if is_coax && !has_borehole
             error("Coax detectors should have boreholes")
         end
@@ -191,13 +191,13 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         end
         
         # borehole taper
-        has_borehole_taper = haskey(meta.geometry.taper, :borehole)
+        has_borehole_taper = hasproperty(meta.geometry.taper, :borehole)
         if has_borehole_taper
             borehole_taper_height = meta.geometry.taper.borehole.height_in_mm
-            if haskey(meta.geometry.taper.borehole, :radius_in_mm)
+            if hasproperty(meta.geometry.taper.borehole, :radius_in_mm)
                 borehole_taper_radius = meta.geometry.taper.borehole.radius_in_mm
                 borehole_taper_angle = atand(borehole_taper_radius, borehole_taper_height)
-            elseif haskey(meta.geometry.taper.borehole, :angle_in_deg)
+            elseif hasproperty(meta.geometry.taper.borehole, :angle_in_deg)
                 borehole_taper_angle = meta.geometry.taper.borehole.angle_in_deg
                 borehole_taper_radius = borehole_taper_height * tand(borehole_taper_angle)
             else
@@ -227,12 +227,12 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         end
 
         # top taper
-        if haskey(meta.geometry.taper, :top)
+        if hasproperty(meta.geometry.taper, :top)
             top_taper_height = meta.geometry.taper.top.height_in_mm
-            if haskey(meta.geometry.taper.top, :radius_in_mm)
+            if hasproperty(meta.geometry.taper.top, :radius_in_mm)
                 top_taper_radius = meta.geometry.taper.top.radius_in_mm
                 top_taper_angle = atand(top_taper_radius, top_taper_height)
-            elseif haskey(meta.geometry.taper.top, :angle_in_deg)
+            elseif hasproperty(meta.geometry.taper.top, :angle_in_deg)
                 top_taper_angle = meta.geometry.taper.top.angle_in_deg
                 top_taper_radius = top_taper_height * tand(top_taper_angle)
             else
@@ -266,10 +266,10 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
 
         # bot outer taper
         bot_taper_height = meta.geometry.taper.bottom.height_in_mm
-        if haskey(meta.geometry.taper.bottom, :radius_in_mm)
+        if hasproperty(meta.geometry.taper.bottom, :radius_in_mm)
             bot_taper_radius = meta.geometry.taper.bottom.radius_in_mm
             bot_taper_angle = atand(bot_taper_radius, bot_taper_height)
-        elseif haskey(meta.geometry.taper.bottom, :angle_in_deg)
+        elseif hasproperty(meta.geometry.taper.bottom, :angle_in_deg)
             bot_taper_angle = meta.geometry.taper.bottom.angle_in_deg
             bot_taper_radius = bot_taper_height * tand(bot_taper_angle)
         else
@@ -300,7 +300,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         end
 
         # groove
-        has_groove = haskey(meta.geometry, :groove)
+        has_groove = hasproperty(meta.geometry, :groove)
         if has_groove
             groove_inner_radius = meta.geometry.groove.radius_in_mm.inner
             groove_outer_radius = meta.geometry.groove.radius_in_mm.outer
@@ -337,7 +337,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
     # is_bulletized && @warn "Bulletization is not implemented yet, ignore for now."
 
     # extras
-    haskey(meta.geometry, :extra) && @warn "Extras are not implemented yet, ignore for now."
+    hasproperty(meta.geometry, :extra) && @warn "Extras are not implemented yet, ignore for now."
 
 
     ### P+ CONTACT ###
@@ -400,9 +400,9 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
 
 
     ### MANTLE CONTACT ###
-    Vop = if haskey(meta.characterization.l200_site, :recommended_voltage_in_V) && meta.characterization.l200_site.recommended_voltage_in_V > 0
+    Vop = if hasproperty(meta.characterization.l200_site, :recommended_voltage_in_V) && meta.characterization.l200_site.recommended_voltage_in_V > 0
         meta.characterization.l200_site.recommended_voltage_in_V
-    elseif haskey(meta.characterization.manufacturer, :recommended_voltage_in_V) && meta.characterization.manufacturer.recommended_voltage_in_V > 0
+    elseif hasproperty(meta.characterization.manufacturer, :recommended_voltage_in_V) && meta.characterization.manufacturer.recommended_voltage_in_V > 0
         meta.characterization.manufacturer.recommended_voltage_in_V
     else
         5000.0 # default value
@@ -593,7 +593,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
     end
     
     slice = Symbol(meta.name[end])
-    config_dict["detectors"][1]["semiconductor"]["impurity_density"] = if haskey(PropDict(xtal_meta),:impurity_curve) && slice in keys(xtal_meta.slices)
+    config_dict["detectors"][1]["semiconductor"]["impurity_density"] = if hasproperty(PropDict(xtal_meta),:impurity_curve) && slice in keys(xtal_meta.slices)
         if xtal_meta.impurity_curve.model == "constant_boule"
             dicttype(
                 "name" => "constant", 
