@@ -8,7 +8,9 @@ using Unitful
 using PropDicts
 
 const _SSDDefaultNumtype = Float32
-
+const DEFAULT_OPERATIONAL_VOLTAGE_IN_V = 5000
+const DEFAULT_N_THICKNESS_IN_MM = 1.0
+const DEFAULT_P_THICKNESS_IN_MM = 0.1
 
 """
     SolidStateDetector[{T<:AbstractFloat}](data::LegendData, detector::DetectorIdLike)
@@ -100,11 +102,11 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
     elseif hasproperty(meta.characterization.manufacturer, :dl_thickness_in_mm) && meta.characterization.manufacturer.dl_thickness_in_mm > 0
         meta.characterization.manufacturer.dl_thickness_in_mm
     else
-        1.0 # default value
+        DEFAULT_N_THICKNESS_IN_MM
     end
     
     li_thickness =  dl_thickness_in_mm
-    pp_thickness = 0.1
+    pp_thickness = DEFAULT_P_THICKNESS_IN_MM
 
     crystal_radius = meta.geometry.radius_in_mm
     crystal_height = meta.geometry.height_in_mm
@@ -405,7 +407,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
     elseif hasproperty(meta.characterization.manufacturer, :recommended_voltage_in_V) && meta.characterization.manufacturer.recommended_voltage_in_V > 0
         meta.characterization.manufacturer.recommended_voltage_in_V
     else
-        5000.0 # default value
+        DEFAULT_OPERATIONAL_VOLTAGE_IN_V
     end
 
     push!(config_dict["detectors"][1]["contacts"], dicttype(
@@ -593,7 +595,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
     end
     
     slice = Symbol(meta.name[end])
-    config_dict["detectors"][1]["semiconductor"]["impurity_density"] = if hasproperty(PropDict(xtal_meta),:impurity_curve) && slice in keys(xtal_meta.slices)
+    config_dict["detectors"][1]["semiconductor"]["impurity_density"] = if hasproperty(xtal_meta,:impurity_curve) && hasproperty(xtal_meta.slices, slice)
         if xtal_meta.impurity_curve.model == "constant_boule"
             dicttype(
                 "name" => "constant", 
