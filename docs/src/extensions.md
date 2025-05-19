@@ -121,7 +121,7 @@ det = SolidStateDetector(LegendData(:l200), :V99000A)
 plot(det)
 ```
 
-Using the previous constructor looks up the diode and crystal metadata files and calls the following lower level constructor -- which can also be used directly (no `$LEGEND_DATA_CONFIG` required):
+`st = :slice` keyword can be passed to the `plot` to plot a 2D slice of the detector. Using the previous constructor looks up the diode and crystal metadata files and calls the following lower level constructor -- which can also be used directly (no `$LEGEND_DATA_CONFIG` required):
 
 ```julia
 det = SolidStateDetector(LegendData, "V99000A.yaml", "V99000.yaml")
@@ -130,7 +130,6 @@ In cases where multiple values (or none) are available in the metadata, the dete
 - n⁺ contact thickness: 0νββ analysis value (if available) → manufacturer's value (if available) → default value
 - Operational Voltage: l200 characterization value (if available) → manufacturer's value (if available) → default value
 - Impurity profile: model in crystal metadata (if available) → constant value of 0
-
 
 In addition, when creating a `Simulation`, all simulation functions in SolidStateDetectors.jl can be applied. As usual, all fields stored in the `Simulation` can be written and read using `LegendHDF5IO`:
 
