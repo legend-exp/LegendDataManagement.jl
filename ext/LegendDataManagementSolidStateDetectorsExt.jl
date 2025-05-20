@@ -634,10 +634,17 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
     
     slice = Symbol(meta.name[end])
     config_dict["detectors"][1]["semiconductor"]["impurity_density"] = if hasproperty(xtal_meta,:impurity_curve) && hasproperty(xtal_meta.slices, slice)
+        impurity_scale =  hasproperty(xtal_meta.impurity_curve.corrections, :scale) ? xtal_meta.impurity_curve.corrections.scale : 1.0
+        impurity_offset = hasproperty(xtal_meta.impurity_curve.corrections, :offset) ? xtal_meta.impurity_curve.corrections.offset * -1e6 : 0.0 ## 1e9cm^-3 -> mm^-3
+        impurity_corrections_dict = dicttype(
+            "scale" => impurity_scale, 
+            "offset" => impurity_offset,
+        )
         if xtal_meta.impurity_curve.model == "constant_boule"
             dicttype(
                 "name" => "constant", 
-                "value" => xtal_meta.impurity_curve.parameters.value,
+                "value" => xtal_meta.impurity_curve.parameters.value * -1e6, ## 1e9cm^-3 -> mm^-3
+                "corrections" => impurity_corrections_dict
             )
         elseif xtal_meta.impurity_curve.model == "linear_boule"
             dicttype(
@@ -645,6 +652,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
                 "a" => xtal_meta.impurity_curve.parameters.a * -1e6, ## 1e9cm^-3 -> mm^-3
                 "b" => xtal_meta.impurity_curve.parameters.b * -1e6, ## 1e9cm^-3 * mm^-1 -> mm^-4
                 "det_z0" => xtal_meta.slices[slice].detector_offset_in_mm, ## already in mm
+                "corrections" => impurity_corrections_dict
             )
         elseif xtal_meta.impurity_curve.model == "parabolic_boule"
             dicttype(
@@ -653,6 +661,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
                 "b" => xtal_meta.impurity_curve.parameters.b * -1e6, ## 1e9cm^-3 * mm^-1 -> mm^-4
                 "c" => xtal_meta.impurity_curve.parameters.c * -1e6, ## 1e9cm^-3 * mm^-2 -> mm^-5
                 "det_z0" => xtal_meta.slices[slice].detector_offset_in_mm, ## already in mm
+                "corrections" => impurity_corrections_dict
             )
         elseif xtal_meta.impurity_curve.model == "linear_exponential_boule"
             dicttype(
@@ -663,6 +672,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
                 "l" => xtal_meta.impurity_curve.parameters.l, ## already in mm
                 "m" => xtal_meta.impurity_curve.parameters.m, ## already in mm
                 "det_z0" => xtal_meta.slices[slice].detector_offset_in_mm, ## already in mm
+                "corrections" => impurity_corrections_dict
             )
         elseif xtal_meta.impurity_curve.model == "parabolic_exponential_boule"
             dicttype(
@@ -674,6 +684,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
                 "l" => xtal_meta.impurity_curve.parameters.l, ## already in mm
                 "m" => xtal_meta.impurity_curve.parameters.m, ## already in mm
                 "det_z0" => xtal_meta.slices[slice].detector_offset_in_mm, ## already in mm
+                "corrections" => impurity_corrections_dict
             )
         end
     else
@@ -691,17 +702,19 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         end
         det_offset = hasproperty(xtal_meta.slices, slice) ? xtal_meta.slices[slice].detector_offset_in_mm*u"mm" : "unknown"
         imp_warn = hasproperty(xtal_meta,:impurity_curve) && hasproperty(xtal_meta.slices, slice) ? ("✔", "") : ("⚠","(DEFAULT)")
+        imp_scale = hasproperty(xtal_meta.impurity_curve.corrections, :scale) ? xtal_meta.impurity_curve.corrections.scale : "-"
+        imp_offset = hasproperty(xtal_meta.impurity_curve.corrections, :offset) ? xtal_meta.impurity_curve.corrections.offset : "-"
         g1,g2,g3,g4,g5,g6 = get_unicode_rep(meta.type)
         vol = round(typeof(1u"cm^3"), LegendDataManagement.get_active_volume(meta, Val(Symbol(meta.type)), .0))
         actvol = round(typeof(1u"cm^3"), LegendDataManagement.get_active_volume(meta, Val(Symbol(meta.type)), li_thickness))
         actvol_check = actvol == vol ? "⚠" : "✔"
         @info """
-
-        $g1  Legend SolidStateDetector - $(meta.name)
-        $g2  ╰─ $Vop_val_used $Vop V
-        $g3  ╰─ $dl_val_used $dl_thickness_in_mm mm
-        $g4  ╰─ $(imp_warn[1]) Impurity model$(imp_warn[2]) / Detector Offset: $imp_model / $det_offset
-        $g5     ╰─ $imp_val
+        Legend SolidStateDetector - $(meta.name)
+        $g1  ╰─ $Vop_val_used $Vop V
+        $g2  ╰─ $dl_val_used $dl_thickness_in_mm mm
+        $g3  ╰─ $(imp_warn[1]) Impurity model $(imp_warn[2]) / Detector Offset: $imp_model / $det_offset
+        $g4     ╰─ $imp_val
+        $g5     ╰─ Corrections: Scale / Offset: $imp_scale / $imp_offset
         $g6  ╰─ $actvol_check Volume / Active volume: $vol / $actvol
         """
     end
