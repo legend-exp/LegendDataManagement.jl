@@ -177,11 +177,13 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     end
 end
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, AbstractVector{FileKey}, ChannelOrDetectorIdLike}; parallel::Bool=false, wpool::WorkerPool=default_worker_pool(), kwargs...)    
-    @everywhere begin
-        @assert isdefined(Main, :LegendDataManagement) && isdefined(Main, :LegendHDF5IO) "Parallel read requires LegendDataManagement.jl and LegendHDF5IO.jl to be loaded on each worker, e.g. via `@everywhere using LegendDataManagement LegendHDF5IO`"
-    end
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, AbstractVector{FileKey}, ChannelOrDetectorIdLike}; parallel::Bool=false, wpool::WorkerPool=default_worker_pool(), kwargs...)
     lflatten(if parallel
+                # TODO: Can we also allow this to be started from other processes?
+                @assert Distributed.myid() == 1 "Parallel read is currently only supported on the main worker process"
+                pmap(wpool, rsel[2]) do fk
+                    @assert isdefined(Main, :LegendDataManagement) && isdefined(Main, :LegendHDF5IO) "Parallel read requires LegendDataManagement.jl and LegendHDF5IO.jl to be loaded on each worker, e.g. via `@everywhere using LegendDataManagement LegendHDF5IO`"
+                end
                 @debug "Parallel read with $(length(workers())) workers from $(length(rsel[2])) filekeys"
                 pmap(wpool, rsel[2]) do fk
                     LegendDataManagement.read_ldata(f, data, ifelse(!isempty(string(rsel[3])), (rsel[1], fk, rsel[3]),  (rsel[1], fk)); kwargs...)
