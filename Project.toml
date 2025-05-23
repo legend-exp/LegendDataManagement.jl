@@ -1,6 +1,6 @@
 name = "LegendDataManagement"
 uuid = "9feedd95-f0e0-423f-a8dc-de0970eae6b3"
-version = "0.5.3"
+version = "0.5.4"
 
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
