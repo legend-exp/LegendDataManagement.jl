@@ -589,11 +589,11 @@ function get_hierarchies(extended::Bool)
         :usability => [:on, :ac, :off],
         :is_blinded => [true, false],
         :psd_usability => [:on, :off],
-        :low_aoe_status => [:valid, :present, :missing],
-        :high_aoe_status => [:valid, :present, :missing],
-        :lq_status => [:valid, :present, :missing],
-        :ann_status => [:valid, :present, :missing],
-        :coax_rt_status => [:valid, :present, :missing]
+        :low_aoe_status => [:valid, :present, :missing, :unknown],
+        :high_aoe_status => [:valid, :present, :missing, :unknown],
+        :lq_status => [:valid, :present, :missing, :unknown],
+        :ann_status => [:valid, :present, :missing, :unknown],
+        :coax_rt_status => [:valid, :present, :missing, :unknown]
     )
     return base_hierarchies
 end
