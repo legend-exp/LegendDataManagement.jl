@@ -137,7 +137,12 @@ In addition, when creating a `Simulation`, all simulation functions in SolidStat
 using LegendDataManagement
 using SolidStateDetectors
 
-sim = Simulation(LegendData, "V99000A.yaml", "V99000.yaml")
+T=Float32
+didode_data=LegendDataManagement.readlprops("V99000A.yaml")
+crystal_data=LegendDataManagement.readlprops("V99000.yaml")
+
+
+sim = Simulation{T}(LegendData, diode_data, crystal_data)
 simulate!(sim) # calculate electric field and weighting potentials
 
 using LegendHDF5IO
