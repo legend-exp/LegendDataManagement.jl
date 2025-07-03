@@ -120,35 +120,70 @@ _load_all_keys(arr::AbstractArray, n_evts::Int=-1) = arr[:][if (n_evts < 1 || n_
 _load_all_keys(t::Table, n_evts::Int=-1) = t[:][if (n_evts < 1 || n_evts > length(t)) 1:length(t) else rand(1:length(t), n_evts) end]
 _load_all_keys(x, n_evts::Int=-1) = x
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, ChannelOrDetectorIdLike}; n_evts::Int=-1, ignore_missing::Bool=false, parallel::Bool=false, wpool::WorkerPool=default_worker_pool())
-    tier, filekey, ch = DataTier(rsel[1]), rsel[2], if !isempty(string((rsel[3]))) _get_channelid(data, rsel[2], rsel[3]) else rsel[3] end
+function LegendDataManagement.read_ldata(
+    f::Base.Callable,
+    data::LegendData,
+    rsel::Tuple{DataTierLike, FileKey, ChannelOrDetectorIdLike};
+    n_evts::Int = -1,
+    ignore_missing::Bool = false,
+    parallel::Bool = false,
+    wpool::WorkerPool = default_worker_pool()
+)
+    tier, filekey, ch = DataTier(rsel[1]), rsel[2], rsel[3]
     _lh5_data_open(data, tier, filekey, ch) do h
-        if !isempty(string((ch))) && !haskey(h, "$ch")
-            if ignore_missing
-                @warn "Channel $ch not found in $(basename(string(h.data_store)))"
-                return nothing
-            else
-                throw(ArgumentError("Channel $ch not found in $(basename(string(h.data_store)))"))
+        ch_str = string(ch)
+        correct_key = nothing
+        # 1. Check if the key exists directly in the file (works for both channel IDs and detector names)
+        if haskey(h, ch_str)
+            correct_key = ch_str
+        else
+            mapped = false
+            # 2. Try mapping channel ID → detector name 
+            try
+                period = filekey.period
+                run = filekey.run
+                category = filekey.category
+                chinfo = channelinfo(data, (period, run, category, ch_str))
+                detname = string(chinfo.detector)
+                if haskey(h, detname)
+                    correct_key = detname
+                    mapped = true
+                end
+            catch
+                # ignore, try next mapping
+            end
+            # 3. Try mapping detector name → channel ID 
+            if !mapped
+                try
+                    period = filekey.period
+                    run = filekey.run
+                    category = filekey.category
+                    chinfo = channelinfo(data, (period, run, category, ch_str))
+                    chanid = string(chinfo.channel)
+                    if haskey(h, chanid)
+                        correct_key = chanid
+                        mapped = true
+                    end
+                catch
+                    # ignore, will throw error below if nothing found
+                end
+            end
+            if correct_key === nothing
+                if ignore_missing
+                    @warn "Neither channel $ch_str nor mapped detector/channel found in $(basename(string(h.data_store)))"
+                    return nothing
+                else
+                    throw(ArgumentError("Neither channel $ch_str nor mapped detector/channel found in $(basename(string(h.data_store)))"))
+                end
             end
         end
+        # Load the data 
         if f == identity
-            if !isempty(string((ch)))
-                _load_all_keys(h[ch, tier], n_evts)
-            else
-                _load_all_keys(h[tier], n_evts)
-            end
+            _load_all_keys(h[correct_key, tier], n_evts)
         elseif f isa PropSelFunction
-            if !isempty(string((ch)))
-                _load_all_keys(getproperties(_propfunc_columnnames(f))(h[ch, tier]), n_evts)
-            else
-                _load_all_keys(getproperties(_propfunc_columnnames(f))(h[tier]), n_evts)
-            end
+            _load_all_keys(getproperties(_propfunc_columnnames(f))(h[correct_key, tier]), n_evts)
         else
-            result = if !isempty(string((ch)))
-                f.(_load_all_keys(h[ch, tier], n_evts))
-            else
-                f.(_load_all_keys(h[tier], n_evts))
-            end
+            result = f.(_load_all_keys(h[correct_key, tier], n_evts))
             if result isa AbstractVector{<:NamedTuple}
                 Table(result)
             else
