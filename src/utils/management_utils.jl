@@ -48,11 +48,11 @@ get_mltrainfilename(data::LegendData, filekey::FileKey) = get_mltrainfilename(da
 
 
 
-function get_partition_channelinfo(data::LegendData, chinfo::Table, period::DataPeriodLike; unfold_partitions::Bool=false)
+function get_partition_channelinfo(data::LegendData, chinfo::Table, period::DataPeriodLike; unfold_partitions::Bool=false, category::DataCategoryLike = :all, grouptype::Symbol = :cal)
     # get partition information for given period
     period = DataPeriod(period)
     # get partition information for given period and channels
-    parts = partitioninfo.(data, chinfo.channel, period)
+    parts = partitioninfo.(Ref(data), chinfo.detector, Ref(period); category, grouptype)
     t = StructArray(merge((partition = parts, ), columns(chinfo)))
     if unfold_partitions
         t_unfold = t |> filterby(@pf length($partition) > 1)
