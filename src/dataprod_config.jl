@@ -104,7 +104,7 @@ export pydataprod_parameters
 
 const _cached_partitioninfo = LRU{Tuple{UInt, Symbol, Symbol}, IdDict{DataPartition, Table}}(maxsize = 300)
 
-function _get_partitions(data::LegendData, label::Symbol; category::DataCategoryLike = :all, grouptype::Symbol = :cal)
+function _get_partitions(data::LegendData, label::Symbol; category::DataCategoryLike = :all, grouptype::DataCategoryLike = :cal)
     
     rinfo = runinfo(data)
     pd = IdDict{Symbol, Vector{Tuple{DataPeriod, DataRun}}}()

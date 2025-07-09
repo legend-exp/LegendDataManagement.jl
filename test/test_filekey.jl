@@ -27,6 +27,12 @@ using Unitful
     @test @inferred(string(category)) == "cal"
     @test @inferred(DataCategory("cal")) == category
 
+    p = DataPartition("calgroup001a")
+    @test p.no == 1
+    @test p.set == :a
+    @test p.cat == DataCategory(:calgroup)
+    @test string(p) == "calgroup001a"
+
     timestamp = @inferred(Timestamp("20221226T200846Z"))
     @test timestamp.unixtime == 1672085326
     @test @inferred(string(timestamp)) == "20221226T200846Z"
