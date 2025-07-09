@@ -6,8 +6,9 @@ using LegendDataManagement.LDMUtils: detector2channel
 using LegendDataManagement: RunCategorySelLike
 using LegendHDF5IO
 using LegendDataTypes: fast_flatten, flatten_by_key
+using StructArrays
 using TypedTables, PropertyFunctions
-using Distributed
+using Distributed, ProgressMeter
 
 const ChannelOrDetectorIdLike = Union{ChannelIdLike, DetectorIdLike}
 const AbstractDataSelectorLike = Union{AbstractString, Symbol, DataTierLike, DataCategoryLike, DataPeriodLike, DataRunLike, DataPartitionLike, ChannelOrDetectorIdLike}
@@ -113,16 +114,19 @@ _skipnothingmissing(xv::AbstractVector) = [x for x in skipmissing(xv) if !isnoth
 lflatten(x) = fast_flatten(collect(_skipnothingmissing(x)))
 lflatten(nt::AbstractVector{<:NamedTuple}) = flatten_by_key(collect(_skipnothingmissing(nt)))
 
-_propfunc_columnnames(f::PropSelFunction{cols}) where cols = cols
+_propfunc_src_columnnames(f::PropSelFunction{src_cols, trg_cols}) where {src_cols, trg_cols} = src_cols
+_propfunc_trg_columnnames(f::PropSelFunction{src_cols, trg_cols}) where {src_cols, trg_cols} = trg_cols
 
 _load_all_keys(nt::NamedTuple, n_evts::Int=-1) = if length(nt) == 1 _load_all_keys(nt[first(keys(nt))], n_evts) else NamedTuple{keys(nt)}(map(x -> _load_all_keys(nt[x], n_evts), keys(nt))) end
 _load_all_keys(arr::AbstractArray, n_evts::Int=-1) = arr[:][if (n_evts < 1 || n_evts > length(arr)) 1:length(arr) else rand(1:length(arr), n_evts) end]
 _load_all_keys(t::Table, n_evts::Int=-1) = t[:][if (n_evts < 1 || n_evts > length(t)) 1:length(t) else rand(1:length(t), n_evts) end]
 _load_all_keys(x, n_evts::Int=-1) = x
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, ChannelOrDetectorIdLike}; n_evts::Int=-1, ignore_missing::Bool=false, parallel::Bool=false, wpool::WorkerPool=default_worker_pool())
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, ChannelOrDetectorIdLike}; filterby::Base.Callable=Returns(true), filtertier::DataTierLike=first(rsel), n_evts::Int=-1, ignore_missing::Bool=false, parallel::Bool=false, wpool::WorkerPool=default_worker_pool())
     tier, filekey, ch = DataTier(rsel[1]), rsel[2], if !isempty(string((rsel[3]))) _get_channelid(data, rsel[2], rsel[3]) else rsel[3] end
+    ch_tier = "$ch/$tier"
     _lh5_data_open(data, tier, filekey, ch) do h
+        # check if channel exists in file or should be ignored
         if !isempty(string((ch))) && !haskey(h, "$ch")
             if ignore_missing
                 @warn "Channel $ch not found in $(basename(string(h.data_store)))"
@@ -131,28 +135,23 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
                 throw(ArgumentError("Channel $ch not found in $(basename(string(h.data_store)))"))
             end
         end
-        if f == identity
-            if !isempty(string((ch)))
-                _load_all_keys(h[ch, tier], n_evts)
+        
+        # load channel data
+        if f == identity && filterby == Returns(true)
+            Table(_load_all_keys(h[ch, tier], n_evts))
+        elseif f isa PropSelFunction && filterby == Returns(true)
+            # if no filter given optimize performance for property selection functions by only loading required columns
+            Table(if length(_propfunc_src_columnnames(f)) == 1
+                StructArray(_load_all_keys(getproperties(_propfunc_src_columnnames(f))(h[ch_tier]), n_evts))
             else
-                _load_all_keys(h[tier], n_evts)
-            end
-        elseif f isa PropSelFunction
-            if !isempty(string((ch)))
-                _load_all_keys(getproperties(_propfunc_columnnames(f))(h[ch, tier]), n_evts)
-            else
-                _load_all_keys(getproperties(_propfunc_columnnames(f))(h[tier]), n_evts)
-            end
+                StructArray(NamedTuple{_propfunc_trg_columnnames(f)}(Tuple(values(columns(_load_all_keys(getproperties(_propfunc_src_columnnames(f))(h[ch_tier]), n_evts))))))
+            end)
         else
-            result = if !isempty(string((ch)))
-                f.(_load_all_keys(h[ch, tier], n_evts))
+            lh5_data = f.(_load_all_keys(h[ch, tier], n_evts) |> PropertyFunctions.filterby(filterby))
+            if TypedTables.Tables.istable(lh5_data)
+                Table(StructArray(lh5_data))
             else
-                f.(_load_all_keys(h[tier], n_evts))
-            end
-            if result isa AbstractVector{<:NamedTuple}
-                Table(result)
-            else
-                result
+                lh5_data
             end
         end
     end
@@ -178,16 +177,17 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
 end
 
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, AbstractVector{FileKey}, ChannelOrDetectorIdLike}; parallel::Bool=false, wpool::WorkerPool=default_worker_pool(), kwargs...)
+    first_fk = first(rsel[2])
+    p = Progress(length(rsel[2]), desc="Reading from $(first_fk.setup)-$(first_fk.period)-$(first_fk.run)-$(first_fk.category)", showspeed=true)
     lflatten(if parallel
-                # TODO: Can we also allow this to be started from other processes?
-                @assert Distributed.myid() == 1 "Parallel read is currently only supported on the main worker process"
+                # TODO: Check if wpool is connected via :master_worker if myid() != 1
                 @debug "Parallel read with $(length(workers())) workers from $(length(rsel[2])) filekeys"
-                pmap(wpool, rsel[2]) do fk
+                progress_pmap(wpool, rsel[2]; progress=p) do fk
                     LegendDataManagement.read_ldata(f, data, ifelse(!isempty(string(rsel[3])), (rsel[1], fk, rsel[3]),  (rsel[1], fk)); kwargs...)
                 end
             else
                 @debug "Sequential read from $(length(rsel[2])) filekeys"
-                map(rsel[2]) do fk
+                progress_map(rsel[2]; progress=p) do fk
                     LegendDataManagement.read_ldata(f, data, ifelse(!isempty(string(rsel[3])), (rsel[1], fk, rsel[3]),  (rsel[1], fk)); kwargs...)
                 end
             end)
@@ -257,16 +257,16 @@ end
 const _partinfo_required_cols = NamedTuple{(:period, :run), Tuple{DataPeriod, DataRun}}
 
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, DataCategoryLike, Table{_partinfo_required_cols}, ChannelOrDetectorIdLike}; parallel::Bool=false, wpool::WorkerPool=default_worker_pool(), kwargs...)
+    p = Progress(length(rsel[3]), desc="Reading from $(length(rsel[3])) runs", showspeed=true)
     lflatten(if parallel
-                # TODO: Can we also allow this to be started from other processes?
-                @assert Distributed.myid() == 1 "Parallel read is currently only supported on the main worker process"
+                # TODO: Check if wpool is connected via :master_worker if myid() != 1
                 @debug "Parallel read with $(length(workers())) workers from $(length(rsel[3])) runs"
-                pmap(wpool, rsel[3]) do r
+                progress_pmap(wpool, rsel[3]; progress=p) do r
                     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], r.period, r.run, rsel[4]); parallel, wpool, kwargs...)
                 end
             else
                 @debug "Sequential read from $(length(rsel[3])) runs"
-                map(rsel[3]) do r
+                progress_map(rsel[3]; progress=p) do r
                     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], r.period, r.run, rsel[4]); parallel=false, kwargs...)
                 end
             end)
