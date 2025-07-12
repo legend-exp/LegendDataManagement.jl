@@ -35,7 +35,7 @@ using TypedTables
         @test read_ldata(l200_lh5, tier, cat, period, run, ch).timestamp == data_fk.timestamp
         @test read_ldata(:timestamp, l200_lh5, tier, cat, period, run, ch).timestamp == data_fk.timestamp
         @test read_ldata((:timestamp, :baseline), l200_lh5, tier, cat, period, run, ch).timestamp == data_fk.timestamp
-        @test read_ldata(@pf($timestamp * $baseline), l200_lh5, tier, cat, period, run, ch) == data_fk.timestamp .* data_fk.baseline
+        @test read_ldata((@pf (; bltime = $timestamp * $baseline, )), l200_lh5, tier, cat, period, run, ch).bltime == data_fk.timestamp .* data_fk.baseline
         @test read_ldata(l200_lh5, tier, fk, ch).timestamp == data_fk.timestamp
         @test read_ldata(l200_lh5, tier, cat, period, run) isa TypedTables.Table
 
@@ -44,9 +44,16 @@ using TypedTables
         @test read_ldata(l200_lh5, tier, cat, period, run, ch; parallel=true).timestamp == data_fk.timestamp
         @test read_ldata(:timestamp, l200_lh5, tier, cat, period, run, ch; parallel=true).timestamp == data_fk.timestamp
         @test read_ldata((:timestamp, :baseline), l200_lh5, tier, cat, period, run, ch; parallel=true).timestamp == data_fk.timestamp
-        @test read_ldata(@pf($timestamp * $baseline), l200_lh5, tier, cat, period, run, ch; parallel=true) == data_fk.timestamp .* data_fk.baseline
+        @test read_ldata((@pf (; bltime = $timestamp * $baseline, )), l200_lh5, tier, cat, period, run, ch; parallel=true).bltime == data_fk.timestamp .* data_fk.baseline
         @test read_ldata(l200_lh5, tier, fk, ch; parallel=true).timestamp == data_fk.timestamp
         @test read_ldata(l200_lh5, tier, cat, period, run; parallel=true) isa TypedTables.Table
+
+        # test filterby
+        @test read_ldata(l200_lh5, tier, cat, period, run, ch; filterby=@pf($daqenergy > 1000)) isa TypedTables.Table
+        @test all(read_ldata(l200_lh5, tier, cat, period, run, ch; filterby=@pf($daqenergy > 1000)).daqenergy .> 1000)
+        @test read_ldata(:timestamp, l200_lh5, tier, cat, period, run, ch; filterby=@pf($daqenergy > 1000)).timestamp == data_fk.timestamp[findall(data_fk.daqenergy .> 1000)]        
+        @test read_ldata((:timestamp, :baseline), l200_lh5, tier, cat, period, run, ch; filterby=@pf($daqenergy > 1000)).timestamp == data_fk.timestamp[findall(data_fk.daqenergy .> 1000)]
+        @test read_ldata((@pf (; bltime = $timestamp * $baseline, )), l200_lh5, tier, cat, period, run, ch; filterby=@pf($daqenergy > 1000)).bltime == data_fk.timestamp[findall(data_fk.daqenergy .> 1000)] .* data_fk.baseline[findall(data_fk.daqenergy .> 1000)]
         
         # test multi run read
         #ToDo: update legend-testdata to make possible

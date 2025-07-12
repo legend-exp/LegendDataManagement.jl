@@ -122,6 +122,8 @@ _load_all_keys(arr::AbstractArray, n_evts::Int=-1) = arr[:][if (n_evts < 1 || n_
 _load_all_keys(t::Table, n_evts::Int=-1) = t[:][if (n_evts < 1 || n_evts > length(t)) 1:length(t) else rand(1:length(t), n_evts) end]
 _load_all_keys(x, n_evts::Int=-1) = x
 
+const _evt_tiers = DataTier.([:jlevt, :jlskm])
+
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, ChannelOrDetectorIdLike}; filterby::Base.Callable=Returns(true), filtertier::DataTierLike=first(rsel), n_evts::Int=-1, ignore_missing::Bool=false, parallel::Bool=false, wpool::WorkerPool=default_worker_pool())
     tier, filekey, ch = DataTier(rsel[1]), rsel[2], if !isempty(string((rsel[3]))) _get_channelid(data, rsel[2], rsel[3]) else rsel[3] end
     ch_tier = "$ch/$tier"
@@ -137,19 +139,23 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
         end
         
         # load channel data
-        if f == identity && filterby == Returns(true)
-            Table(_load_all_keys(h[ch, tier], n_evts))
-        elseif f isa PropSelFunction && filterby == Returns(true)
+        if f isa PropSelFunction && filterby == Returns(true)
             # if no filter given optimize performance for property selection functions by only loading required columns
             Table(if length(_propfunc_src_columnnames(f)) == 1
-                StructArray(_load_all_keys(getproperties(_propfunc_src_columnnames(f))(h[ch_tier]), n_evts))
+                NamedTuple{_propfunc_trg_columnnames(f)}([_load_all_keys(getproperty(only(_propfunc_src_columnnames(f)))(h[ch_tier]), n_evts)])
             else
-                StructArray(NamedTuple{_propfunc_trg_columnnames(f)}(Tuple(values(columns(_load_all_keys(getproperties(_propfunc_src_columnnames(f))(h[ch_tier]), n_evts))))))
+                NamedTuple{_propfunc_trg_columnnames(f)}(Tuple(values(columns(_load_all_keys(getproperties(_propfunc_src_columnnames(f))(h[ch_tier]), n_evts)))))
             end)
         else
-            lh5_data = f.(_load_all_keys(h[ch, tier], n_evts) |> PropertyFunctions.filterby(filterby))
+            lh5_data = _load_all_keys(h[ch, tier], n_evts) 
+            if filterby != Returns(true)
+                lh5_data = lh5_data |> PropertyFunctions.filterby(filterby)
+            end
+            if f != identity
+                lh5_data = f.(lh5_data)
+            end
             if TypedTables.Tables.istable(lh5_data)
-                Table(StructArray(lh5_data))
+                Table(lh5_data)
             else
                 lh5_data
             end
