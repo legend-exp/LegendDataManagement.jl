@@ -126,10 +126,10 @@ const _evt_tiers = DataTier.([:jlevt, :jlskm])
 
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, ChannelOrDetectorIdLike}; filterby::Base.Callable=Returns(true), filtertier::DataTierLike=first(rsel), n_evts::Int=-1, ignore_missing::Bool=false, parallel::Bool=false, wpool::WorkerPool=default_worker_pool())
     tier, filekey, ch = DataTier(rsel[1]), rsel[2], if !isempty(string((rsel[3]))) _get_channelid(data, rsel[2], rsel[3]) else rsel[3] end
-    ch_tier = "$ch/$tier"
-    _lh5_data_open(data, tier, filekey, ch) do h
+    ch_tier = tier in _evt_tiers ? "/$tier" : "$ch/$tier"
+    data_tier = _lh5_data_open(data, tier, filekey, ch) do h
         # check if channel exists in file or should be ignored
-        if !isempty(string((ch))) && !haskey(h, "$ch")
+        if !isempty(string((ch))) && !(tier in _evt_tiers) && !haskey(h, "$ch")
             if ignore_missing
                 @warn "Channel $ch not found in $(basename(string(h.data_store)))"
                 return nothing
@@ -147,7 +147,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
                 NamedTuple{_propfunc_trg_columnnames(f)}(Tuple(values(columns(_load_all_keys(getproperties(_propfunc_src_columnnames(f))(h[ch_tier]), n_evts)))))
             end)
         else
-            lh5_data = _load_all_keys(h[ch, tier], n_evts) 
+            lh5_data = _load_all_keys(h[ch_tier], n_evts)
             if filterby != Returns(true)
                 lh5_data = lh5_data |> PropertyFunctions.filterby(filterby)
             end
@@ -160,6 +160,11 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
                 lh5_data
             end
         end
+    end
+    if tier in _evt_tiers && !isempty(string(ch))
+        data_tier[any.(map.(isequal(Int(ch)), data_tier.geds.trig_e_ch))]
+    else
+        data_tier
     end
 end
 
