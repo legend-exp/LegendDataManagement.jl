@@ -96,6 +96,12 @@ dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, det)
 ```
 In case, a `ChannelId` is missing in a file, the function will throw an `ArgumentError`. To avoid this and return `nothing` instead, you can use the `ignore_missing` keyword argument.
 
+The data can be filtered by a `filterby` keyword argument which is a [PropertyFunction](https://github.com/oschulz/PropertyFunctions.jl/tree/main) applied to each chunk of loaded data:
+```julia
+dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, ch; filterby=@pf($e_trap > 0.0))
+```
+This will only load data where the `e_trap` property is greater than 0.
+
 It is possible to read in multiple files in parallel using the `Distributed` functionalities from within a session. You can activate parallel read with the `parallel` kwarg.
 ``` julia
 dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), ch)
