@@ -99,18 +99,20 @@ end
 export create_validity
 
 """
-    get_partitionvalidity(data::LegendData, ch::ChannelIdLike, part::DataPartitionLike, cat::DataCategoryLike=:cal) -> Vector{@NamedTuple{period::DataPeriod, run::DataRun, validity::String}}
+    get_partitionvalidity(data::LegendData, part::DataPartitionLike) -> Vector{@NamedTuple{period::DataPeriod, run::DataRun, validity::String}}
 
 Get partition validity for a given channel and partition.
 """
-function get_partitionvalidity(data::LegendData, ch::ChannelIdLike, det::DetectorIdLike, part::DataPartitionLike, cat::DataCategoryLike=:cal)
+function get_partitionvalidity(data::LegendData, det::DetectorIdLike, part::DataPartitionLike)
     # unpack
-    ch, det, part = ChannelId(ch), DetectorId(det), DataPartition(part)
+    det, part = DetectorId(det), DataPartition(part)
     # get partition validity
-    partinfo = partitioninfo(data, ch, part; category=cat)
+    partinfo = partitioninfo(data, det, part)
     Vector{@NamedTuple{period::DataPeriod, run::DataRun, filekey::FileKey, validity::String}}([(period = pinf.period, run = pinf.run, filekey = start_filekey(data, (pinf.period, pinf.run, cat)), validity = "$det/$(part).yaml") for pinf in partinfo])
 end
 export get_partitionvalidity
+# dropped unecessaty ch argument, keep old function functionality for now
+@deprecate get_partitionvalidity(data::LegendData, ch::ChannelIdLike, det::DetectorIdLike, part::DataPartitionLike, cat::DataCategoryLike=:cal) get_partitionvalidity(data, det, part)
 
 """
     detector2channel(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, detector::DetectorIdLike)

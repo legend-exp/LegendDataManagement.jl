@@ -62,7 +62,7 @@ _lprops2props(nt::NamedTuple) = _lprops2props(PropDict(pairs(nt)))
 
 """
     readlprops(filename::AbstractString)
-    readprops(filenames::Vector{<:AbstractString}) 
+    readlprops(filenames::Vector{<:AbstractString}) 
 
 
 Read a PropDict from a file and parse it to `Unitful.Quantity` and `Measurements.Measurement` objects.

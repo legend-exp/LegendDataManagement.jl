@@ -277,7 +277,7 @@ export DataCategory
 Base.:(==)(a::DataCategory, b::DataCategory) = a.label == b.label
 Base.isless(a::DataCategory, b::DataCategory) = isless(a.label, b.label)
 
-const category_expr = r"^[a-z]{3,10}$"
+const category_expr = r"^[a-z]{3}$"
 
 _can_convert_to(::Type{DataCategory}, s::AbstractString) = !isnothing(match(category_expr, s))
 _can_convert_to(::Type{DataCategory}, s::Symbol) = _can_convert_to(DataCategory, string(s))
@@ -287,7 +287,7 @@ _can_convert_to(::Type{DataCategory}, s) = false
 function DataCategory(s::AbstractString)
     _can_convert_to(DataCategory, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data category"))
     length(s) < 3 && throw(ArgumentError("String \"$s\" is too short to be a valid LEGEND data category"))
-    length(s) > 10 && throw(ArgumentError("String \"$s\" is too long to be a valid LEGEND data category"))
+    length(s) > 6 && throw(ArgumentError("String \"$s\" is too long to be a valid LEGEND data category"))
     DataCategory(Symbol(s))
 end
 
@@ -333,13 +333,13 @@ const RunCategorySelLike = Tuple{<:DataPeriodLike, <:DataRunLike, <:DataCategory
 """
     struct DataPartition <: DataSelector
 
-Represents a LEGEND data-taking partition.
+Represents a LEGEND data-taking partition. If only a number is given, the struct uses category :caln and set :a as default.
 
 Example:
 
 ```julia
 partition = DataPartition(1)
-partition.cat = :calgroup
+partition.cat = :cal
 partition.no == 1
 partition.set == :a
 string(partition) == "calgroup001a"
@@ -350,7 +350,7 @@ struct DataPartition <: DataSelector
     no::Int
     set::Symbol
     cat::DataCategory
-    DataPartition(no::Int, set::Symbol = :a, cat::DataCategory = DataCategory(:calgroup)) = new(no, set, cat)
+    DataPartition(no::Int, set::Symbol = :a, cat::DataCategory = DataCategory(:cal)) = new(no, set, cat)
 end
 export DataPartition
 
@@ -359,10 +359,10 @@ Base.:(==)(a::DataPartition, b::DataPartition) = a.no == b.no && a.set == b.set 
 Base.isless(a::DataPartition, b::DataPartition) = isless(a.no, b.no) && isless(a.set, b.set)
 
 # ToDo: Improve implementation
-Base.print(io::IO, partition::DataPartition) = print(io, "$(partition.cat.label)$(lpad(string(partition.no), 3, string(0)))$(partition.set)")
+Base.print(io::IO, partition::DataPartition) = print(io, "$(partition.cat.label)group$(lpad(string(partition.no), 3, string(0)))$(partition.set)")
 Base.show(io::IO, partition::DataPartition) = print(io, "DataPartition($partition)")
 
-const partition_expr = r"^(part|calgroup|phygroup)([0-9]{2,3})([A-Za-z])$"
+const partition_expr = r"^([a-z]{3})group([0-9]{2,3})([A-Za-z])$"
 
 _can_convert_to(::Type{DataPartition}, s::AbstractString) = !isnothing(match(partition_expr, s))
 _can_convert_to(::Type{DataPartition}, s::Symbol) = _can_convert_to(DataPartition, string(s))
