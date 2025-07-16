@@ -148,10 +148,7 @@ Return cross-period data partitions.
 # Arguments
 - `data::LegendData`: The LegendData object containing the data.
 - `det::DetectorIdLike`: The ID of the detector.
-
-# Keyword Arguments
-- `category::DataCategoryLike`: Filter data rows based on analysis category. Default: `:all`
-- `grouptype::Symbol`: Select which groupings to use (`:cal`, `:phy`). Default: `:cal`
+- `category::DataCategoryLike`: Analysis category to select groupings, e.g. `:cal`, `:phy`.
 
 # Returns
 - `IdDict{DataPartition, Table}`: A dictionary mapping data partitions to tables.

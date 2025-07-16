@@ -10,7 +10,7 @@ using PropertyDicts
 using StructArrays
 using Unitful
 using Format
-using JSON
+using YAML
 using Dates
 using Measurements
 using Measurements: ±

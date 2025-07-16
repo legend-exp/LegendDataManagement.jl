@@ -272,7 +272,9 @@ function _load_validity(validity_path::AbstractString; mode_default::AbstractStr
     if isfile(validity_path)
         # TODO: Cannot use readlprops here because this can be a Vector of PropDicts and not a PropDict
         #       Can readlprops be updated so that we can drop the explicit YAML dependency here?
-        entries = PropDict.(YAML.load_file(validity_path))
+        raw = YAML.load_file(validity_path)
+        entries = PropDict.(raw === nothing ? [] : raw)
+
         new_validity = _ValidityDict()
         for props in entries
             valid_from = Timestamp(props.valid_from)

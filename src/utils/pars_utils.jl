@@ -41,45 +41,87 @@ function writevalidity(props_db::LegendDataManagement.MaybePropsDB, filekey::Fil
     Distributed.remotecall_fetch(_writevalidity_impl, 1, props_db, filekey, apply; category=category, write_from_master= (Distributed.myid() == 1))
 end
 const _writevalidity_lock = ReentrantLock()
-function _writevalidity_impl(props_db::LegendDataManagement.MaybePropsDB, filekey::FileKey, apply::Vector{String}; category::DataCategoryLike=:all, write_from_master::Bool=true)
-    # write validity
+function _writevalidity_impl(props_db::LegendDataManagement.MaybePropsDB, filekey::FileKey, apply::Vector{String};
+    category::DataCategoryLike = :all, mode::AbstractString = "reset", write_from_master::Bool = true)
+
     @lock _writevalidity_lock begin
-        # get timestamp from filekey
-        pars_validTimeStamp = string(filekey.time)
-        # get validity filename and check if exists
-        validity_filename = joinpath(data_path(props_db), validity_filename)
-        mkpath(dirname(validity_filename))
-        touch(validity_filename)
-        # check if validity already written
-        validity_lines = readlines(validity_filename)
-        # check if given validity already exists
-        is_validity = findall(x -> contains(x, "$pars_validTimeStamp") && contains(x, "$(string(category))"), validity_lines)
-        if isempty(is_validity)
-            if write_from_master @info "Write new validity for $pars_validTimeStamp" end
-            push!(validity_lines, "{\"valid_from\":\"$pars_validTimeStamp\", \"category\":\"$(string(category))\", \"apply\":[\"$(join(sort(apply), "\", \""))\"]}")
-        elseif length(is_validity) == 1
-            if write_from_master @info "Merge old $pars_validTimeStamp $(string(category)) validity entry" end
-            apply = unique(append!(Vector{String}(JSON.parse(validity_lines[first(is_validity)])["apply"]), apply))
-            validity_lines[first(is_validity)] = "{\"valid_from\":\"$pars_validTimeStamp\", \"category\":\"$(string(category))\", \"apply\":[\"$(join(sort(apply), "\", \""))\"]}"
-        end
-        # write validity
-        open(validity_filename, "w") do io
-            for line in sort(validity_lines)
-                println(io, line)
+        # locate & create file if missing
+        dst = joinpath(data_path(props_db), "validity.yaml")
+        mkpath(dirname(dst))
+        if !isfile(dst)
+            open(dst, "w") do io
+                println(io, "[]")
             end
         end
+
+        # load or initialize the vector of entries
+        raw     = YAML.load_file(dst)
+        entries = raw isa Vector ? raw : Any[]
+
+        ts = string(filekey.time)
+
+        # drop any previous entry with the same timestamp
+        filter!(e -> e["valid_from"] != ts, entries)
+
+        # build a Dict containing the validity to be saved
+        entry = Dict{String,Any}()
+        entry["valid_from"] = ts
+        entry["apply"]      = apply
+        entry["category"]   = category
+        entry["mode"]       = mode
+        push!(entries, entry)
+        
+        write_from_master && @info "Write validity for $ts"
+
+        # sort the entries by timestamp
+        sort!(entries, by = e -> e["valid_from"])
+
+        function write_entries_ordered(dst, entries)
+            open(dst, "w") do io
+                for e in entries
+                    println(io, "- valid_from: ", e["valid_from"])
+
+                    println(io, "  apply:")
+                    for path in e["apply"]
+                        println(io, "    - ", path)
+                    end
+
+                    println(io, "  category: ", e["category"])
+                    println(io, "  mode: ", e["mode"])
+                    println(io)  # newline between entries
+                end
+            end
+        end
+
+        # emit valid YAML, with each Dict’s keys in insertion order
+        write_entries_ordered(dst, entries)
     end
 end
 writevalidity(props_db, filekey, apply::String; kwargs...) = writevalidity(props_db, filekey, [apply]; kwargs...)
 writevalidity(props_db, filekey, rsel::Tuple{DataPeriod, DataRun}; kwargs...) = writevalidity(props_db, filekey, "$(first(rsel))/$(last(rsel)).yaml"; kwargs...)
 writevalidity(props_db, filekey, part::DataPartition; kwargs...) = writevalidity(props_db, filekey, "$(part).yaml"; kwargs...)
 function writevalidity(props_db::LegendDataManagement.MaybePropsDB, validity::StructVector{@NamedTuple{period::DataPeriod, run::DataRun, filekey::FileKey, validity::String}}; kwargs...)
-    # get unique runs and periods for the individual entries 
-    runsel = unique([(row.period, row.run) for row in validity])
-    # write validity for each run and period
-    for (period, run) in runsel
-        val = filter(row -> row.period == period && row.run == run, validity)
-        writevalidity(props_db, first(val.filekey), val.validity; kwargs...)
+    # Dictionary to store the best (earliest) row per unique validity string
+    best_by_validity = Dict{String, NamedTuple}()
+
+    # Iterate over all validity entries; keep smallest timestamp for each unique "apply"
+    for row in validity
+        key = row.validity
+        if haskey(best_by_validity, key)
+            if row.filekey.time < best_by_validity[key].filekey.time
+                best_by_validity[key] = row
+            end
+        else
+            best_by_validity[key] = row
+        end
+    end
+
+    # Sort the selected rows by timestamp for chronological writing
+    sorted_rows = sort(collect(values(best_by_validity)), by = r -> r.filekey.time)
+
+    # Write validity for each unique validity string with smallest timestamp
+    for row in sorted_rows
+        writevalidity(props_db, row.filekey, row.validity; kwargs...)
     end
 end
 
