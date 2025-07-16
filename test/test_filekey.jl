@@ -30,7 +30,7 @@ using Unitful
     p = DataPartition("calgroup001a")
     @test p.no == 1
     @test p.set == :a
-    @test p.cat == DataCategory(:calgroup)
+    @test p.cat == DataCategory(:cal)
     @test string(p) == "calgroup001a"
 
     timestamp = @inferred(Timestamp("20221226T200846Z"))
