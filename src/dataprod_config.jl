@@ -104,18 +104,21 @@ export pydataprod_parameters
 
 const _cached_partitioninfo = LRU{Tuple{UInt, Symbol, Symbol}, IdDict{DataPartition, Table}}(maxsize = 300)
 
-function _get_partitions(data::LegendData, label::Symbol; category::DataCategoryLike = :all)
-    
+function _get_partitions(data::LegendData, label::Symbol, category::DataCategoryLike)
     rinfo = runinfo(data)
-    rinfo_type = typeof(first(runinfo(data)))
-
     pd = IdDict{Symbol, Vector{Tuple{DataPeriod, DataRun}}}()
-    
-    # parse default (and possibly detector-specific) partitions
+
+    # Merge default and Detector-specific partitions
+    if !haskey(data.metadata.datasets, Symbol("$(category)_groupings"))
+        throw(ArgumentError("Groupings for categroy \"$category\" not found"))
+    end
     partitions = merge(
-        data.metadata.datasets.cal_groupings.default,
-        get(data.metadata.datasets.cal_groupings, label, PropDict())
+        (v1, v2) -> v2,
+        data.metadata.datasets[Symbol("$(category)_groupings")].default,
+        get(data.metadata.datasets[Symbol("$(category)_groupings")], label, PropDict()),
     )
+
+    # Convert partition definitions into a mapping from detector name to (period, run) tuples
     for (n, pr) in partitions
         pd[n] = Tuple{DataPeriod, DataRun}[]
         for (p, r) in pr
@@ -123,24 +126,29 @@ function _get_partitions(data::LegendData, label::Symbol; category::DataCategory
         end
     end
 
-    # create the Tables
-    IdDict(DataPartition.(keys(pd)) .=> Table.((filter(row -> (row.period, row.run) in pr && (category == :all || getproperty(row, category).is_analysis_run), rinfo) for pr in values(pd))))
+    # Keep only period, run, and the selected category
+    IdDict(DataPartition.(keys(pd)) .=> [
+        Table(NamedTuple{(:period, :run, category)}((row.period, row.run, getproperty(row, category)))
+            for row in rinfo if (row.period, row.run) in pr && getproperty(row, category).is_analysis_run)
+        for pr in values(pd)
+    ])
 end
 
 
 """
     partitioninfo(data::LegendData, det::DetectorId)::IdDict{DataPartition, Table}
-    partitioninfo(data::LegendData, det::DetectorIdLike, part::DataPartitionLike; category::DataCategoryLike=:all)
-    partitioninfo(data::LegendData, det::DetectorIdLike, period::DataPeriodLike; category::DataCategoryLike=:all)
-    partitioninfo(data, det::DetectorIdLike, period::DataPeriodLike, run::DataRunLike; category::DataCategoryLike=:all)
+    partitioninfo(data::LegendData, det::DetectorIdLike, part::DataPartitionLike; category::DataCategoryLike=:cal)
+    partitioninfo(data::LegendData, det::DetectorIdLike, period::DataPeriodLike; category::DataCategoryLike=:cal)
+    partitioninfo(data, det::DetectorIdLike, period::DataPeriodLike, run::DataRunLike; category::DataCategoryLike=:cal)
 
-    partitioninfo(data::LegendData, ch::ChannelId)
+    partitioninfo(data::LegendData, ch::ChannelId; category::DataCategoryLike=:cal)
 
 Return cross-period data partitions.
 
 # Arguments
 - `data::LegendData`: The LegendData object containing the data.
 - `det::DetectorIdLike`: The ID of the detector.
+- `category::DataCategoryLike`: Analysis category to select groupings, e.g. `:cal`, `:phy`.
 
 # Returns
 - `IdDict{DataPartition, Table}`: A dictionary mapping data partitions to tables.
@@ -148,29 +156,33 @@ Return cross-period data partitions.
 function partitioninfo end
 export partitioninfo
 
-partitioninfo(data::LegendData, det::DetectorIdLike; kwargs...) = _get_partitions(data, Symbol(DetectorId(det)); kwargs...)
-partitioninfo(data, det, part::DataPartition; kwargs...) = partitioninfo(data, det; kwargs...)[part]
-partitioninfo(data, det, period::DataPeriod; kwargs...) = sort(Vector{DataPartition}([p for (p, pinfo) in partitioninfo(data, det; kwargs...) if period in pinfo.period]))
-function partitioninfo(data, det, p::Union{Symbol, AbstractString}; kwargs...)
+partitioninfo(data::LegendData, det::DetectorIdLike, cat::DataCategoryLike) = _get_partitions(data, Symbol(DetectorId(det)), cat)
+partitioninfo(data, det, part::DataPartition) = partitioninfo(data, det, part.cat.label)[part]
+partitioninfo(data, det, cat, period::DataPeriod) = sort(Vector{DataPartition}([p for (p, pinfo) in partitioninfo(data, det, cat) if period in pinfo.period]))
+function partitioninfo(data, det, p::Union{Symbol, AbstractString}, cat::DataCategoryLike)
     if _can_convert_to(DataPartition, p)
-        partitioninfo(data, det, DataPartition(p); kwargs...)
+        partitioninfo(data, det, DataPartition(p))
     elseif _can_convert_to(DataPeriod, p)
-        partitioninfo(data, det, DataPeriod(p); kwargs...)
+        partitioninfo(data, det, cat, DataPeriod(p))
     else 
         throw(ArgumentError("Invalid specification \"$p\". Must be of type DataPartition or DataPeriod"))
     end
 end
-partitioninfo(data, det, period::DataPeriodLike, run::DataRunLike; kwargs...) = sort(Vector{DataPartition}([p for (p, pinfo) in partitioninfo(data, det; kwargs...) if any(map(row -> row.period == DataPeriod(period) && row.run == DataRun(run), pinfo))]))
+partitioninfo(data, det, cat, period::DataPeriodLike, run::DataRunLike) = sort(Vector{DataPartition}([p for (p, pinfo) in partitioninfo(data, det, cat) if any(map(row -> row.period == DataPeriod(period) && row.run == DataRun(run), pinfo))]))
+
+Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, det::DetectorId, p::Vector{<:DataPeriod}, cat::DataCategoryLike) = unique(vcat(f.(Ref(data), Ref(det), Ref(cat), p)...))
+Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, det::DetectorId, p::Vector{<:DataPartition}) = vcat(f.(Ref(data), Ref(det), p)...)
+Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, det::Vector{DetectorId}, p::DataPeriod, cat::DataCategoryLike) = f.(Ref(data), det, Ref(cat), Ref(p))
 
 # support old method where the ChannelId was passed
-function partitioninfo(data::LegendData, ch::ChannelId; kwargs...)
+function partitioninfo(data::LegendData, ch::ChannelId, cat::DataCategoryLike = :cal)
     det = channelinfo(data, first(filter(!ismissing, runinfo(data).cal.startkey)), ch).detector
-    _get_partitions(data, Symbol(ChannelId(ch)); kwargs...)
+    partitioninfo(data, det, cat)
 end
 
-Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, ch::ChannelId, p::Vector{<:DataPeriod}) = unique(vcat(f.(Ref(data), Ref(ch), p)...))
+Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, ch::ChannelId, p::Vector{<:DataPeriod}, cat::DataCategoryLike) = unique(vcat(f.(Ref(data), Ref(ch), Ref(cat), p)...))
 Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, ch::ChannelId, p::Vector{<:DataPartition}) = vcat(f.(Ref(data), Ref(ch), p)...)
-Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, ch::Vector{ChannelId}, p::DataPeriod) = f.(Ref(data), ch, Ref(p))
+Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, ch::Vector{ChannelId}, p::DataPeriod, cat::DataCategoryLike) = f.(Ref(data), ch, Ref(cat), Ref(p))
 
 const _cached_combined_partitions = LRU{Tuple{UInt, Symbol, Vector{Symbol}}, Vector{DataPeriod}}(maxsize = 300)
 
@@ -279,25 +291,44 @@ function analysis_runs end
 export analysis_runs
 
 
-"""
-    cal_groupings_default(data::LegendData)::PropDict
 
-Get all default calibration groupings ("partitions").
-"""
-function cal_groupings_default(data::LegendData)::PropDict
-    cal_analysis_runs = PropDict()
-    for (part, runs) in data.metadata.datasets.cal_groupings.default
-        for (p, rs) in runs
-            cal_analysis_run_p = get!(cal_analysis_runs, p, DataRun[])
-            append!(cal_analysis_run_p, parse_runs(rs))
+const _cached_part_groupings = LRU{Tuple{UInt, DataCategoryLike}, StructVector{@NamedTuple{period::DataPeriod, run::DataRun}}}(maxsize = 10)
+function _groupings_runs(data::LegendData, group_category::DataCategoryLike)
+    Table(sort(get!(_cached_part_groupings, (objectid(data), group_category)) do
+        groupings = data.metadata.datasets[Symbol("$(group_category)_groupings")].default
+
+        flat_pr = Vector{@NamedTuple{period::DataPeriod, run::DataRun}}()
+        for group in values(groupings)  
+            for (p, rs) in group       
+                for r in LegendDataManagement.parse_runs(rs) 
+                    push!(flat_pr, (period = DataPeriod(p), run = r))
+                end
+            end
         end
-    end
-    cal_analysis_runs
+
+        StructArray(flat_pr)
+    end))
 end
+
+"""
+    phy_groupings_default(data::LegendData)
+
+Returns default phy_groupings runs.
+"""
+phy_groupings_default(data::LegendData) = _groupings_runs(data, :phy)
+export phy_groupings_default
+
+
+"""
+    cal_groupings_default(data::LegendData)
+
+Returns default cal_groupings runs.
+"""
+cal_groupings_default(data::LegendData) = _groupings_runs(data, :cal)
+export cal_groupings_default
 
 
 const MaybeFileKey = Union{FileKey, Missing}
-
 const _cached_runinfo = LRU{UInt, Table}(maxsize = 300)
 
 """
@@ -305,43 +336,74 @@ const _cached_runinfo = LRU{UInt, Table}(maxsize = 300)
     runinfo(data::LegendData, runsel::RunSelLike)::NamedTuple
     runinfo(data::LegendData, filekey::FileKey)::NamedTuple
 
-Get the run information for `data`.
+Get the run information for `data` based on various selection criteria.
+
+# Arguments
+- `data::LegendData`: The dataset to query run information from.
+- `runlist::Symbol = :valid`: Specifies which runlist from `data.metadata.datasets.runlists` to use for filtering. Defaults to `:valid`.
+
+# Returns
+A table of run information with one named tuple per category (e.g. `:cal`, `:phy`), each containing `startkey`, `livetime`, and `is_analysis_run`
+
+# Example
+runinfo(data)                                   # full table of valid runs
+runinfo(data, :p03)                             # all runs in period p03
+runinfo(data, (:p03, :r005))                    # single-row Table for that run
+runinfo(data, (:p03, :r005, :phy))              # only the :phy entry
+runinfo(data, fk::FileKey)                      # same as above via FileKey
+runinfo(data; runlist = :custom_list)           # use a custom runlist
 """
-function runinfo(data::LegendData)
+function runinfo(data::LegendData; runlist::Symbol=:valid) #dataset
     get!(_cached_runinfo, objectid(data)) do
         # load runinfo
         rinfo = PropDict(data.metadata.datasets.runinfo)
-        parts_default = cal_groupings_default(data)
         nttype = @NamedTuple{startkey::MaybeFileKey, livetime::typeof(1.0u"s"), is_analysis_run::Bool}
+        phy_groupings = phy_groupings_default(data)
+        cal_groupings = cal_groupings_default(data)
+        
+        runlist_data = get(data.metadata.datasets.runlists, runlist, PropDict())
+        allowed = Set{Tuple{Symbol, Symbol, DataRun}}()
+        for (cat, periods) in runlist_data
+            for (p, rlist) in periods
+                for r in parse_runs(rlist)
+                    push!(allowed, (Symbol(cat), p, r))
+                end
+            end
+        end
+
         function make_row(p, r, ri)
             period::DataPeriod = DataPeriod(p)
             run::DataRun = DataRun(r)
             function get_cat_entry(cat)
                 if haskey(ri, cat)
                     fk = ifelse(haskey(ri[cat], :start_key), FileKey(data.name, period, run, cat, Timestamp(get(ri[cat], :start_key, 1))), missing)
-                    is_ana_run::Bool = (; period, run) in _analysis_runs(data, cat) && !ismissing(fk)
+                    is_ana_run = if cat == :phy
+                        (; period, run) in phy_groupings && !ismissing(fk)
+                    elseif cat == :cal 
+                        (; period, run) in cal_groupings && !ismissing(fk)
+                    else
+                        true
+                    end
                     nttype((fk, get(ri[cat], :livetime_in_s, NaN)*u"s", Bool(is_ana_run)))
                 else
                     nttype((missing, NaN*u"s", Bool(false)))
                 end
             end
-            # is_ana_phy_run = (; period, run) in analysis_runs(data) && !ismissing(get_cat_entry(:phy).startkey)
-            # is_ana_cal_run = "$run" in get(parts_default, period, [])
-            @NamedTuple{period::DataPeriod, run::DataRun, cal::nttype, phy::nttype, fft::nttype}((period, run, get_cat_entry(:cal), get_cat_entry(:phy), get_cat_entry(:fft)))
+            @NamedTuple{period::DataPeriod, run::DataRun, cal::nttype, phy::nttype, fft::nttype, cos::nttype, lac::nttype}((period, run, get_cat_entry(:cal), get_cat_entry(:phy), get_cat_entry(:fft), get_cat_entry(:cos), get_cat_entry(:lac)))
         end
-        periods_and_runs = [[make_row(p, r, ri) for (r, ri) in rs] for (p, rs) in rinfo]
-        flat_pr = sort(StructArray(vcat(periods_and_runs...)::Vector{@NamedTuple{period::DataPeriod, run::DataRun, cal::nttype, phy::nttype, fft::nttype}}))
-        Table(merge(columns(flat_pr), (cal = Table(StructArray(flat_pr.cal)), phy = Table(StructArray(flat_pr.phy)), fft = Table(StructArray(flat_pr.fft)))))
+        periods_and_runs = [[make_row(p, r, ri) for (r, ri) in rs if any((cat -> (cat, p, DataRun(r)) in allowed), (:cal, :phy, :fft, :cos, :lac))] for (p, rs) in rinfo]
+        flat_pr = sort(StructArray(vcat(filter(!isempty, periods_and_runs)...)::Vector{@NamedTuple{period::DataPeriod, run::DataRun, cal::nttype, phy::nttype, fft::nttype, cos::nttype, lac::nttype}}))
+        Table(merge(columns(flat_pr), (cal = Table(StructArray(flat_pr.cal)), phy = Table(StructArray(flat_pr.phy)), fft = Table(StructArray(flat_pr.fft)), cos = Table(StructArray(flat_pr.cos)), lac = Table(StructArray(flat_pr.lac)))))
     end
 end
 export runinfo
 
-runinfo(data::LegendData, period::DataPeriodLike) = runinfo(data) |> filterby(@pf $period == DataPeriod(period))
+runinfo(data::LegendData, period::DataPeriodLike; runlist::Symbol = :valid) = runinfo(data; runlist) |> filterby(@pf $period == DataPeriod(period))
 
-function runinfo(data::LegendData, runsel::RunSelLike)
+function runinfo(data::LegendData, runsel::RunSelLike; runlist::Symbol = :valid)
     period, run = runsel
     period, run = DataPeriod(period), DataRun(run)
-    t = runinfo(data) |> filterby(@pf $period == period && $run == run)
+    t = runinfo(data; runlist) |> filterby(@pf $period == period && $run == run)
     if isempty(t)
         throw(ArgumentError("No run information found for period $period run $run"))
     else
@@ -349,13 +411,13 @@ function runinfo(data::LegendData, runsel::RunSelLike)
     end
 end
 
-function runinfo(data::LegendData, runsel::RunCategorySelLike)
+function runinfo(data::LegendData, runsel::RunCategorySelLike; runlist::Symbol = :valid)
     period, run, category = runsel
     period, run, category = DataPeriod(period), DataRun(run), DataCategory(category)
-    getproperty(runinfo(data, (period, run)), Symbol(category))
+    getproperty(runinfo(data, (period, run); runlist), Symbol(category))
 end
-runinfo(data, fk::FileKey) = runinfo(data, (fk.period, fk.run, fk.category))
-runinfo(data, selectors...) = runinfo(data, selectors)
+runinfo(data, fk::FileKey; runlist::Symbol = :valid) = runinfo(data, (fk.period, fk.run, fk.category); runlist)
+runinfo(data, selectors...; runlist::Symbol = :valid) = runinfo(data, selectors; runlist)
 
 """
     start_filekey(data::LegendData, runsel::RunCategorySelLike)
