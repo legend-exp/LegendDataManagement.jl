@@ -73,7 +73,12 @@ function _writevalidity_impl(props_db::LegendDataManagement.MaybePropsDB, fileke
         sort!(entries, by = e -> e["valid_from"])
         
         # create a new file with the same filename with updated entries
-        YAML.write_file(dst, entries)
+        ParallelProcessingTools.write_files(dst; mode=CreateOrReplace()) do tmpfile
+            open(tmpfile, "w") do io
+                YAML.write(io, entries)
+            end
+        end
+        return nothing
     end
 end
 writevalidity(props_db, filekey, apply::String; kwargs...) = writevalidity(props_db, filekey, [apply]; kwargs...)
