@@ -55,46 +55,25 @@ function _writevalidity_impl(props_db::LegendDataManagement.MaybePropsDB, fileke
         end
 
         # load or initialize the vector of entries
-        raw     = YAML.load_file(dst)
+        raw     = YAML.load_file(dst, dicttype = OrderedDict)
         entries = raw isa Vector ? raw : Any[]
-
         ts = string(filekey.time)
-
         # drop any previous entry with the same timestamp
         filter!(e -> e["valid_from"] != ts, entries)
-
-        # build a Dict containing the validity to be saved
-        entry = Dict{String,Any}()
-        entry["valid_from"] = ts
-        entry["apply"]      = apply
-        entry["category"]   = category
-        entry["mode"]       = mode
-        push!(entries, entry)
+        # build an OrderedDict containing the validity to be saved
+        push!(entries, OrderedDict{String,Any}(
+            "valid_from" => ts,
+            "apply" => apply,
+            "category" => category,
+            "mode" => mode
+        ))
         
         write_from_master && @info "Write validity for $ts"
-
         # sort the entries by timestamp
         sort!(entries, by = e -> e["valid_from"])
-
-        function write_entries_ordered(dst, entries)
-            open(dst, "w") do io
-                for e in entries
-                    println(io, "- valid_from: ", e["valid_from"])
-
-                    println(io, "  apply:")
-                    for path in e["apply"]
-                        println(io, "    - ", path)
-                    end
-
-                    println(io, "  category: ", e["category"])
-                    println(io, "  mode: ", e["mode"])
-                    println(io)  # newline between entries
-                end
-            end
-        end
-
-        # emit valid YAML, with each Dict’s keys in insertion order
-        write_entries_ordered(dst, entries)
+        
+        # create a new file with the same filename with updated entries
+        YAML.write_file(dst, entries)
     end
 end
 writevalidity(props_db, filekey, apply::String; kwargs...) = writevalidity(props_db, filekey, [apply]; kwargs...)

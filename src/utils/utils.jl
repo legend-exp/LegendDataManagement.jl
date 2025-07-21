@@ -16,6 +16,7 @@ using Measurements
 using Measurements: ±
 import Distributed
 
+using OrderedCollections
 using PropertyFunctions: PropertyFunction, @pf, filterby, props2varsyms
 using Tables
 using Tables: columns

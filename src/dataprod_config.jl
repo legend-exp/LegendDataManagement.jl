@@ -136,12 +136,13 @@ end
 
 
 """
-    partitioninfo(data::LegendData, det::DetectorId)::IdDict{DataPartition, Table}
-    partitioninfo(data::LegendData, det::DetectorIdLike, part::DataPartitionLike; category::DataCategoryLike=:cal)
-    partitioninfo(data::LegendData, det::DetectorIdLike, period::DataPeriodLike; category::DataCategoryLike=:cal)
-    partitioninfo(data, det::DetectorIdLike, period::DataPeriodLike, run::DataRunLike; category::DataCategoryLike=:cal)
+    partitioninfo(data::LegendData, det::DetectorIdLike, cat::DataCategoryLike)
+    partitioninfo(data, det, part::DataPartition)
+    partitioninfo(data, det, cat, period::DataPeriod)
+    partitioninfo(data, det, cat, period, run)
 
-    partitioninfo(data::LegendData, ch::ChannelId; category::DataCategoryLike=:cal)
+    partitioninfo(data::LegendData, ch::ChannelId, cat::DataCategoryLike = :cal)
+
 
 Return cross-period data partitions.
 
@@ -176,7 +177,7 @@ Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, det::Vect
 
 # support old method where the ChannelId was passed
 function partitioninfo(data::LegendData, ch::ChannelId, cat::DataCategoryLike = :cal)
-    det = channelinfo(data, first(filter(!ismissing, runinfo(data).cal.startkey)), ch).detector
+    det = channelinfo(data, first(filter(!ismissing, getproperty(runinfo(data), cat).startkey)), ch).detector
     partitioninfo(data, det, cat)
 end
 
@@ -300,7 +301,7 @@ function _groupings_runs(data::LegendData, group_category::DataCategoryLike)
         flat_pr = Vector{@NamedTuple{period::DataPeriod, run::DataRun}}()
         for group in values(groupings)  
             for (p, rs) in group       
-                for r in LegendDataManagement.parse_runs(rs) 
+                for r in parse_runs(rs) 
                     push!(flat_pr, (period = DataPeriod(p), run = r))
                 end
             end
@@ -340,6 +341,8 @@ Get the run information for `data` based on various selection criteria.
 
 # Arguments
 - `data::LegendData`: The dataset to query run information from.
+
+# Keyword Arguments
 - `runlist::Symbol = :valid`: Specifies which runlist from `data.metadata.datasets.runlists` to use for filtering. Defaults to `:valid`.
 
 # Returns
@@ -358,8 +361,6 @@ function runinfo(data::LegendData; runlist::Symbol=:valid) #dataset
         # load runinfo
         rinfo = PropDict(data.metadata.datasets.runinfo)
         nttype = @NamedTuple{startkey::MaybeFileKey, livetime::typeof(1.0u"s"), is_analysis_run::Bool}
-        phy_groupings = phy_groupings_default(data)
-        cal_groupings = cal_groupings_default(data)
         
         runlist_data = get(data.metadata.datasets.runlists, runlist, PropDict())
         allowed = Set{Tuple{Symbol, Symbol, DataRun}}()
@@ -377,10 +378,8 @@ function runinfo(data::LegendData; runlist::Symbol=:valid) #dataset
             function get_cat_entry(cat)
                 if haskey(ri, cat)
                     fk = ifelse(haskey(ri[cat], :start_key), FileKey(data.name, period, run, cat, Timestamp(get(ri[cat], :start_key, 1))), missing)
-                    is_ana_run = if cat == :phy
-                        (; period, run) in phy_groupings && !ismissing(fk)
-                    elseif cat == :cal 
-                        (; period, run) in cal_groupings && !ismissing(fk)
+                    is_ana_run::Bool = if cat in (:phy, :cal)
+                        (; period, run) in _groupings_runs(data, cat) && !ismissing(fk)
                     else
                         true
                     end
