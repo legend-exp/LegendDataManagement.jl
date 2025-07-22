@@ -103,8 +103,8 @@ export pydataprod_parameters
 
 
 const _cached_partitioninfo = LRU{Tuple{UInt, Symbol, Symbol}, IdDict{DataPartition, Table}}(maxsize = 300)
-
 function _get_partitions(data::LegendData, label::Symbol, category::DataCategoryLike)
+    category = Symbol(category)
     rinfo = runinfo(data)
     pd = IdDict{Symbol, Vector{Tuple{DataPeriod, DataRun}}}()
 
@@ -185,7 +185,6 @@ Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, ch::Chann
 Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, ch::ChannelId, p::Vector{<:DataPartition}) = vcat(f.(Ref(data), Ref(ch), p)...)
 Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, ch::Vector{ChannelId}, p::DataPeriod, cat::DataCategoryLike) = f.(Ref(data), ch, Ref(cat), Ref(p))
 
-const _cached_combined_partitions = LRU{Tuple{UInt, Symbol, Vector{Symbol}}, Vector{DataPeriod}}(maxsize = 300)
 
 """
     get_partition_combined_periods(data::LegendData, period::DataPeriodLike; chs::Vector{<:ChannelIdLike}=ChannelIdLike[])
@@ -206,6 +205,7 @@ function get_partition_combined_periods(data::LegendData, period::DataPeriodLike
 end
 export get_partition_combined_periods
 
+const _cached_combined_partitions = LRU{Tuple{UInt, Symbol, Vector{Symbol}}, Vector{DataPeriod}}(maxsize = 300)
 function _get_partition_combined_periods(data::LegendData, period::DataPeriodLike, dets::Vector{<:DetectorIdLike})
     period, dets = Symbol(DataPeriod(period)), Symbol.(DetectorId.(dets))
     get!(_cached_combined_partitions, (objectid(data), period, dets)) do
@@ -378,11 +378,7 @@ function runinfo(data::LegendData; runlist::Symbol=:valid) #dataset
             function get_cat_entry(cat)
                 if haskey(ri, cat)
                     fk = ifelse(haskey(ri[cat], :start_key), FileKey(data.name, period, run, cat, Timestamp(get(ri[cat], :start_key, 1))), missing)
-                    is_ana_run::Bool = if cat in (:phy, :cal)
-                        (; period, run) in _groupings_runs(data, cat) && !ismissing(fk)
-                    else
-                        true
-                    end
+                    is_ana_run::Bool = !ismissing(fk) && (!(cat in (:phy, :cal)) || (; period, run) in _groupings_runs(data, cat))
                     nttype((fk, get(ri[cat], :livetime_in_s, NaN)*u"s", Bool(is_ana_run)))
                 else
                     nttype((missing, NaN*u"s", Bool(false)))

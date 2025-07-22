@@ -45,10 +45,10 @@ function get_exposure(data::LegendData, det::DetectorIdLike, period::DataPeriod;
 end
 
 function get_exposure(data::LegendData, det::DetectorIdLike, part::DataPartition; kwargs...)
-    part_dict = partitioninfo(data, det, part.cat.label)
+    part_dict = partitioninfo(data, det, part.cat)
     if haskey(part_dict, part)
         rinfo = partitioninfo(data, det, part)
-        return get_exposure(data, det, rinfo; cat=part.cat.label, kwargs...)
+        return get_exposure(data, det, rinfo; cat=part.cat, kwargs...)
     end
     
     #default if partition does not exist
