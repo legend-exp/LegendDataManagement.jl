@@ -110,7 +110,7 @@ function _get_partitions(data::LegendData, label::Symbol, category::DataCategory
 
     # Merge default and Detector-specific partitions
     if !haskey(data.metadata.datasets, Symbol("$(category)_groupings"))
-        throw(ArgumentError("Groupings for categroy \"$category\" not found"))
+        throw(ArgumentError("Groupings for category \"$category\" not found"))
     end
     partitions = merge(
         (v1, v2) -> v2,
@@ -158,7 +158,7 @@ function partitioninfo end
 export partitioninfo
 
 partitioninfo(data::LegendData, det::DetectorIdLike, cat::DataCategoryLike) = _get_partitions(data, Symbol(DetectorId(det)), cat)
-partitioninfo(data, det, part::DataPartition) = partitioninfo(data, det, part.cat.label)[part]
+partitioninfo(data, det, part::DataPartition) = partitioninfo(data, det, part.cat)[part]
 partitioninfo(data, det, cat, period::DataPeriod) = sort(Vector{DataPartition}([p for (p, pinfo) in partitioninfo(data, det, cat) if period in pinfo.period]))
 function partitioninfo(data, det, p::Union{Symbol, AbstractString}, cat::DataCategoryLike)
     if _can_convert_to(DataPartition, p)
