@@ -134,7 +134,7 @@ function get_partitionvalidity(data::LegendData, det::DetectorIdLike, part::Data
     det, part = DetectorId(det), DataPartition(part)
     # get partition validity
     partinfo = partitioninfo(data, det, part)
-    Vector{@NamedTuple{period::DataPeriod, run::DataRun, filekey::FileKey, validity::String}}([(period = pinf.period, run = pinf.run, filekey = start_filekey(data, (pinf.period, pinf.run, cat)), validity = "$det/$(part).yaml") for pinf in partinfo])
+    Vector{@NamedTuple{period::DataPeriod, run::DataRun, filekey::FileKey, validity::String}}([(period = pinf.period, run = pinf.run, filekey = start_filekey(data, (pinf.period, pinf.run, part.cat)), validity = "$det/$(part).yaml") for pinf in partinfo])
 end
 export get_partitionvalidity
 # dropped unecessaty ch argument, keep old function functionality for now
