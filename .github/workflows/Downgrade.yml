@@ -25,7 +25,7 @@ jobs:
           version: ${{ matrix.version }}
       - name: registry_add
         run: julia add_registries.jl
-      - uses: julia-actions/julia-downgrade-compat@v1
+      - uses: julia-actions/julia-downgrade-compat@v2
         with:
           skip: Pkg,TOML
       - uses: julia-actions/julia-buildpkg@v1
