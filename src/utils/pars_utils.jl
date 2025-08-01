@@ -37,8 +37,8 @@ Write validity for a given filekey.
 """
 function writevalidity end
 export writevalidity
-function writevalidity(props_db::LegendDataManagement.MaybePropsDB, filekey::FileKey, apply::Vector{String}; category::DataCategoryLike=:all)
-    Distributed.remotecall_fetch(_writevalidity_impl, 1, props_db, filekey, apply; category=category, write_from_master= (Distributed.myid() == 1))
+function writevalidity(props_db::LegendDataManagement.MaybePropsDB, filekey::FileKey, apply::Vector{String}; category::DataCategoryLike=:all, mode::AbstractString = "reset")
+    Distributed.remotecall_fetch(_writevalidity_impl, 1, props_db, filekey, apply; category=category, mode=mode, write_from_master= (Distributed.myid() == 1))
 end
 const _writevalidity_lock = ReentrantLock()
 function _writevalidity_impl(props_db::LegendDataManagement.MaybePropsDB, filekey::FileKey, apply::Vector{String};
@@ -59,7 +59,7 @@ function _writevalidity_impl(props_db::LegendDataManagement.MaybePropsDB, fileke
         entries = raw isa Vector ? raw : Any[]
         ts = string(filekey.time)
         # drop any previous entry with the same timestamp
-        filter!(e -> e["valid_from"] != ts, entries)
+        filter!(e -> !(e["valid_from"] == ts && e["mode"] == mode), entries)
         # build an OrderedDict containing the validity to be saved
         push!(entries, OrderedDict{String,Any}(
             "valid_from" => ts,
@@ -84,28 +84,65 @@ end
 writevalidity(props_db, filekey, apply::String; kwargs...) = writevalidity(props_db, filekey, [apply]; kwargs...)
 writevalidity(props_db, filekey, rsel::Tuple{DataPeriod, DataRun}; kwargs...) = writevalidity(props_db, filekey, "$(first(rsel))/$(last(rsel)).yaml"; kwargs...)
 writevalidity(props_db, filekey, part::DataPartition; kwargs...) = writevalidity(props_db, filekey, "$(part).yaml"; kwargs...)
-function writevalidity(props_db::LegendDataManagement.MaybePropsDB, validity::StructVector{@NamedTuple{period::DataPeriod, run::DataRun, filekey::FileKey, validity::String}}; kwargs...)
-    # Dictionary to store the best (earliest) row per unique validity string
-    best_by_validity = Dict{String, NamedTuple}()
+function writevalidity(
+    props_db::LegendDataManagement.MaybePropsDB,
+    validity_with_flag::NamedTuple{(:result, :skipped)};
+    category::DataCategoryLike = :all
+)
+    validity = validity_with_flag.result
 
-    # Iterate over all validity entries; keep smallest timestamp for each unique "apply"
+    # Group by FileKey timestamp
+    ts_to_validities = Dict{Timestamp, Set{String}}()
+    ts_to_filekey = Dict{Timestamp, FileKey}()
+
     for row in validity
-        key = row.validity
-        if haskey(best_by_validity, key)
-            if row.filekey.time < best_by_validity[key].filekey.time
-                best_by_validity[key] = row
-            end
-        else
-            best_by_validity[key] = row
-        end
+        ts = row.filekey.time
+        val = row.validity
+        push!(get!(ts_to_validities, ts, Set{String}()), val)
+        ts_to_filekey[ts] = row.filekey
     end
 
-    # Sort the selected rows by timestamp for chronological writing
-    sorted_rows = sort(collect(values(best_by_validity)), by = r -> r.filekey.time)
+    # Sort timestamps
+    timestamps = sort(collect(keys(ts_to_validities)))
 
-    # Write validity for each unique validity string with smallest timestamp
-    for row in sorted_rows
-        writevalidity(props_db, row.filekey, row.validity; kwargs...)
+    prev_validities = Set{String}()
+    first = true
+
+    for ts in timestamps
+        current_validities = ts_to_validities[ts]
+        fk = ts_to_filekey[ts]
+
+        if first # First timestamp: reset
+            mode = validity_with_flag.skipped ? "append" : "reset"
+            writevalidity(props_db, fk, sort(collect(current_validities)); category=category, mode=mode)
+            prev_validities = deepcopy(current_validities)
+            first = false
+            continue
+        end
+
+        if current_validities == prev_validities # No change -> skip writing validity
+            continue
+        end
+
+        added = setdiff(current_validities, prev_validities)
+        removed = setdiff(prev_validities, current_validities)
+
+        if !isempty(added) && isempty(removed)
+            writevalidity(props_db, fk, sort(collect(added)); category=category, mode="append")
+        elseif isempty(added) && !isempty(removed)
+            writevalidity(props_db, fk, sort(collect(removed)); category=category, mode="remove")
+        elseif length(added) == 1 && length(removed) == 1
+            writevalidity(props_db, fk, [only(removed), only(added)]; category=category, mode="replace")
+        elseif length(added) + length(removed) <= 10
+            # split state into small append and remove block instead of using multiple "replace" or big "reset"
+            writevalidity(props_db, fk, sort(collect(removed)); category=category, mode="remove")
+            writevalidity(props_db, fk, sort(collect(added)); category=category, mode="append")
+        else
+            # Fallback to reset: write full current state
+            writevalidity(props_db, fk, sort(collect(current_validities)); category=category, mode="reset")
+        end
+
+        prev_validities = deepcopy(current_validities)
     end
 end
 
@@ -115,12 +152,14 @@ Create a StructArray from a result of the parallel processing
 """
 function create_validity(result)
     validity_all = Vector{@NamedTuple{period::DataPeriod, run::DataRun, filekey::FileKey, validity::String}}()
+    skipped = false
     for (_, res_ch) in result
+        skipped |= get(res_ch, :skipped, false)  # Set to true if any channel was skipped
         if haskey(res_ch, :validity) && !get(res_ch, :skipped, false)
             append!(validity_all, res_ch.validity)
         end
     end
-    StructArray(validity_all)
+    return (result = StructArray(validity_all), skipped = skipped)
 end
 export create_validity
 
