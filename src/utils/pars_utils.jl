@@ -55,8 +55,8 @@ function _writevalidity_impl(props_db::LegendDataManagement.MaybePropsDB, fileke
         end
 
         # load or initialize the vector of entries
-        raw     = YAML.load_file(dst, dicttype = OrderedDict)
-        entries = raw isa Vector ? raw : Any[]
+        raw     = YAML.load_file(dst, dicttype = OrderedDict{String, Any})
+        entries::Vector{OrderedDict{String,Any}} = raw isa Vector ? raw : OrderedDict{String,Any}[]
         ts = string(filekey.time)
         # drop any previous entry with the same timestamp
         filter!(e -> !(e["valid_from"] == ts && e["mode"] == mode), entries)

@@ -275,37 +275,38 @@ function _load_validity(validity_path::AbstractString; mode_default::AbstractStr
         raw = ParallelProcessingTools.read_files(validity_path) do io
             YAML.load_file(io)
         end
-        entries = PropDict.(raw === nothing ? [] : raw)
-
         new_validity = _ValidityDict()
-        for props in entries
-            valid_from = Timestamp(props.valid_from)
-            categories = DataCategory.(let s = get(props, :category, "all"); s isa AbstractVector ? s : [s]; end)
-            filelist = let fk = props.apply; fk isa AbstractString ? [fk] : fk end
-            for category in categories
-                dict_entry = get!(new_validity, category, (valid_from = FileKey[], filelist = Vector{String}[]))
-                mode = isempty(dict_entry.filelist) ? "reset" : get(props, :mode, mode_default)
-                if mode == "reset"
-                    new = filelist
-                elseif mode == "append"
-                    new = deepcopy(last(dict_entry.filelist))
-                    append!(new, filelist)
-                elseif mode == "remove"
-                    new = deepcopy(last(dict_entry.filelist))
-                    filter!(f -> !(f in filelist), new)
-                elseif mode == "replace"
-                    length(filelist) != 2 && throw(ArgumentError("Invalid number of elements in replace mode: $(length(filelist))"))
-                    remove_file, add_file = filelist
-                    new = deepcopy(last(dict_entry.filelist))
-                    idx = findall(new .== remove_file)
-                    isnothing(idx) && throw(ArgumentError("Cannot replace $(remove_file): does not exist"))
-                    deleteat!(new, idx)
-                    push!(new, add_file)
-                else
-                    throw(ArgumentError("Unknown mode for $(timestamp): $(mode)"))
+
+        if !isnothing(raw)
+            for props in PropDict.(raw)
+                valid_from = Timestamp(props.valid_from)
+                categories = DataCategory.(let s = get(props, :category, "all"); s isa AbstractVector ? s : [s]; end)
+                filelist = let fk = props.apply; fk isa AbstractString ? [fk] : fk end
+                for category in categories
+                    dict_entry = get!(new_validity, category, (valid_from = FileKey[], filelist = Vector{String}[]))
+                    mode = isempty(dict_entry.filelist) ? "reset" : get(props, :mode, mode_default)
+                    if mode == "reset"
+                        new = filelist
+                    elseif mode == "append"
+                        new = deepcopy(last(dict_entry.filelist))
+                        append!(new, filelist)
+                    elseif mode == "remove"
+                        new = deepcopy(last(dict_entry.filelist))
+                        filter!(f -> !(f in filelist), new)
+                    elseif mode == "replace"
+                        length(filelist) != 2 && throw(ArgumentError("Invalid number of elements in replace mode: $(length(filelist))"))
+                        remove_file, add_file = filelist
+                        new = deepcopy(last(dict_entry.filelist))
+                        idx = findall(new .== remove_file)
+                        isnothing(idx) && throw(ArgumentError("Cannot replace $(remove_file): does not exist"))
+                        deleteat!(new, idx)
+                        push!(new, add_file)
+                    else
+                        throw(ArgumentError("Unknown mode for $(timestamp): $(mode)"))
+                    end
+                    push!(dict_entry.valid_from, valid_from)
+                    push!(dict_entry.filelist, new)
                 end
-                push!(dict_entry.valid_from, valid_from)
-                push!(dict_entry.filelist, new)
             end
         end   
         new_validity

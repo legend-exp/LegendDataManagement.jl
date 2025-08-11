@@ -411,8 +411,8 @@ function runinfo(data::LegendData, runsel::RunCategorySelLike; runlist::Symbol =
     period, run, category = DataPeriod(period), DataRun(run), DataCategory(category)
     getproperty(runinfo(data, (period, run); runlist), Symbol(category))
 end
-runinfo(data, fk::FileKey; runlist::Symbol = :valid) = runinfo(data, (fk.period, fk.run, fk.category); runlist)
-runinfo(data, selectors...; runlist::Symbol = :valid) = runinfo(data, selectors; runlist)
+runinfo(data, fk::FileKey; kwargs...) = runinfo(data, (fk.period, fk.run, fk.category); kwargs...)
+runinfo(data, selectors...; kwargs...) = runinfo(data, selectors; kwargs...)
 
 """
     start_filekey(data::LegendData, runsel::RunCategorySelLike)
