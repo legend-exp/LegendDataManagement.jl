@@ -253,7 +253,13 @@ end
 
 
 const _cached_analysis_runs = LRU{Tuple{UInt, DataCategoryLike}, StructVector{@NamedTuple{period::DataPeriod, run::DataRun}}}(maxsize = 10)
-function _analysis_runs(data::LegendData, cat::DataCategoryLike)
+
+"""
+    analysis_runs(data::LegendData)
+
+Return cross-period analysis runs.
+"""
+function analysis_runs(data::LegendData, cat::DataCategoryLike)
     Table(sort(get!(_cached_analysis_runs, (objectid(data), cat)) do
         aruns::PropDict = get(data.metadata.datasets.runlists.valid, Symbol(cat), PropDict())
         periods_and_runs = Vector{@NamedTuple{period::DataPeriod, run::DataRun}}[
@@ -264,32 +270,9 @@ function _analysis_runs(data::LegendData, cat::DataCategoryLike)
         StructArray(flat_pr)
     end))
 end
-
-"""
-    analysis_phy_runs(data::LegendData)
-
-Return cross-period physics analysis runs.
-"""
-analysis_phy_runs(data::LegendData) = _analysis_runs(data, :phy)
-export analysis_phy_runs
-
-
-"""
-    analysis_cal_runs(data::LegendData)
-
-Return cross-period calibration analysis runs.
-"""
-analysis_cal_runs(data::LegendData) = _analysis_runs(data, :cal)
-export analysis_cal_runs
-
-"""
-    analysis_runs(data::LegendData)
-
-Return cross-period analysis runs.
-"""
-function analysis_runs end
-@deprecate analysis_runs(data::LegendData) analysis_phy_runs(data)
 export analysis_runs
+
+@deprecate analysis_runs(data::LegendData) analysis_runs(data, :phy)
 
 
 
@@ -342,9 +325,6 @@ Get the run information for `data` based on various selection criteria.
 # Arguments
 - `data::LegendData`: The dataset to query run information from.
 
-# Keyword Arguments
-- `runlist::Symbol = :valid`: Specifies which runlist from `data.metadata.datasets.runlists` to use for filtering. Defaults to `:valid`.
-
 # Returns
 A table of run information with one named tuple per category (e.g. `:cal`, `:phy`), each containing `startkey`, `livetime`, and `is_analysis_run`
 
@@ -354,51 +334,47 @@ runinfo(data, :p03)                             # all runs in period p03
 runinfo(data, (:p03, :r005))                    # single-row Table for that run
 runinfo(data, (:p03, :r005, :phy))              # only the :phy entry
 runinfo(data, fk::FileKey)                      # same as above via FileKey
-runinfo(data; runlist = :custom_list)           # use a custom runlist
 """
-function runinfo(data::LegendData; runlist::Symbol=:valid) #dataset
+function runinfo(data::LegendData)
     get!(_cached_runinfo, objectid(data)) do
-        # load runinfo
         rinfo = PropDict(data.metadata.datasets.runinfo)
+
+        # Detect categories dynamically (as Symbols)
+        categories = unique(Symbol.(reduce(vcat, (collect(keys(ri)) for (_, runs) in rinfo for (_, ri) in runs))))
         nttype = @NamedTuple{startkey::MaybeFileKey, livetime::typeof(1.0u"s"), is_analysis_run::Bool}
-        
-        runlist_data = get(data.metadata.datasets.runlists, runlist, PropDict())
-        allowed = Set{Tuple{Symbol, Symbol, DataRun}}()
-        for (cat, periods) in runlist_data
-            for (p, rlist) in periods
-                for r in parse_runs(rlist)
-                    push!(allowed, (Symbol(cat), p, r))
-                end
-            end
-        end
 
         function make_row(p, r, ri)
-            period::DataPeriod = DataPeriod(p)
-            run::DataRun = DataRun(r)
+            period, run = DataPeriod(p), DataRun(r)
             function get_cat_entry(cat)
                 if haskey(ri, cat)
-                    fk = ifelse(haskey(ri[cat], :start_key), FileKey(data.name, period, run, cat, Timestamp(get(ri[cat], :start_key, 1))), missing)
-                    is_ana_run::Bool = !ismissing(fk) && (!(cat in (:phy, :cal)) || (; period, run) in _groupings_runs(data, cat))
-                    nttype((fk, get(ri[cat], :livetime_in_s, NaN)*u"s", Bool(is_ana_run)))
+                    fk = haskey(ri[cat], :start_key) ? FileKey(data.name, period, run, cat, Timestamp(get(ri[cat], :start_key, 1))) : missing
+                    livetime = get(ri[cat], :livetime_in_s, NaN) * u"s"
+                    is_ana_run::Bool = !ismissing(fk) && (!(cat in (:phy, :cal)) || any(row.period == period && row.run == run for row in analysis_runs(data, cat)))
+                    nttype((fk, livetime, is_ana_run))
                 else
-                    nttype((missing, NaN*u"s", Bool(false)))
+                    nttype((missing, NaN*u"s", false))
                 end
             end
-            @NamedTuple{period::DataPeriod, run::DataRun, cal::nttype, phy::nttype, fft::nttype, cos::nttype, lac::nttype}((period, run, get_cat_entry(:cal), get_cat_entry(:phy), get_cat_entry(:fft), get_cat_entry(:cos), get_cat_entry(:lac)))
+            (; period, run, NamedTuple{Tuple(categories)}(Tuple(get_cat_entry(cat) for cat in categories))...)
         end
-        periods_and_runs = [[make_row(p, r, ri) for (r, ri) in rs if any((cat -> (cat, p, DataRun(r)) in allowed), (:cal, :phy, :fft, :cos, :lac))] for (p, rs) in rinfo]
-        flat_pr = sort(StructArray(vcat(filter(!isempty, periods_and_runs)...)::Vector{@NamedTuple{period::DataPeriod, run::DataRun, cal::nttype, phy::nttype, fft::nttype, cos::nttype, lac::nttype}}))
-        Table(merge(columns(flat_pr), (cal = Table(StructArray(flat_pr.cal)), phy = Table(StructArray(flat_pr.phy)), fft = Table(StructArray(flat_pr.fft)), cos = Table(StructArray(flat_pr.cos)), lac = Table(StructArray(flat_pr.lac)))))
+
+
+
+        # Build rows (no filtering)
+        flat_pr = sort(StructArray(vcat([[make_row(p, r, ri) for (r, ri) in rs] for (p, rs) in rinfo]...)))
+        merged_cols = merge(columns(flat_pr), (; [(cat => Table(StructArray(getproperty(flat_pr, cat)))) for cat in categories]...))
+        Table(merged_cols)
     end
 end
 export runinfo
 
-runinfo(data::LegendData, period::DataPeriodLike; runlist::Symbol = :valid) = runinfo(data; runlist) |> filterby(@pf $period == DataPeriod(period))
 
-function runinfo(data::LegendData, runsel::RunSelLike; runlist::Symbol = :valid)
+runinfo(data::LegendData, period::DataPeriodLike) = runinfo(data) |> filterby(@pf $period == DataPeriod(period))
+
+function runinfo(data::LegendData, runsel::RunSelLike)
     period, run = runsel
     period, run = DataPeriod(period), DataRun(run)
-    t = runinfo(data; runlist) |> filterby(@pf $period == period && $run == run)
+    t = runinfo(data) |> filterby(@pf $period == period && $run == run)
     if isempty(t)
         throw(ArgumentError("No run information found for period $period run $run"))
     else
@@ -406,13 +382,13 @@ function runinfo(data::LegendData, runsel::RunSelLike; runlist::Symbol = :valid)
     end
 end
 
-function runinfo(data::LegendData, runsel::RunCategorySelLike; runlist::Symbol = :valid)
+function runinfo(data::LegendData, runsel::RunCategorySelLike)
     period, run, category = runsel
     period, run, category = DataPeriod(period), DataRun(run), DataCategory(category)
-    getproperty(runinfo(data, (period, run); runlist), Symbol(category))
+    getproperty(runinfo(data, (period, run)), Symbol(category))
 end
-runinfo(data, fk::FileKey; kwargs...) = runinfo(data, (fk.period, fk.run, fk.category); kwargs...)
-runinfo(data, selectors...; kwargs...) = runinfo(data, selectors; kwargs...)
+runinfo(data, fk::FileKey) = runinfo(data, (fk.period, fk.run, fk.category))
+runinfo(data, selectors...) = runinfo(data, selectors)
 
 """
     start_filekey(data::LegendData, runsel::RunCategorySelLike)

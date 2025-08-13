@@ -20,7 +20,7 @@ using Unitful
     end
 
     @testset "analysis_runs" begin
-        analysisruns = analysis_runs(l200) 
+        analysisruns = analysis_runs(l200, :cal)
         @test analysisruns isa TypedTables.Table
         @test hasproperty(analysisruns, :period)
         @test hasproperty(analysisruns, :run)
