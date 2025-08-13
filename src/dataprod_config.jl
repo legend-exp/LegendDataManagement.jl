@@ -158,8 +158,8 @@ function partitioninfo end
 export partitioninfo
 
 partitioninfo(data::LegendData, det::DetectorIdLike, cat::DataCategoryLike) = _get_partitions(data, Symbol(DetectorId(det)), cat)
-partitioninfo(data, det, part::DataPartition) = partitioninfo(data, det, part.cat)[part]
-partitioninfo(data, det, cat, period::DataPeriod) = sort(Vector{DataPartition}([p for (p, pinfo) in partitioninfo(data, det, cat) if period in pinfo.period]))
+partitioninfo(data::LegendData, det::DetectorIdLike, part::DataPartition) = partitioninfo(data, det, part.cat)[part]
+partitioninfo(data::LegendData, det::DetectorIdLike, cat::DataCategoryLike, period::DataPeriod) = sort(Vector{DataPartition}([p for (p, pinfo) in partitioninfo(data, det, cat) if period in pinfo.period]))
 function partitioninfo(data, det, p::Union{Symbol, AbstractString}, cat::DataCategoryLike)
     if _can_convert_to(DataPartition, p)
         partitioninfo(data, det, DataPartition(p))
@@ -176,9 +176,9 @@ Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, det::Dete
 Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, det::Vector{DetectorId}, p::DataPeriod, cat::DataCategoryLike) = f.(Ref(data), det, Ref(cat), Ref(p))
 
 # support old method where the ChannelId was passed
-function partitioninfo(data::LegendData, ch::ChannelId, cat::DataCategoryLike = :cal)
-    det = channelinfo(data, first(filter(!ismissing, getproperty(runinfo(data), cat).startkey)), ch).detector
-    partitioninfo(data, det, cat)
+function partitioninfo(data::LegendData, ch::ChannelId, args...)
+    det = channelinfo(data, first(filter(!ismissing, runinfo(data).cal.startkey)), ch).detector
+    partitioninfo(data, det, args...)
 end
 
 Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, ch::ChannelId, p::Vector{<:DataPeriod}, cat::DataCategoryLike) = unique(vcat(f.(Ref(data), Ref(ch), Ref(cat), p)...))
@@ -252,7 +252,7 @@ end
 @inline parse_runs(s::AbstractString) = parse_runs([s])
 
 
-const _cached_analysis_runs = LRU{Tuple{UInt, DataCategoryLike}, StructVector{@NamedTuple{period::DataPeriod, run::DataRun}}}(maxsize = 10)
+const _cached_analysis_runs = LRU{Tuple{UInt, DataCategoryLike}, StructVector{@NamedTuple{period::DataPeriod, run::DataRun}}}(maxsize = 100)
 
 """
     analysis_runs(data::LegendData)
@@ -276,7 +276,7 @@ export analysis_runs
 
 
 
-const _cached_part_groupings = LRU{Tuple{UInt, DataCategoryLike}, StructVector{@NamedTuple{period::DataPeriod, run::DataRun}}}(maxsize = 10)
+const _cached_part_groupings = LRU{Tuple{UInt, DataCategoryLike}, StructVector{@NamedTuple{period::DataPeriod, run::DataRun}}}(maxsize = 100)
 function _groupings_runs(data::LegendData, group_category::DataCategoryLike)
     Table(sort(get!(_cached_part_groupings, (objectid(data), group_category)) do
         groupings = data.metadata.datasets[Symbol("$(group_category)_groupings")].default
@@ -358,9 +358,7 @@ function runinfo(data::LegendData)
             (; period, run, NamedTuple{Tuple(categories)}(Tuple(get_cat_entry(cat) for cat in categories))...)
         end
 
-
-
-        # Build rows (no filtering)
+        # Build rows
         flat_pr = sort(StructArray(vcat([[make_row(p, r, ri) for (r, ri) in rs] for (p, rs) in rinfo]...)))
         merged_cols = merge(columns(flat_pr), (; [(cat => Table(StructArray(getproperty(flat_pr, cat)))) for cat in categories]...))
         Table(merged_cols)

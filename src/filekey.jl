@@ -356,13 +356,13 @@ export DataPartition
 
 @inline DataPartition(partition::DataPartition) = partition
 Base.:(==)(a::DataPartition, b::DataPartition) = a.no == b.no && a.set == b.set && a.cat == b.cat
-Base.isless(a::DataPartition, b::DataPartition) = isless(a.no, b.no) && isless(a.set, b.set)
+Base.isless(a::DataPartition, b::DataPartition) = a.no < b.no || (a.no == b.no && a.set < b.set)
 
 # ToDo: Improve implementation
 Base.print(io::IO, partition::DataPartition) = print(io, "$(partition.cat.label)group$(lpad(string(partition.no), 3, string(0)))$(partition.set)")
 Base.show(io::IO, partition::DataPartition) = print(io, "DataPartition($partition)")
 
-const partition_expr = r"^([a-z]{3})group([0-9]{2,3})([A-Za-z])$"
+const partition_expr = r"^(?:([a-z]{3}))?group([0-9]{2,3})([A-Za-z])?$"
 
 _can_convert_to(::Type{DataPartition}, s::AbstractString) = !isnothing(match(partition_expr, s))
 _can_convert_to(::Type{DataPartition}, s::Symbol) = _can_convert_to(DataPartition, string(s))

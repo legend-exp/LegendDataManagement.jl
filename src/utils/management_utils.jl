@@ -52,7 +52,7 @@ function get_partition_channelinfo(data::LegendData, chinfo::Table, period::Data
     # get partition information for given period
     period = DataPeriod(period)
     # get partition information for given period and channels
-    parts = partitioninfo.(Ref(data), chinfo.detector, category, Ref(period))
+    parts = partitioninfo.(data, chinfo.detector, period, category)
     t = StructArray(merge((partition = parts, ), columns(chinfo)))
     if unfold_partitions
         t_unfold = t |> filterby(@pf length($partition) > 1)
