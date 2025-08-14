@@ -207,7 +207,8 @@ export get_partition_combined_periods
 
 const _cached_combined_partitions = LRU{Tuple{UInt, Symbol, Vector{Symbol}}, Vector{DataPeriod}}(maxsize = 300)
 function _get_partition_combined_periods(data::LegendData, period::DataPeriodLike, dets::Vector{<:DetectorIdLike})
-    period, dets = Symbol(DataPeriod(period)), Symbol.(DetectorId.(dets))
+    period = Symbol(DataPeriod(period))
+    dets   = Symbol[Symbol(DetectorId(d)) for d in dets]
     get!(_cached_combined_partitions, (objectid(data), period, dets)) do
         # load partition information
         parts = data.metadata.datasets.cal_groupings
