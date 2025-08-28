@@ -333,17 +333,21 @@ const RunCategorySelLike = Tuple{<:DataPeriodLike, <:DataRunLike, <:DataCategory
 """
     struct DataPartition <: DataSelector
 
-Represents a LEGEND data-taking partition. If only a number is given, the struct uses category :caln and set :a as default.
+Represents a LEGEND data-taking partition. If only a number is given, the struct uses category `:cal` and set `:a` as default.  
+
+The struct can also be constructed from strings in various formats, such as `"calgroup001a"`, `"calpartition001a"`, `"calpart001a"`, or the short form `"part001"`.
 
 Example:
 
 ```julia
 partition = DataPartition(1)
-partition.cat = :cal
+partition.cat == :cal
 partition.no == 1
 partition.set == :a
-string(partition) == "calgroup001a"
-DataPartition(:calgroup001a) == partition
+string(partition) == "calpartition001a"
+DataPartition("calgroup001a") == partition
+DataPartition("calpart001a") == partition
+DataPartition("part001") == partition
 ```
 """
 struct DataPartition <: DataSelector
@@ -359,10 +363,10 @@ Base.:(==)(a::DataPartition, b::DataPartition) = a.no == b.no && a.set == b.set 
 Base.isless(a::DataPartition, b::DataPartition) = a.no < b.no || (a.no == b.no && a.set < b.set)
 
 # ToDo: Improve implementation
-Base.print(io::IO, partition::DataPartition) = print(io, "$(partition.cat.label)group$(lpad(string(partition.no), 3, string(0)))$(partition.set)")
+Base.print(io::IO, partition::DataPartition) = print(io, "$(partition.cat.label)partition$(lpad(string(partition.no), 3, '0'))$(partition.set)")
 Base.show(io::IO, partition::DataPartition) = print(io, "DataPartition($partition)")
 
-const partition_expr = r"^(?:([a-z]{3}))?group([0-9]{2,3})([A-Za-z])?$"
+const partition_expr = r"^(?:([a-z]{3}))?(?:group|partition|part)?([0-9]{2,3})([A-Za-z])?$"
 
 _can_convert_to(::Type{DataPartition}, s::AbstractString) = !isnothing(match(partition_expr, s))
 _can_convert_to(::Type{DataPartition}, s::Symbol) = _can_convert_to(DataPartition, string(s))
@@ -375,7 +379,10 @@ function DataPartition(s::AbstractString)
         throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data-partition name"))
     else
         cat, no, set = m.captures
-        DataPartition(parse(Int, no), Symbol(set), DataCategory(cat))
+        no = parse(Int, no)
+        cat = isnothing(cat) ? DataCategory(:cal) : DataCategory(cat)
+        set = isnothing(set) ? :a : Symbol(lowercase(set))
+        DataPartition(no, set, cat)
     end
 end
 

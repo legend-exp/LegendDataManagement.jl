@@ -35,7 +35,7 @@ using Unitful
     @test p.no == 1
     @test p.set == :a
     @test p.cat == DataCategory(:cal)
-    @test string(p) == "calgroup001a"
+    @test string(p) == "calpartition001a"
     @test p == DataPartition(001)
     @test p < DataPartition(:calgroup002)
     @test_throws ArgumentError DataPartition("invalidstring")
