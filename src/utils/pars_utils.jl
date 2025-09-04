@@ -31,14 +31,34 @@ function nt2pd(pd::PropDict, nt::Union{NamedTuple, Dict, PropDict})
 end
 
 """
-    writevalidity(props_db::LegendDataManagement.PropsDB, filekey::FileKey; category::Symbol=:all)
-    writevalidity(props_db::LegendDataManagement.PropsDB, filekey::FileKey, part::DataPartitionLike; category::Symbol=:all)
-Write validity for a given filekey.
+    writevalidity(props_db::LegendDataManagement.PropsDB, filekey::FileKey,
+                  apply::Union{String,Vector{String}}; category::Symbol = :all, mode::String = "reset")
+
+    writevalidity(props_db::LegendDataManagement.PropsDB, filekey::FileKey,
+                  rsel::Tuple{DataPeriod,DataRun}; category::Symbol = :all)
+
+    writevalidity(props_db::LegendDataManagement.PropsDB, filekey::FileKey,
+                  part::DataPartitionLike; category::Symbol = :all)
+
+    writevalidity(props_db::LegendDataManagement.PropsDB,
+                  validity_with_flag::NamedTuple{(:result, :skipped)}; category::Symbol = :all, impl::Symbol = :full)
+
+Write validity information into `validity.yaml`.
+
+- With `apply` (string or vector), one or more validity files are written
+  using the given `mode` (`"reset"`, `"append"`, `"remove"`, or `"replace"`).
+- A `(DataPeriod, DataRun)` or `DataPartition` is automatically converted
+  into the corresponding validity string.
+- With a `NamedTuple(:result, :skipped)`, process a sequence of validity
+  updates across detectors and partitions, using either the `:full` or
+  `:diff` implementation.
+
+All entries are merged chronologically into `validity.yaml`.
 """
 function writevalidity end
 export writevalidity
 function writevalidity(props_db::LegendDataManagement.MaybePropsDB, filekey::FileKey, apply::Vector{String}; category::DataCategoryLike=:all, mode::AbstractString = "reset")
-    Distributed.remotecall_fetch(_writevalidity_impl, 1, props_db, filekey, apply; category=category, mode=mode, write_from_master= (Distributed.myid() == 1))
+    Distributed.remotecall_fetch(_writevalidity_impl, 1, props_db, filekey, apply; category, mode, write_from_master= (Distributed.myid() == 1))
 end
 const _writevalidity_lock = ReentrantLock()
 function _writevalidity_impl(props_db::LegendDataManagement.MaybePropsDB, filekey::FileKey, apply::Vector{String};
@@ -85,6 +105,113 @@ writevalidity(props_db, filekey, apply::String; kwargs...) = writevalidity(props
 writevalidity(props_db, filekey, rsel::Tuple{DataPeriod, DataRun}; kwargs...) = writevalidity(props_db, filekey, "$(first(rsel))/$(last(rsel)).yaml"; kwargs...)
 writevalidity(props_db, filekey, part::DataPartition; kwargs...) = writevalidity(props_db, filekey, "$(part).yaml"; kwargs...)
 function writevalidity(
+    props_db::LegendDataManagement.MaybePropsDB,
+    validity_with_flag::NamedTuple{(:result, :skipped)};
+    category::DataCategoryLike = :all,
+    impl::Symbol = :full # :full or :diff
+)
+    if impl == :full
+        # Ensures each detector has a validity entry for every run, even if not grouped (useful e.g. for AC runs).
+        return writevalidity_full(props_db, validity_with_flag; category=category)
+    elseif impl == :diff
+        # Detects differences in validity entries per timestamp and writes each change into validity.yaml.
+        return writevalidity_diff(props_db, validity_with_flag; category=category)
+    else
+        throw(ArgumentError("Unknown implementation: $impl"))
+    end
+end
+
+function writevalidity_full(
+    props_db::LegendDataManagement.MaybePropsDB,
+    validity_with_flag::NamedTuple{(:result, :skipped)};
+    category::DataCategoryLike = :all
+)
+    validity = validity_with_flag.result
+
+    # 1) only keep earliest timestamp per unique validity string
+    validity_first_ts = Dict{String, Timestamp}()
+    validity_filekey  = Dict{Timestamp, FileKey}()
+    for row in validity
+        ts = row.filekey.time
+        val = row.validity
+        if !haskey(validity_first_ts, val) || ts < validity_first_ts[val]
+            validity_first_ts[val] = ts
+            validity_filekey[ts] = row.filekey
+        end
+    end
+
+    # 2) collect first 'a' partitions per detector and find global reset timestamp
+    det_to_a_validity = Dict{String, String}()      # detector => "...a.yaml"
+    det_to_a_ts       = Dict{String, Timestamp}()   # detector => first 'a' ts
+    for (val, ts) in validity_first_ts
+        if endswith(val, "a.yaml")
+            det = split(val, '/')[1]
+            det_to_a_validity[det] = val
+            det_to_a_ts[det] = ts
+        end
+    end
+    reset_ts = isempty(det_to_a_ts) ? nothing : minimum(values(det_to_a_ts))
+
+    # 3) group non-'a' transitions as remove(prev) + append(new)
+    ts_to_adds    = Dict{Timestamp, Vector{String}}()
+    ts_to_removes = Dict{Timestamp, Vector{String}}()
+
+    for (val, ts) in validity_first_ts
+        det, suffix = split(val, '/')
+        if endswith(val, "a.yaml")
+            continue
+        end
+        # parse partition (strip ".yaml"), compute predecessor (same number, previous set)
+        part      = DataPartition(replace(suffix, ".yaml" => ""))
+        prev_char = Char(first(string(part.set))) - 1
+        prev_part = DataPartition(part.no, Symbol(prev_char), part.cat)
+        prev_val  = string(det, "/", prev_part, ".yaml")
+
+        push!(get!(ts_to_adds, ts, String[]), val)
+        push!(get!(ts_to_removes, ts, String[]), prev_val)
+    end
+
+    # 4) emit writes in chronological order, grouping per timestamp (≤1 remove, ≤1 append)
+    timestamps = sort!(collect(union(keys(ts_to_adds), keys(ts_to_removes),
+                                     reset_ts === nothing ? Timestamp[] : [reset_ts])))
+
+    for ts in timestamps
+        fk = validity_filekey[ts]
+        appends = String[]
+        removes = String[]
+
+        # baseline handling at earliest 'a' timestamp
+        if ts == reset_ts
+            if validity_with_flag.skipped
+                append!(appends, values(det_to_a_validity))   # treat as append when skipped=true
+            else
+                vals = sort!(collect(values(det_to_a_validity)))
+                writevalidity(props_db, fk, vals; category=category, mode="reset")
+            end
+        end
+
+        if haskey(ts_to_removes, ts)
+            append!(removes, ts_to_removes[ts])
+        end
+        if haskey(ts_to_adds, ts)
+            append!(appends, ts_to_adds[ts])
+        end
+
+        # use "replace" if exactly one remove and one append
+        if length(removes) == 1 && length(appends) == 1
+            writevalidity(props_db, fk, [removes[1], appends[1]]; category=category, mode="replace")
+        else
+            if !isempty(removes)
+                writevalidity(props_db, fk, sort!(removes); category=category, mode="remove")
+            end
+            if !isempty(appends)
+                writevalidity(props_db, fk, sort!(appends); category=category, mode="append")
+            end
+        end
+    end
+end
+
+function writevalidity_diff(
     props_db::LegendDataManagement.MaybePropsDB,
     validity_with_flag::NamedTuple{(:result, :skipped)};
     category::DataCategoryLike = :all
