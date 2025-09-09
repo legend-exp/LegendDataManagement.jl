@@ -223,9 +223,9 @@ LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{
 
 
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPartition, ChannelOrDetectorIdLike}; kwargs...)
-    first_run = first(LegendDataManagement._get_partitions(data, :default)[rsel[3]])
+    first_run = first(LegendDataManagement._get_partitions(data, :default, rsel[2])[rsel[3]])
     ch = _get_channelid(data, (first_run.period, first_run.run, rsel[2]), rsel[4])
-    pinfo = partitioninfo(data, ch, rsel[3]; category=rsel[2])
+    pinfo = partitioninfo(data, ch, rsel[3])
     @assert ch == _get_channelid(data, (first(pinfo).period, first(pinfo).run, rsel[2]), rsel[4]) "Channel mismatch in partitioninfo"
     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], pinfo, ch); kwargs...)
 end

@@ -132,73 +132,6 @@ const DataTierLike = Union{DataTier, Symbol, AbstractString}
 export DataTierLike
 
 
-"""
-    struct DataPartition <: DataSelector
-
-Represents a LEGEND data-taking partition.
-
-Example:
-
-```julia
-partition = DataPartition(1)
-partition.cat = :calgroup
-partition.no == 1
-partition.set == :a
-string(partition) == "calgroup001a"
-DataPartition(:calgroup001a) == partition
-```
-"""
-struct DataPartition <: DataSelector
-    no::Int
-    set::Symbol
-    cat::Symbol
-    # fall back to default calgroups if only an Integer is given
-    DataPartition(no::Int, set::Symbol = :a, cat::Symbol = :calgroup) = new(no, set, cat)
-end
-export DataPartition
-
-@inline DataPartition(partition::DataPartition) = partition
-Base.:(==)(a::DataPartition, b::DataPartition) = a.no == b.no && a.set == b.set && a.cat == b.cat
-Base.isless(a::DataPartition, b::DataPartition) = isless(a.no, b.no) && isless(a.set, b.set)
-
-# ToDo: Improve implementation
-Base.print(io::IO, partition::DataPartition) = print(io, "$(partition.cat)$(lpad(string(partition.no), 3, string(0)))$(partition.set)")
-Base.show(io::IO, partition::DataPartition) = print(io, "DataPartition($partition)")
-
-const partition_expr = r"^(part|calgroup|phygroup)([0-9]{2,3})([A-Za-z])$"
-
-_can_convert_to(::Type{DataPartition}, s::AbstractString) = !isnothing(match(partition_expr, s))
-_can_convert_to(::Type{DataPartition}, s::Symbol) = _can_convert_to(DataPartition, string(s))
-_can_convert_to(::Type{DataPartition}, s::DataPartition) = true
-_can_convert_to(::Type{DataPartition}, s) = false
-
-function DataPartition(s::AbstractString)
-    m = match(partition_expr, s)
-    if isnothing(m)
-        throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data-partition name"))
-    else
-        cat, no, set = (m::RegexMatch).captures
-        DataPartition(parse(Int, no), Symbol(set), Symbol(cat))
-    end
-end
-
-function DataPartition(s::Symbol) 
-    DataPartition(string(s)) 
-end
-
-Base.convert(::Type{DataPartition}, s::AbstractString) = DataPartition(s)
-Base.convert(::Type{DataPartition}, s::Symbol) = DataPartition(string(s))
-
-
-"""
-    DataPartitionLike = Union{DataPartition, Symbol, AbstractString}
-
-Anything that can represent a data partition, like `DataPartition(:calgroup001a)` or "part02".
-"""
-const DataPartitionLike = Union{DataPartition, Symbol, AbstractString}
-export DataPartitionLike
-
-
 
 """
     struct DataPeriod <: DataSelector
@@ -395,6 +328,80 @@ const PeriodSelLike = Tuple{<:DataPeriodLike, <:DataCategoryLike}
 Represents a LEGEND run selection for a specific `category`.
 """
 const RunCategorySelLike = Tuple{<:DataPeriodLike, <:DataRunLike, <:DataCategoryLike}
+
+
+"""
+    struct DataPartition <: DataSelector
+
+Represents a LEGEND data-taking partition. If only a number is given, the struct uses category `:cal` and set `:a` as default.  
+
+The struct can also be constructed from strings in various formats, such as `"calgroup001a"`, `"calpartition001a"`, `"calpart001a"`, or the short form `"part001"`.
+
+Example:
+
+```julia
+partition = DataPartition(1)
+partition.cat == :cal
+partition.no == 1
+partition.set == :a
+string(partition) == "calpartition001a"
+DataPartition("calgroup001a") == partition
+DataPartition("calpart001a") == partition
+DataPartition("part001") == partition
+```
+"""
+struct DataPartition <: DataSelector
+    no::Int
+    set::Symbol
+    cat::DataCategory
+    DataPartition(no::Int, set::Symbol = :a, cat::DataCategory = DataCategory(:cal)) = new(no, set, cat)
+end
+export DataPartition
+
+@inline DataPartition(partition::DataPartition) = partition
+Base.:(==)(a::DataPartition, b::DataPartition) = a.no == b.no && a.set == b.set && a.cat == b.cat
+Base.isless(a::DataPartition, b::DataPartition) = a.no < b.no || (a.no == b.no && a.set < b.set)
+
+# ToDo: Improve implementation
+Base.print(io::IO, partition::DataPartition) = print(io, "$(partition.cat.label)partition$(lpad(string(partition.no), 3, '0'))$(partition.set)")
+Base.show(io::IO, partition::DataPartition) = print(io, "DataPartition($partition)")
+
+const partition_expr = r"^(?:([a-z]{3}))?(?:group|partition|part)?([0-9]{2,3})([A-Za-z])?$"
+
+_can_convert_to(::Type{DataPartition}, s::AbstractString) = !isnothing(match(partition_expr, s))
+_can_convert_to(::Type{DataPartition}, s::Symbol) = _can_convert_to(DataPartition, string(s))
+_can_convert_to(::Type{DataPartition}, s::DataPartition) = true
+_can_convert_to(::Type{DataPartition}, s) = false
+
+function DataPartition(s::AbstractString)
+    m = match(partition_expr, s)
+    if isnothing(m)
+        throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data-partition name"))
+    else
+        cat, no, set = m.captures
+        no = parse(Int, no)
+        cat = isnothing(cat) ? DataCategory(:cal) : DataCategory(cat)
+        set = isnothing(set) ? :a : Symbol(lowercase(set))
+        DataPartition(no, set, cat)
+    end
+end
+
+function DataPartition(s::Symbol) 
+    DataPartition(string(s)) 
+end
+
+Base.convert(::Type{DataPartition}, s::AbstractString) = DataPartition(s)
+Base.convert(::Type{DataPartition}, s::Symbol) = DataPartition(string(s))
+
+
+"""
+    DataPartitionLike = Union{DataPartition, Symbol, AbstractString}
+
+Anything that can represent a data partition, like `DataPartition(:calgroup001a)` or "part02".
+"""
+const DataPartitionLike = Union{DataPartition, Symbol, AbstractString}
+export DataPartitionLike
+
 
 """
     struct Timestamp <: DataSelector
