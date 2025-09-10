@@ -411,11 +411,13 @@ end
 
 function _get_md_property(@nospecialize(pd::PropsDB), s::Symbol)
     new_relpath = push!(copy(_rel_path(pd)), string(s))
-
+    
     yaml_primary_filename, yaml_override_filename = _propsdb_fullpaths(pd, "$s.yaml")
 
     if isdir(joinpath(_base_path(pd), new_relpath...))
         _any_props(_base_path(pd), _override_base(pd), new_relpath, _validity_sel(pd))
+    elseif isdir(joinpath(_override_base(pd), new_relpath...))
+        _any_props(_override_base(pd), "", new_relpath, _validity_sel(pd))
     elseif ispath(yaml_primary_filename)
         _check_propery_access(pd, yaml_primary_filename)
         if ispath(yaml_override_filename)

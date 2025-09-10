@@ -348,7 +348,7 @@ function runinfo(data::LegendData)
             period, run = DataPeriod(p), DataRun(r)
             function get_cat_entry(cat)
                 if haskey(ri, cat)
-                    fk = haskey(ri[cat], :start_key) ? FileKey(data.name, period, run, cat, Timestamp(get(ri[cat], :start_key, 1))) : missing
+                    fk = ifelse(haskey(ri[cat], :start_key), FileKey(data.name, period, run, cat, Timestamp(get(ri[cat], :start_key, 1))), missing)
                     livetime = get(ri[cat], :livetime_in_s, NaN) * u"s"
                     is_ana_run::Bool = !ismissing(fk) && (!(cat in (:phy, :cal)) || any(row.period == period && row.run == run for row in analysis_runs(data, cat)))
                     nttype((fk, livetime, is_ana_run))

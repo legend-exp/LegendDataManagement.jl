@@ -19,14 +19,16 @@ jobs:
       matrix:
         version: ['1']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
       - name: registry_add
         run: julia add_registries.jl
-      - uses: julia-actions/julia-downgrade-compat@v1
+      - uses: julia-actions/julia-downgrade-compat@v2
         with:
+          julia_version: ${{ matrix.version }}
+          mode: alldeps
           skip: Pkg,TOML,YAML
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1

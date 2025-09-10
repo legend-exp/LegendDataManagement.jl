@@ -96,6 +96,12 @@ dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, det)
 ```
 In case, a `ChannelId` is missing in a file, the function will throw an `ArgumentError`. To avoid this and return `nothing` instead, you can use the `ignore_missing` keyword argument.
 
+The data can be filtered by a `filterby` keyword argument which is a [PropertyFunction](https://github.com/oschulz/PropertyFunctions.jl/tree/main) applied to each chunk of loaded data:
+```julia
+dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, ch; filterby=@pf($e_trap > 0.0))
+```
+This will only load data where the `e_trap` property is greater than 0.
+
 It is possible to read in multiple files in parallel using the `Distributed` functionalities from within a session. You can activate parallel read with the `parallel` kwarg.
 ``` julia
 dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), ch)
@@ -121,11 +127,15 @@ det = SolidStateDetector(LegendData(:l200), :V99000A)
 plot(det)
 ```
 
-A detector can also be constructed using the filename of the LEGEND metadata detector-datasheet JSON file (no `$LEGEND_DATA_CONFIG` required):
+`st = :slice` keyword can be passed to the `plot` to plot a 2D slice of the detector. Using the previous constructor looks up the diode and crystal metadata files and calls the following lower level constructor -- which can also be used directly (no `$LEGEND_DATA_CONFIG` required):
 
 ```julia
-det = SolidStateDetector(LegendData, "V99000A.json")
+det = SolidStateDetector(LegendData, "V99000A.yaml", "V99000.yaml")
 ```
+In cases where multiple values (or none) are available in the metadata, the detector is configured using the following priority:
+- n⁺ contact thickness: 0νββ analysis value (if available) → manufacturer's value (if available) → default value
+- Operational Voltage: l200 characterization value (if available) → manufacturer's value (if available) → default value
+- Impurity profile: model in crystal metadata (if available) → constant value of 0
 
 In addition, when creating a `Simulation`, all simulation functions in SolidStateDetectors.jl can be applied. As usual, all fields stored in the `Simulation` can be written and read using `LegendHDF5IO`:
 
@@ -133,7 +143,12 @@ In addition, when creating a `Simulation`, all simulation functions in SolidStat
 using LegendDataManagement
 using SolidStateDetectors
 
-sim = Simulation(LegendData, "V99000A.json")
+T=Float32
+didode_data=LegendDataManagement.readlprops("V99000A.yaml")
+crystal_data=LegendDataManagement.readlprops("V99000.yaml")
+
+
+sim = Simulation{T}(LegendData, diode_data, crystal_data)
 simulate!(sim) # calculate electric field and weighting potentials
 
 using LegendHDF5IO
