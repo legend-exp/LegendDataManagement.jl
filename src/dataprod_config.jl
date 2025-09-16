@@ -472,7 +472,39 @@ Get the list of filekeys to ignore for `data`.
 """
 function bad_filekeys(data::LegendData)
     get!(_cached_bad_filekeys, objectid(data)) do
-        Set(read_filekeys(joinpath(data_path(pydataprod_config(data)), "ignore_keys.keylist")))
+        # Access ignored_daq_cycles directly from metadata.datasets
+        if haskey(data.metadata.datasets, :ignored_daq_cycles)
+            ignored_data = data.metadata.datasets.ignored_daq_cycles
+            bad_keys = Set{FileKey}()
+            
+            # Process both 'unprocessable' and 'removed' categories
+            for category in ["unprocessable", "removed"]
+                if haskey(ignored_data, Symbol(category))
+                    for entry in ignored_data[Symbol(category)]
+                        # Extract FileKey from string like "l200-p15-r005-phy-20250817T223510Z"
+                        if isa(entry, String) && startswith(entry, "l200-")
+                            try
+                                # Parse the FileKey string
+                                parsed_fk = FileKey(entry)
+                                push!(bad_keys, parsed_fk)
+                            catch e
+                                @debug "Could not parse FileKey from '$entry': $e"
+                            end
+                        end
+                    end
+                end
+            end
+            bad_keys
+        else
+            # Fallback to old format if available
+            ignore_keys_path = joinpath(data_path(pydataprod_config(data)), "ignore_keys.keylist")
+            if isfile(ignore_keys_path)
+                Set(read_filekeys(ignore_keys_path))
+            else
+                @debug "No ignore files found in metadata.datasets.ignored_daq_cycles or $ignore_keys_path"
+                Set{FileKey}()
+            end
+        end
     end
 end
 export bad_filekeys
