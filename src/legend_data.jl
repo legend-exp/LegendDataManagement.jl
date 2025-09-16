@@ -380,7 +380,17 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
                 hvcard::Int = get(chmap[k].voltage.card, :id, -1)
                 hvch::Int = get(chmap[k].voltage, :channel, -1)
 
-                enrichment::Unitful.Quantity{<:Measurement{Float64}} = if haskey(diodmap, k) && haskey(diodmap[k].production, :enrichment) measurement(diodmap[k].production.enrichment.val, diodmap[k].production.enrichment.unc) else measurement(Float64(NaN), Float64(NaN)) end *100u"percent"
+                enrichment::Unitful.Quantity{<:Measurement{Float64}} = if haskey(diodmap, k) && haskey(diodmap[k].production, :enrichment) && haskey(diodmap[k].production.enrichment, :val) && haskey(diodmap[k].production.enrichment, :unc)
+                    val = diodmap[k].production.enrichment.val
+                    unc = diodmap[k].production.enrichment.unc
+                    if isa(val, PropDicts.MissingProperty) || isa(unc, PropDicts.MissingProperty)
+                        measurement(Float64(NaN), Float64(NaN))
+                    else
+                        measurement(Float64(val), Float64(unc))
+                    end
+                else
+                    measurement(Float64(NaN), Float64(NaN))
+                end * 100u"percent"
                 mass::Unitful.Mass{Float64} = if haskey(diodmap, k) && haskey(diodmap[k].production, :mass_in_g) diodmap[k].production.mass_in_g else Float64(NaN) end *1e-3*u"kg"
             
                 total_volume::Unitful.Volume{Float64} = if haskey(diodmap, k) get_active_volume(diodmap[k], 0.0) else Float64(NaN) * u"cm^3" end
