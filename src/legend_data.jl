@@ -99,10 +99,10 @@ end
     private ? (:_config, props...) : props
 end
 
-function LegendData(setup::Symbol; dataset::Union{AbstractString, Symbol} = "")
+function LegendData(setup::Symbol; dataset::Symbol = :default)
     ldata = getproperty(LegendDataConfig().setups, setup)
     # Only override if dataset keyword is non-empty
-    selected_dataset = dataset == "" ? Symbol(ldata.dataset) : Symbol(dataset)
+    selected_dataset = dataset == :default ? Symbol(ldata.dataset) : dataset
     LegendData(ldata, setup, selected_dataset)
 end
 
