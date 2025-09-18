@@ -258,11 +258,12 @@ const _cached_analysis_runs = LRU{Tuple{UInt, DataCategoryLike}, StructVector{@N
 """
     analysis_runs(data::LegendData)
 
-Return cross-period analysis runs.
+Return cross-period analysis runs. Picks the dataset specified in data.dataset.
 """
 function analysis_runs(data::LegendData, cat::DataCategoryLike)
     Table(sort(get!(_cached_analysis_runs, (objectid(data), cat)) do
-        aruns::PropDict = get(data.metadata.datasets.runlists.valid, Symbol(cat), PropDict())
+        haskey(data.metadata.datasets.runlists, Symbol(data.dataset)) || error("Requested dataset '$(data.dataset)' not found in runlists.")
+        aruns::PropDict = get(getproperty(data.metadata.datasets.runlists, Symbol(data.dataset)), Symbol(cat), PropDict())
         periods_and_runs = Vector{@NamedTuple{period::DataPeriod, run::DataRun}}[
             map(run -> (period = DataPeriod(p), run = run), parse_runs(rs))
             for (p, rs) in aruns

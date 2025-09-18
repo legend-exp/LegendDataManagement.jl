@@ -55,6 +55,7 @@ struct LegendData <: AbstractSetupData
     # ToDo: Add setup name
     _config::SetupConfig
     _name::Symbol
+    _dataset::Symbol
 end
 export LegendData
 
@@ -67,6 +68,8 @@ get_setup_name(data::LegendData) = getfield(data, :_name)
         getfield(d, :_config)
     elseif s == :name
         getfield(d, :_name)
+    elseif s == :dataset
+        getfield(d, :_dataset)
     elseif s == :metadata
         _ldata_propsdb(d, :metadata)
     elseif s == :tier
@@ -88,7 +91,7 @@ function _ldata_propsdb(d::LegendData, dbsym::Symbol)
 end
 
 @inline function Base.propertynames(d::LegendData)
-    (:metadata, :tier, :par, :jlpar)
+    (:metadata, :tier, :par, :jlpar, :dataset)
 end
 
 @inline function Base.propertynames(d::LegendData, private::Bool)
@@ -96,9 +99,11 @@ end
     private ? (:_config, props...) : props
 end
 
-
-function LegendData(setup::Symbol)
-    LegendData(getproperty(LegendDataConfig().setups, setup), setup)
+function LegendData(setup::Symbol; dataset::Union{AbstractString, Symbol} = "")
+    ldata = getproperty(LegendDataConfig().setups, setup)
+    # Only override if dataset keyword is non-empty
+    selected_dataset = dataset == "" ? Symbol(ldata.dataset) : Symbol(dataset)
+    LegendData(ldata, setup, selected_dataset)
 end
 
 Base.@deprecate data_filename(data::LegendData, filekey::FileKey, tier::DataTierLike) data.tier[tier, filekey]

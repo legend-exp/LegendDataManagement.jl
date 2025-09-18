@@ -23,6 +23,7 @@ data_path(setup, "tier", "raw", "cal", "p02", "r006", "l200-p02-r006-cal-2022122
 """
 struct SetupConfig
     paths::Vector{Pair{Vector{String}, String}}
+    dataset::String
 end
 export SetupConfig
 
@@ -38,7 +39,8 @@ end
 function SetupConfig(p::PropDict)
     paths = [_split_config_pathentry(string(k)) => String(v) for (k,v) in p.paths]
     sorted_paths = sort(paths)
-    SetupConfig(sorted_paths)
+    dataset = haskey(p, :dataset) ? String(p.dataset) : "valid"
+    SetupConfig(sorted_paths, dataset)
 end
 
 
