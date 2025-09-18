@@ -21,8 +21,14 @@ include("testing_utils.jl")
     @test normalize_path(@inferred(l200.tier[:raw, "l200-p02-r006-cal-20221226T200846Z"])) == "/some/other/storage/raw_lh5/cal/p02/r006/l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5"
     @test normalize_path(@inferred(l200.tier[:dsp, "l200-p02-r006-cal-20221226T200846Z"])) == normalize_path(joinpath(testdata_dir, "generated", "tier", "dsp", "cal", "p02", "r006", "l200-p02-r006-cal-20221226T200846Z-tier_dsp.lh5"))
 
-    props_base_path = data_path(LegendDataConfig().setups.l200, "metadata")
-    @test l200.metadata isa LegendDataManagement.PropsDB
+    @testset "LegendData" begin
+        props_base_path = data_path(LegendDataConfig().setups.l200, "metadata")
+        @test l200.metadata isa LegendDataManagement.PropsDB
+
+        @test l200.dataset == :valid
+        #@test LegendData(:l200_nu24).dataset == :nu24 
+        #@test LegendData(:l200_nu24; dataset = :valid).dataset == :valid
+    end
 
     @testset "channelinfo" begin
         # ToDo: Make type-stable:
