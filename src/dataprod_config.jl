@@ -477,21 +477,15 @@ function bad_filekeys(data::LegendData)
         if haskey(data.metadata.datasets, :ignored_daq_cycles)
             ignored_data = data.metadata.datasets.ignored_daq_cycles
             bad_keys = Set{FileKey}()
-            
-            # Process both 'unprocessable' and 'removed' categories
-            for category in ["unprocessable", "removed"]
-                if haskey(ignored_data, Symbol(category))
-                    for entry in ignored_data[Symbol(category)]
-                        # Extract FileKey from string like "l200-p15-r005-phy-20250817T223510Z"
-                        if isa(entry, String) && startswith(entry, "l200-")
-                            try
-                                # Parse the FileKey string
-                                parsed_fk = FileKey(entry)
-                                push!(bad_keys, parsed_fk)
-                            catch e
-                                @debug "Could not parse FileKey from '$entry': $e"
-                            end
-                        end
+
+            # Dynamically process all categories in ignored_data
+            for category in keys(ignored_data)
+                for entry in ignored_data[category]
+                    try
+                        parsed_fk = FileKey(entry)
+                        push!(bad_keys, parsed_fk)
+                    catch e
+                        error("Corrupt ignored_daq_cycles entry: Could not parse FileKey from '$entry': $e")
                     end
                 end
             end
@@ -502,8 +496,7 @@ function bad_filekeys(data::LegendData)
             if isfile(ignore_keys_path)
                 Set(read_filekeys(ignore_keys_path))
             else
-                @debug "No ignore files found in metadata.datasets.ignored_daq_cycles or $ignore_keys_path"
-                Set{FileKey}()
+                error("No ignore files found in metadata.datasets.ignored_daq_cycles or $ignore_keys_path")
             end
         end
     end
