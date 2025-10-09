@@ -464,41 +464,17 @@ end
 is_analysis_run(data::LegendData, fk::FileKey) = is_analysis_run(data, (fk.period, fk.run, fk.category))
 is_analysis_run(data::LegendData, selectors...) = is_analysis_run(data, selectors)
 
-const _cached_bad_filekeys = LRU{UInt, Set{FileKey}}(maxsize = 10^3)
+const _cached_bad_filekeys = LRU{Tuple{UInt, Vector{Symbol}}, Set{FileKey}}(maxsize = 10^3)
 
 """
-    bad_filekeys(data::LegendData)
+    bad_filekeys(data::LegendData; load_keys::Vector{Symbol}=Symbol.(keys(PropDict(data.metadata.datasets.ignored_daq_cycles)))
 
 Get the list of filekeys to ignore for `data`.
 """
-function bad_filekeys(data::LegendData)
-    get!(_cached_bad_filekeys, objectid(data)) do
-        # Access ignored_daq_cycles directly from metadata.datasets
-        if haskey(data.metadata.datasets, :ignored_daq_cycles)
-            ignored_data = data.metadata.datasets.ignored_daq_cycles
-            bad_keys = Set{FileKey}()
-
-            # Dynamically process all categories in ignored_data
-            for category in keys(ignored_data)
-                for entry in ignored_data[category]
-                    try
-                        parsed_fk = FileKey(entry)
-                        push!(bad_keys, parsed_fk)
-                    catch e
-                        error("Corrupt ignored_daq_cycles entry: Could not parse FileKey from '$entry': $e")
-                    end
-                end
-            end
-            bad_keys
-        else
-            # Fallback to old format if available
-            ignore_keys_path = joinpath(data_path(pydataprod_config(data)), "ignore_keys.keylist")
-            if isfile(ignore_keys_path)
-                Set(read_filekeys(ignore_keys_path))
-            else
-                error("No ignore files found in metadata.datasets.ignored_daq_cycles or $ignore_keys_path")
-            end
-        end
+function bad_filekeys(data::LegendData; load_keys::Vector{Symbol}=Symbol.(keys(PropDict(data.metadata.datasets.ignored_daq_cycles))))
+    get!(_cached_bad_filekeys, (objectid(data), load_keys)) do
+        ignored_data = PropDict(data.metadata.datasets.ignored_daq_cycles)
+        Set(vcat([FileKey.(ignored_data[k]) for k in load_keys]...))
     end
 end
 export bad_filekeys
