@@ -11,21 +11,34 @@ using Unitful
     @test setup.label == :l200
     @test @inferred(string(setup)) == "l200"
     @test @inferred(ExpSetup("l200")) == setup
+    @test_throws ArgumentError DataPeriod("invalidsetup")
 
     period = DataPeriod(2)
     @test period.no == 2
     @test @inferred(string(period)) == "p02"
     @test @inferred(DataPeriod("p02")) == period
+    @test_throws ArgumentError DataPeriod("invalidperiod")
 
     r = DataRun(6)
     @test r.no == 6
     @test @inferred(string(r)) == "r006"
     @test @inferred(DataRun("r006")) == r
+    @test_throws ArgumentError DataRun("invalidrun")
 
     category = DataCategory(:cal)
     @test category.label == :cal
     @test @inferred(string(category)) == "cal"
     @test @inferred(DataCategory("cal")) == category
+    @test_throws ArgumentError DataCategory("invalidstring")
+
+    p = DataPartition("calgroup001a")
+    @test p.no == 1
+    @test p.set == :a
+    @test p.cat == DataCategory(:cal)
+    @test string(p) == "calpartition001a"
+    @test p == DataPartition(001)
+    @test p < DataPartition(:calgroup002)
+    @test_throws ArgumentError DataPartition("invalidstring")
 
     timestamp = @inferred(Timestamp("20221226T200846Z"))
     @test timestamp.unixtime == 1672085326

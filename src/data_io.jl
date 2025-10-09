@@ -16,7 +16,7 @@ dsp = read_ldata((:e_cusp, :e_trap, :blmean), l200, :jldsp, filekey, ch)
 dsp = read_ldata(:e_cusp, l200, :jldsp, filekey, ch)
 dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, ch)
 
-dsp = read_ldata(l200, :jldsp, :cal, DataPartition(1), ch)
+dsp = read_ldata(l200, :jldsp, :cal, DataPartition(:calgroup001a), ch)
 dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), ch)
 dsp = read_ldata(l200, :jldsp, :cal, runinfo(l200)[1:3], ch)
 

@@ -19,7 +19,7 @@ l200 = LegendData(:l200)
                 @test period_exposure ≈ sum(map(r -> get_exposure(l200, det, period, r), rinfo.run))
             end
             @testset "Partition exposure" begin
-                part = DataPartition(1)
+                part = DataPartition(:phygroup001a)
                 part_exposure = get_exposure(l200, det, part)
                 partinfo = partitioninfo(l200, det, part)
                 @test part_exposure isa Quantity

@@ -371,7 +371,7 @@ end
 function _get_larcal_dc_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol; kwargs...)
     dataprod_lar = _dataprod_lar_cal(data, sel, detector; kwargs...)
     let Δt_pos_dc_tag = dataprod_lar.Δt_pos_dc_tag, dc_tag_interval = ClosedInterval(dataprod_lar.dc_tag_interval...)
-        @pf [any(  abs.($pos_dc .- p) .< Δt_pos_dc_tag  .&&  $max_dc .∈ dc_tag_interval) for p in $pos]
+        @pf [any(  abs.($pos_dc .- p) .< Δt_pos_dc_tag  .&&  ($max_dc .>= dc_tag_interval.left) .&& ($max_dc .<= dc_tag_interval.right)) for p in $pos]
     end
     
 end

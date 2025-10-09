@@ -1,6 +1,6 @@
 # This file is a part of LegendDataManagement.jl, licensed under the MIT License (MIT).
 
-const validity_filename = "validity.jsonl"
+const validity_filename = "validity.yaml"
 
 const _ValidityTimesFiles = NamedTuple{(:valid_from, :filelist), Tuple{Vector{Timestamp}, Vector{Vector{String}}}}
 const _ValidityDict = IdDict{DataCategory,_ValidityTimesFiles}
@@ -197,7 +197,7 @@ function PropDicts.writeprops(@nospecialize(missing_props::NoSuchPropsDBEntry), 
     if isdir(maybe_dirpath)
         throw(ErrorException("Cannot write properties to existing directory \"$maybe_dirpath\", target must be a file"))
     end
-    file = "$(rp[end]).json"
+    file = "$(rp[end]).yaml"
     mkpath(dir)
     writeprops(joinpath(dir, file), props)
     nothing
@@ -268,33 +268,48 @@ function _any_props(base_path::String, override_base::String, rel_path::Vector{S
 end
 
 
-function _read_jsonl(filename::String)
-    open(filename) do io
-        JSON.parse.(filter(!isempty, collect(eachline(io))))
-    end
-end
-
-function _load_validity(validity_path::String)
-    if ispath(validity_path)
-        entries = PropDict.(_read_jsonl(validity_path))
+function _load_validity(validity_path::AbstractString; mode_default::AbstractString = "append")
+    if isfile(validity_path)
+        # TODO: Cannot use readlprops here because this can be a Vector of PropDicts and not a PropDict
+        #       Can readlprops be updated so that we can drop the explicit YAML dependency here?
+        raw = ParallelProcessingTools.read_files(validity_path) do io
+            YAML.load_file(io)
+        end
         new_validity = _ValidityDict()
-        for props in entries
-            valid_from = _timestamp2datetime(props.valid_from)
-            # Backward compatibility, fallback from "category" to "select":
-            category = haskey(props, :category) ? DataCategory(props.category) : DataCategory(props.select)
-            filelist = props.apply
-            dict_entry = get!(new_validity, category, (valid_from = FileKey[], filelist = Vector{String}[]))
-            push!(dict_entry.valid_from, valid_from)
-            push!(dict_entry.filelist, filelist)
-        end
-        for key in keys(new_validity)
-            dict_entry = new_validity[key]
-            idxs = sortperm(dict_entry.valid_from)
-            new_validity[key] = (valid_from = dict_entry.valid_from[idxs], filelist = dict_entry.filelist[idxs])
-        end
-        return new_validity
-    else
-        return nothing
+
+        if !isnothing(raw)
+            for props in PropDict.(raw)
+                valid_from = Timestamp(props.valid_from)
+                categories = DataCategory.(let s = get(props, :category, "all"); s isa AbstractVector ? s : [s]; end)
+                filelist = let fk = props.apply; fk isa AbstractString ? [fk] : fk end
+                for category in categories
+                    dict_entry = get!(new_validity, category, (valid_from = FileKey[], filelist = Vector{String}[]))
+                    mode = isempty(dict_entry.filelist) ? "reset" : get(props, :mode, mode_default)
+                    if mode == "reset"
+                        new = filelist
+                    elseif mode == "append"
+                        new = deepcopy(last(dict_entry.filelist))
+                        append!(new, filelist)
+                    elseif mode == "remove"
+                        new = deepcopy(last(dict_entry.filelist))
+                        filter!(f -> !(f in filelist), new)
+                    elseif mode == "replace"
+                        length(filelist) != 2 && throw(ArgumentError("Invalid number of elements in replace mode: $(length(filelist))"))
+                        remove_file, add_file = filelist
+                        new = deepcopy(last(dict_entry.filelist))
+                        idx = findall(new .== remove_file)
+                        isnothing(idx) && throw(ArgumentError("Cannot replace $(remove_file): does not exist"))
+                        deleteat!(new, idx)
+                        push!(new, add_file)
+                    else
+                        throw(ArgumentError("Unknown mode for $(timestamp): $(mode)"))
+                    end
+                    push!(dict_entry.valid_from, valid_from)
+                    push!(dict_entry.filelist, new)
+                end
+            end
+        end   
+        new_validity
     end
 end
 
@@ -396,22 +411,23 @@ end
 
 function _get_md_property(@nospecialize(pd::PropsDB), s::Symbol)
     new_relpath = push!(copy(_rel_path(pd)), string(s))
+    
+    yaml_primary_filename, yaml_override_filename = _propsdb_fullpaths(pd, "$s.yaml")
 
-    json_primary_filename, json_override_filename = _propsdb_fullpaths(pd, "$s.json")
     if isdir(joinpath(_base_path(pd), new_relpath...))
         _any_props(_base_path(pd), _override_base(pd), new_relpath, _validity_sel(pd))
     elseif isdir(joinpath(_override_base(pd), new_relpath...))
         _any_props(_override_base(pd), "", new_relpath, _validity_sel(pd))
-    elseif ispath(json_primary_filename)
-        _check_propery_access(pd, json_primary_filename)
-        if ispath(json_override_filename)
-            readlprops([json_primary_filename, json_override_filename])
+    elseif ispath(yaml_primary_filename)
+        _check_propery_access(pd, yaml_primary_filename)
+        if ispath(yaml_override_filename)
+            readlprops([yaml_primary_filename, yaml_override_filename])
         else
-            readlprops(json_primary_filename)
+            readlprops(yaml_primary_filename)
         end
-    elseif ispath(json_override_filename)
-        _check_propery_access(pd, json_override_filename)
-        readlprops(json_override_filename)
+    elseif ispath(yaml_override_filename)
+        _check_propery_access(pd, yaml_override_filename)
+        readlprops(yaml_override_filename)
     else
         if !_needs_vsel(pd) && (isnothing(_validity_sel(pd)) || isempty(_validity_sel(pd)))
             NoSuchPropsDBEntry(_base_path(pd), push!(copy(_rel_path(pd)), string(s)))
@@ -423,7 +439,7 @@ end
 
 
 function _is_metadata_property_filename(filename)
-    endswith(filename, ".json") || isdir(filename)
+    (endswith(filename, ".json") || !isnothing(match(r"^[^.].*\.yaml", filename)) || isdir(filename)) && filename != validity_filename
 end
 
 function _md_propertyname(rel_filename::String)
@@ -431,7 +447,7 @@ function _md_propertyname(rel_filename::String)
     if !contains(rel_filename, ".")
         Symbol(rel_filename)
     else
-        if endswith(rel_filename, ".json")
+        if (endswith(rel_filename, ".json") || !isnothing(match(r"^[^.].*\.yaml", rel_filename))) && rel_filename != validity_filename
             Symbol(rel_filename[begin:end-5])
         else
             :__no_property

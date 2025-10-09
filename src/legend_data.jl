@@ -55,6 +55,7 @@ struct LegendData <: AbstractSetupData
     # ToDo: Add setup name
     _config::SetupConfig
     _name::Symbol
+    _dataset::Symbol
 end
 export LegendData
 
@@ -67,6 +68,8 @@ get_setup_name(data::LegendData) = getfield(data, :_name)
         getfield(d, :_config)
     elseif s == :name
         getfield(d, :_name)
+    elseif s == :dataset
+        getfield(d, :_dataset)
     elseif s == :metadata
         _ldata_propsdb(d, :metadata)
     elseif s == :tier
@@ -88,7 +91,7 @@ function _ldata_propsdb(d::LegendData, dbsym::Symbol)
 end
 
 @inline function Base.propertynames(d::LegendData)
-    (:metadata, :tier, :par, :jlpar)
+    (:metadata, :tier, :par, :jlpar, :dataset)
 end
 
 @inline function Base.propertynames(d::LegendData, private::Bool)
@@ -96,9 +99,11 @@ end
     private ? (:_config, props...) : props
 end
 
-
-function LegendData(setup::Symbol)
-    LegendData(getproperty(LegendDataConfig().setups, setup), setup)
+function LegendData(setup::Symbol; dataset::Symbol = :default)
+    ldata = getproperty(LegendDataConfig().setups, setup)
+    # Only override if dataset keyword is non-empty
+    selected_dataset = dataset == :default ? Symbol(ldata.dataset) : dataset
+    LegendData(ldata, setup, selected_dataset)
 end
 
 Base.@deprecate data_filename(data::LegendData, filekey::FileKey, tier::DataTierLike) data.tier[tier, filekey]
@@ -308,7 +313,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
     chinfo = get!(_cached_channelinfo, key) do
         chmap = data.metadata(sel).hardware.configuration.channelmaps
         diodmap = data.metadata.hardware.detectors.germanium.diodes
-        dpcfg = data.metadata(sel).dataprod.config.analysis
+        dpcfg = data.metadata(sel).datasets.statuses
         
         channel_keys = collect(keys(chmap))
 
@@ -380,7 +385,11 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
                 hvcard::Int = get(chmap[k].voltage.card, :id, -1)
                 hvch::Int = get(chmap[k].voltage, :channel, -1)
 
-                enrichment::Unitful.Quantity{<:Measurement{Float64}} = if haskey(diodmap, k) && haskey(diodmap[k].production, :enrichment) measurement(diodmap[k].production.enrichment.val, diodmap[k].production.enrichment.unc) else measurement(Float64(NaN), Float64(NaN)) end *100u"percent"
+                enrichment::Unitful.Quantity{<:Measurement{Float64}} = if haskey(diodmap, k)  && haskey(diodmap[k].production, :enrichment) && !isnothing(diodmap[k].production.enrichment.val)
+                    measurement(diodmap[k].production.enrichment.val, isnothing(diodmap[k].production.enrichment.unc) ? NaN : diodmap[k].production.enrichment.unc)
+                else
+                    measurement(Float64(NaN), Float64(NaN))
+                end * 100u"percent"
                 mass::Unitful.Mass{Float64} = if haskey(diodmap, k) && haskey(diodmap[k].production, :mass_in_g) diodmap[k].production.mass_in_g else Float64(NaN) end *1e-3*u"kg"
             
                 total_volume::Unitful.Volume{Float64} = if haskey(diodmap, k) get_active_volume(diodmap[k], 0.0) else Float64(NaN) * u"cm^3" end

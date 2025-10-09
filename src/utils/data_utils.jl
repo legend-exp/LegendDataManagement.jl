@@ -212,11 +212,11 @@ Get filekeys for a given partition.
 # Return
 - `Vector{FileKey}`: filekeys
 """
-function get_partitionfilekeys(data::LegendData, part::DataPartitionLike, tier::DataTierLike, category::DataCategoryLike; only_good::Bool=true)
+function get_partitionfilekeys(data::LegendData, part::DataPartitionLike, tier::DataTierLike; only_good::Bool=true)
     part = DataPartition(part)
     # get partition info
-    partinfo = partitioninfo(data, :default)[part]
-    found_filekeys = [filekey for (period, run) in partinfo if is_analysis_run(data, period, DataRun(run.no +1)) for filekey in search_disk(FileKey, data.tier[tier, category, period, run])]
+    partinfo = partitioninfo(data, :default, part.cat)[part]
+    found_filekeys = [filekey for (period, run) in partinfo if is_analysis_run(data, period, DataRun(run.no +1)) for filekey in search_disk(FileKey, data.tier[tier, part.cat, period, run])]
     found_filekeys = if only_good
         filter(Base.Fix2(!in, bad_filekeys(data)), found_filekeys)
     else
@@ -225,3 +225,4 @@ function get_partitionfilekeys(data::LegendData, part::DataPartitionLike, tier::
     found_filekeys
 end
 export get_partitionfilekeys
+@deprecate get_partitionfilekeys(data::LegendData, part::DataPartitionLike, tier::DataTierLike, category::DataCategoryLike; only_good::Bool=true) get_partitionfilekeys(data, part, tier; only_good)

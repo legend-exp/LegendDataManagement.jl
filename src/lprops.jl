@@ -62,7 +62,7 @@ _lprops2props(nt::NamedTuple) = _lprops2props(PropDict(pairs(nt)))
 
 """
     readlprops(filename::AbstractString)
-    readprops(filenames::Vector{<:AbstractString}) 
+    readlprops(filenames::Vector{<:AbstractString}) 
 
 
 Read a PropDict from a file and parse it to `Unitful.Quantity` and `Measurements.Measurement` objects.
@@ -72,8 +72,8 @@ Read a PropDict from a file and parse it to `Unitful.Quantity` and `Measurements
 function readlprops end
 export readlprops
 
-readlprops(filename::AbstractString) = _props2lprops(readprops(filename))
-readlprops(filenames::Vector{<:AbstractString}) = _props2lprops(readprops(filenames))
+readlprops(filename::AbstractString; trim_null::Bool=false, kwargs...) = _props2lprops(readprops(filename; trim_null=trim_null, kwargs...))
+readlprops(filenames::Vector{<:AbstractString}; trim_null::Bool=false, kwargs...) = _props2lprops(readprops(filenames; trim_null=trim_null, kwargs...))
 
 """
     writelprops(f::IO, p::PropDict; write_units::Bool=true, write_errors::Bool=true, mutliline::Bool=true, indent::Int=4)
@@ -88,7 +88,7 @@ export writelprops
 writelprops(io::IO, p::PropDict; multiline::Bool = true, indent::Int = 4) = writeprops(io, _lprops2props(p); multiline=multiline, indent=indent)
 writelprops(filename::AbstractString, p::PropDict; multiline::Bool = true, indent::Int = 4) = writeprops(filename, _lprops2props(p); multiline=multiline, indent=indent)
 
-writelprops(db::MaybePropsDB, key::Union{Symbol, DataSelector}, p::PropDict; kwargs...) = writelprops(joinpath(mkpath(data_path(db)), "$(string(key)).json"), p; kwargs...)
+writelprops(db::MaybePropsDB, key::Union{Symbol, DataSelector}, p::PropDict; kwargs...) = writelprops(joinpath(mkpath(data_path(db)), "$(string(key)).yaml"), p; kwargs...)
 
 
 """

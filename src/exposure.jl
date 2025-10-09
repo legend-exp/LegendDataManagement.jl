@@ -27,7 +27,7 @@ Calculates the exposure of a detector in a given run/period/partition.
 l200 = LegendData(:l200)
 get_exposure(l200, :V00050A, DataPeriod(3), DataRun(0))
 get_exposure(l200, :V00050A, DataPeriod(3))
-get_exposure(l200, :V00050A, DataPartition(1))
+get_exposure(l200, :V00050A, DataPartition(:calgroup001a))
 ````
 
 """
@@ -44,11 +44,11 @@ function get_exposure(data::LegendData, det::DetectorIdLike, period::DataPeriod;
     get_exposure(data, det, rinfo; kwargs...)
 end
 
-function get_exposure(data::LegendData, det::DetectorIdLike, part::DataPartition; cat::DataCategoryLike=:phy, kwargs...)
-    part_dict = partitioninfo(data, det)
+function get_exposure(data::LegendData, det::DetectorIdLike, part::DataPartition; kwargs...)
+    part_dict = partitioninfo(data, det, part.cat)
     if haskey(part_dict, part)
-        rinfo = partitioninfo(data, det, part; category=cat)
-        return get_exposure(data, det, rinfo; cat=cat, kwargs...)
+        rinfo = partitioninfo(data, det, part)
+        return get_exposure(data, det, rinfo; cat=part.cat, kwargs...)
     end
     
     #default if partition does not exist
