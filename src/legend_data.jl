@@ -385,14 +385,8 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
                 hvcard::Int = get(chmap[k].voltage.card, :id, -1)
                 hvch::Int = get(chmap[k].voltage, :channel, -1)
 
-                enrichment::Unitful.Quantity{<:Measurement{Float64}} = if haskey(diodmap, k) && haskey(diodmap[k].production, :enrichment) && haskey(diodmap[k].production.enrichment, :val) && haskey(diodmap[k].production.enrichment, :unc)
-                    val = diodmap[k].production.enrichment.val
-                    unc = diodmap[k].production.enrichment.unc
-                    if isa(val, PropDicts.MissingProperty) || isa(unc, PropDicts.MissingProperty)
-                        measurement(Float64(NaN), Float64(NaN))
-                    else
-                        measurement(Float64(val), Float64(unc))
-                    end
+                enrichment::Unitful.Quantity{<:Measurement{Float64}} = if haskey(diodmap, k)  && haskey(diodmap[k].production, :enrichment) && !isnothing(diodmap[k].production.enrichment.val)
+                    measurement(diodmap[k].production.enrichment.val, isnothing(diodmap[k].production.enrichment.unc) ? NaN : diodmap[k].production.enrichment.unc)
                 else
                     measurement(Float64(NaN), Float64(NaN))
                 end * 100u"percent"
