@@ -192,7 +192,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         "semiconductor" => dicttype(
             "material" => "HPGe",
             "charge_drift_model" => dicttype(
-                "include" => joinpath(SolidStateDetectors.get_path_to_example_config_files(), "ADLChargeDriftModel", "drift_velocity_config.yaml"),
+                "include" => joinpath(SolidStateDetectors.get_path_to_example_config_files(), "ADLChargeDriftModel", "drift_velocity_config_2016.yaml"), #change to 2016
             ),
             # "impurity_density" => dicttype("parameters" => Vector()),
             "geometry" => dicttype(),
