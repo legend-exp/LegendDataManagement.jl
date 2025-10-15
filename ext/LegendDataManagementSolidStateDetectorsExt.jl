@@ -21,34 +21,34 @@ LegendDataManagement provides an extension for SolidStateDetectors, a
 `SolidStateDetector` can be constructed from LEGEND metadata using the
 methods above.
 """
-function SolidStateDetectors.SolidStateDetector(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true)
-    SolidStateDetector{_SSDDefaultNumtype}(data, detector, env, verbose = verbose)
+function SolidStateDetectors.SolidStateDetector(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true, operational_voltage_in_V::Real = NaN, n_thickness_in_mm::Real = NaN)
+    SolidStateDetector{_SSDDefaultNumtype}(data, detector, env, verbose = verbose, operational_voltage_in_V = operational_voltage_in_V, n_thickness_in_mm = n_thickness_in_mm)
 end
 
-function SolidStateDetectors.SolidStateDetector(::LegendData, meta::Union{<:String, <:AbstractDict}, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true)
-    SolidStateDetector{_SSDDefaultNumtype}(LegendData, meta, env, verbose = verbose)
+function SolidStateDetectors.SolidStateDetector(::LegendData, meta::Union{<:String, <:AbstractDict}, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true, operational_voltage_in_V::Real = NaN, n_thickness_in_mm::Real = NaN)
+    SolidStateDetector{_SSDDefaultNumtype}(LegendData, meta, env, verbose = verbose, operational_voltage_in_V = operational_voltage_in_V, n_thickness_in_mm = n_thickness_in_mm)
 end
 
-function SolidStateDetectors.SolidStateDetector{T}(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true) where {T<:AbstractFloat}
+function SolidStateDetectors.SolidStateDetector{T}(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true, operational_voltage_in_V::Real = NaN, n_thickness_in_mm::Real = NaN) where {T<:AbstractFloat}
     detector_props = getproperty(data.metadata.hardware.detectors.germanium.diodes, Symbol(detector))
     xtal_props = getproperty(data.metadata.hardware.detectors.germanium.crystals, Symbol(string(detector)[1:end-1]))
-    SolidStateDetector{T}(LegendData, detector_props, xtal_props, env, verbose = verbose)
+    SolidStateDetector{T}(LegendData, detector_props, xtal_props, env, verbose = verbose, operational_voltage_in_V = operational_voltage_in_V, n_thickness_in_mm = n_thickness_in_mm)
 end
 
-function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, filename::String, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true) where {T<:AbstractFloat}
-    SolidStateDetector{T}(LegendData, readprops(filename, subst_pathvar = false, subst_env = false, trim_null = false), env, verbose = verbose)
+function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, filename::String, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true, operational_voltage_in_V::Real = NaN, n_thickness_in_mm::Real = NaN) where {T<:AbstractFloat}
+    SolidStateDetector{T}(LegendData, readprops(filename, subst_pathvar = false, subst_env = false, trim_null = false), env, verbose = verbose, operational_voltage_in_V = operational_voltage_in_V, n_thickness_in_mm = n_thickness_in_mm)
 end
 
-function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::AbstractDict, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true) where {T<:AbstractFloat}
-    SolidStateDetector{T}(LegendData, convert(PropDict, meta), env, verbose = verbose)
+function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::AbstractDict, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true, operational_voltage_in_V::Real = NaN, n_thickness_in_mm::Real = NaN) where {T<:AbstractFloat}
+    SolidStateDetector{T}(LegendData, convert(PropDict, meta), env, verbose = verbose, operational_voltage_in_V = operational_voltage_in_V, n_thickness_in_mm = n_thickness_in_mm)
 end
 
-function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::PropDict, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true) where {T<:AbstractFloat}
-    SolidStateDetector{T}(LegendData, meta, LegendDataManagement.NoSuchPropsDBEntry("",[]), env, verbose = verbose)
+function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::PropDict, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true, operational_voltage_in_V::Real = NaN, n_thickness_in_mm::Real = NaN) where {T<:AbstractFloat}
+    SolidStateDetector{T}(LegendData, meta, LegendDataManagement.NoSuchPropsDBEntry("",[]), env, verbose = verbose, operational_voltage_in_V = operational_voltage_in_V, n_thickness_in_mm = n_thickness_in_mm)
 end
 
-function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true) where {T<:AbstractFloat}
-    config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta, env, verbose = verbose)
+function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true, operational_voltage_in_V::Real = NaN, n_thickness_in_mm::Real = NaN) where {T<:AbstractFloat}
+    config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta, env, verbose = verbose, operational_voltage_in_V = operational_voltage_in_V, n_thickness_in_mm = n_thickness_in_mm)
     SolidStateDetector{T}(config_dict, SolidStateDetectors.construct_units(config_dict))
 end
 
@@ -61,34 +61,34 @@ LegendDataManagement provides an extension for SolidStateDetectors, a
 `Simulation` can be constructed from LEGEND metadata using the
 methods above.
 """
-function SolidStateDetectors.Simulation(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true)
-    Simulation{_SSDDefaultNumtype}(data, detector, env, verbose = verbose)
+function SolidStateDetectors.Simulation(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true, operational_voltage_in_V::Real = NaN, n_thickness_in_mm::Real = NaN)
+    Simulation{_SSDDefaultNumtype}(data, detector, env, verbose = verbose, operational_voltage_in_V = operational_voltage_in_V, n_thickness_in_mm = n_thickness_in_mm)
 end
 
-function SolidStateDetectors.Simulation(::Type{LegendData}, meta::Union{<:String, <:AbstractDict}, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true)
-    Simulation{_SSDDefaultNumtype}(LegendData, meta, env, verbose = verbose)
+function SolidStateDetectors.Simulation(::Type{LegendData}, meta::Union{<:String, <:AbstractDict}, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true, operational_voltage_in_V::Real = NaN, n_thickness_in_mm::Real = NaN)
+    Simulation{_SSDDefaultNumtype}(LegendData, meta, env, verbose = verbose, operational_voltage_in_V = operational_voltage_in_V, n_thickness_in_mm = n_thickness_in_mm)
 end
 
-function SolidStateDetectors.Simulation{T}(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true) where {T<:AbstractFloat}
+function SolidStateDetectors.Simulation{T}(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true, operational_voltage_in_V::Real = NaN, n_thickness_in_mm::Real = NaN) where {T<:AbstractFloat}
     detector_props = getproperty(data.metadata.hardware.detectors.germanium.diodes, Symbol(detector))
     xtal_props = getproperty(data.metadata.hardware.detectors.germanium.crystals, Symbol(string(detector)[1:end-1]))
-    Simulation{T}(LegendData, detector_props, xtal_props, env, verbose = verbose)
+    Simulation{T}(LegendData, detector_props, xtal_props, env, verbose = verbose, operational_voltage_in_V = operational_voltage_in_V, n_thickness_in_mm = n_thickness_in_mm)
 end
 
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, filename::String, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true) where {T<:AbstractFloat}
-    Simulation{T}(LegendData, readprops(filename, subst_pathvar = false, subst_env = false, trim_null = false), env, verbose = verbose)
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, filename::String, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true, operational_voltage_in_V::Real = NaN, n_thickness_in_mm::Real = NaN) where {T<:AbstractFloat}
+    Simulation{T}(LegendData, readprops(filename, subst_pathvar = false, subst_env = false, trim_null = false), env, verbose = verbose, operational_voltage_in_V = operational_voltage_in_V, n_thickness_in_mm = n_thickness_in_mm)
 end
 
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::AbstractDict, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true) where {T<:AbstractFloat}
-    Simulation{T}(LegendData, convert(PropDict, meta), env, verbose = verbose)
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::AbstractDict, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true, operational_voltage_in_V::Real = NaN, n_thickness_in_mm::Real = NaN) where {T<:AbstractFloat}
+    Simulation{T}(LegendData, convert(PropDict, meta), env, verbose = verbose, operational_voltage_in_V = operational_voltage_in_V, n_thickness_in_mm = n_thickness_in_mm)
 end
 
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::PropDict, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true) where {T<:AbstractFloat}
-    Simulation{T}(LegendData, meta, LegendDataManagement.NoSuchPropsDBEntry("",[]), env, verbose = verbose)
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::PropDict, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true, operational_voltage_in_V::Real = NaN, n_thickness_in_mm::Real = NaN) where {T<:AbstractFloat}
+    Simulation{T}(LegendData, meta, LegendDataManagement.NoSuchPropsDBEntry("",[]), env, verbose = verbose, operational_voltage_in_V = operational_voltage_in_V, n_thickness_in_mm = n_thickness_in_mm)
 end
 
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true) where {T<:AbstractFloat}
-    config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta, env, verbose = verbose)
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true, operational_voltage_in_V::Real = NaN, n_thickness_in_mm::Real = NaN) where {T<:AbstractFloat}
+    config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta, env, verbose = verbose, operational_voltage_in_V = operational_voltage_in_V, n_thickness_in_mm = n_thickness_in_mm)
     Simulation{T}(config_dict)
 end
 
@@ -130,12 +130,15 @@ function get_unicode_rep(::Val{:coax})
     "╰───╯ ╰───╯"
 end
 
-function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::X, env::HPGeEnvironment = HPGeEnvironment(); dicttype = Dict{String,Any}, verbose::Bool = true) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
+function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::X, env::HPGeEnvironment = HPGeEnvironment(); 
+    dicttype = Dict{String,Any}, verbose::Bool = true, operational_voltage_in_V::Real = NaN, n_thickness_in_mm::Real = NaN) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
 
     # Not all possible configurations are yet implemented!
     gap = 1.0 # to ensure negative volumes do not match at surfaces
 
-    dl_thickness_in_mm, dl_val_used = if hasproperty(meta.characterization, :combined_0vbb_analysis) && meta.characterization.combined_0vbb_analysis.fccd_in_mm.value > 0
+    dl_thickness_in_mm, dl_val_used = if !isnan(n_thickness_in_mm) && n_thickness_in_mm >= 0
+        n_thickness_in_mm, "✔ n⁺contact thickness (user):"
+    elseif hasproperty(meta.characterization, :combined_0vbb_analysis) && meta.characterization.combined_0vbb_analysis.fccd_in_mm.value > 0
         meta.characterization.combined_0vbb_analysis.fccd_in_mm.value, "✔ n⁺contact thickness (0νββ analysis):"
     elseif hasproperty(meta.characterization.manufacturer, :dl_thickness_in_mm) && meta.characterization.manufacturer.dl_thickness_in_mm > 0
         meta.characterization.manufacturer.dl_thickness_in_mm, "✔ n⁺contact thickness (manufacturer):"
@@ -143,7 +146,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         DEFAULT_N_THICKNESS_IN_MM, "⚠ n⁺contact thickness (DEFAULT):"
     end
     
-    li_thickness =  dl_thickness_in_mm
+    li_thickness =  float(dl_thickness_in_mm)
     pp_thickness = DEFAULT_P_THICKNESS_IN_MM
 
     crystal_radius = meta.geometry.radius_in_mm
@@ -440,7 +443,9 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
 
 
     ### MANTLE CONTACT ###
-    Vop, Vop_val_used = if hasproperty(meta.characterization.l200_site, :recommended_voltage_in_V) && meta.characterization.l200_site.recommended_voltage_in_V > 0
+    Vop, Vop_val_used = if !isnan(operational_voltage_in_V) && operational_voltage_in_V >= 0
+        operational_voltage_in_V, "✔ Operational voltage (user):"
+    elseif hasproperty(meta.characterization.l200_site, :recommended_voltage_in_V) && meta.characterization.l200_site.recommended_voltage_in_V > 0
         meta.characterization.l200_site.recommended_voltage_in_V,  "✔ Operational voltage (L200 characterization):"
     elseif hasproperty(meta.characterization.manufacturer, :recommended_voltage_in_V) && meta.characterization.manufacturer.recommended_voltage_in_V > 0
         meta.characterization.manufacturer.recommended_voltage_in_V,  "✔ Operational voltage (manufacturer):"
