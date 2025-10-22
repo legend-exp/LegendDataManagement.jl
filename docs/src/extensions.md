@@ -117,7 +117,7 @@ In addition, the `wpool`kwarg allows to parse a custome `WorkerPool` for more so
 
 ## `SolidStateDetectors` extension
 
-LegendDataManagment provides an extension for [SolidStateDetectors](https://github.com/JuliaPhysics/SolidStateDetectors.jl). This makes it possible to create `SolidStateDetector` and `Simulation` instances from LEGEND metadata.
+LegendDataManagment provides an extension for [SolidStateDetectors](https://github.com/JuliaPhysics/SolidStateDetectors.jl). This makes it possible to create `SolidStateDetector` and `Simulation` instances from LEGEND metadata. The default drift model used when creating a detector/simulation through LegendDataManagment is ADLChargeDriftModel2016.
 
 Example (requires a `$LEGEND_DATA_CONFIG` environment variable pointing to a legend data-config file):
 
@@ -127,14 +127,14 @@ det = SolidStateDetector(LegendData(:l200), :V99000A)
 plot(det)
 ```
 
-`st = :slice` keyword can be passed to the `plot` to plot a 2D slice of the detector. Using the previous constructor looks up the diode and crystal metadata files and calls the following lower level constructor -- which can also be used directly (no `$LEGEND_DATA_CONFIG` required):
+`st = :slice` keyword can be passed to the `plot` to plot a 2D slice of the detector. Using the previous constructor looks up the diode and crystal metadata files. This can also be done manually with the following constructor -- which can also be used directly (no `$LEGEND_DATA_CONFIG` required):
 
 ```julia
 det = SolidStateDetector(LegendData, "V99000A.yaml", "V99000.yaml")
 ```
 In cases where multiple values (or none) are available in the metadata, the detector is configured using the following priority:
-- n⁺ contact thickness: 0νββ analysis value (if available) → manufacturer's value (if available) → default value
-- Operational Voltage: l200 characterization value (if available) → manufacturer's value (if available) → default value
+- n⁺ contact thickness: 0νββ analysis value (if available) → manufacturer's value (if available) → default value. Can also be overridden with `n_thickness` keyword.
+- Operational Voltage: l200 characterization value (if available) → manufacturer's value (if available) → default value. Can also be overridden with `operational_voltage` keyword.
 - Impurity profile: model in crystal metadata (if available) → constant value of 0
 
 In addition, when creating a `Simulation`, all simulation functions in SolidStateDetectors.jl can be applied. As usual, all fields stored in the `Simulation` can be written and read using `LegendHDF5IO`:
@@ -142,13 +142,11 @@ In addition, when creating a `Simulation`, all simulation functions in SolidStat
 ```julia
 using LegendDataManagement
 using SolidStateDetectors
+using Unitful
 
 T=Float32
-didode_data=LegendDataManagement.readlprops("V99000A.yaml")
-crystal_data=LegendDataManagement.readlprops("V99000.yaml")
 
-
-sim = Simulation{T}(LegendData, diode_data, crystal_data)
+sim = Simulation{T}(LegendData(:l200), :V99000A, HPGeEnvironment("LAr", 87u"K"), n_thickness = 0.7u"mm", operational_voltage = 4u"kV")
 simulate!(sim) # calculate electric field and weighting potentials
 
 using LegendHDF5IO
