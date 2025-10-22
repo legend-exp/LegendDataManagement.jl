@@ -14,6 +14,7 @@ const DEFAULT_P_THICKNESS_IN_MM = 0.1
 
 """
     SolidStateDetector{T<:AbstractFloat}(data::LegendData, detector::DetectorIdLike; kwargs...)
+    SolidStateDetector{T<:AbstractFloat}(::Type{LegendData}, diode_filename::String; kwargs...)
     SolidStateDetector{T<:AbstractFloat}(::Type{LegendData}, diode_filename::String, xtal_filename::String; kwargs...)
     SolidStateDetector{T<:AbstractFloat}(::Type{LegendData}, diode_meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}; kwargs...)
 
@@ -40,6 +41,11 @@ function SolidStateDetectors.SolidStateDetector(data::LegendData, detector::Dete
     SolidStateDetector{_SSDDefaultNumtype}(data, detector, env; kwargs...)
 end
 
+function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, diode_filename::String, env::HPGeEnvironment = HPGeEnvironment(); kwargs...) where {T<:AbstractFloat}
+    diode_meta = readlprops(diode_filename)
+    SolidStateDetector{T}(LegendData, diode_meta, LegendDataManagement.NoSuchPropsDBEntry("",[]), env; kwargs...)
+end
+
 function SolidStateDetectors.SolidStateDetector{T}(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); kwargs...) where {T<:AbstractFloat}
     detector_props = getproperty(data.metadata.hardware.detectors.germanium.diodes, Symbol(detector))
     xtal_props = getproperty(data.metadata.hardware.detectors.germanium.crystals, Symbol(string(detector)[1:end-1]))
@@ -53,12 +59,16 @@ function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, diode_fil
 end
 
 function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, diode_meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(); kwargs...) where {T<:AbstractFloat}
+    if xtal_meta isa LegendDataManagement.NoSuchPropsDBEntry
+        @warn "Crystal metadata not provided. No impurity density information will be passed to the simulation."
+    end
     config_dict = create_SSD_config_dict_from_LEGEND_metadata(diode_meta, xtal_meta, env; kwargs...)
     SolidStateDetector{T}(config_dict, SolidStateDetectors.construct_units(config_dict))
 end
 
 """
     Simulation{T<:AbstractFloat}(data::LegendData, detector::DetectorIdLike; kwargs...)
+    Simulation{T<:AbstractFloat}(::Type{LegendData}, diode_filename::String; kwargs...)
     Simulation{T<:AbstractFloat}(::Type{LegendData}, diode_filename::String, xtal_filename::String; kwargs...)
     Simulation{T<:AbstractFloat}(::Type{LegendData}, diode_meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}; kwargs...)
 
@@ -91,6 +101,11 @@ function SolidStateDetectors.Simulation{T}(data::LegendData, detector::DetectorI
     Simulation{T}(LegendData, detector_props, xtal_props, env; kwargs...)
 end
 
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, diode_filename::String, env::HPGeEnvironment = HPGeEnvironment(); kwargs...) where {T<:AbstractFloat}
+    diode_meta = readlprops(diode_filename)
+    Simulation{T}(LegendData, diode_meta, LegendDataManagement.NoSuchPropsDBEntry("",[]), env; kwargs...)
+end
+
 function SolidStateDetectors.Simulation{T}(::Type{LegendData}, diode_filename::String, xtal_filename::String, env::HPGeEnvironment = HPGeEnvironment(); kwargs...) where {T<:AbstractFloat}
     diode_meta = readlprops(diode_filename)
     xtal_meta = readlprops(xtal_filename)
@@ -98,6 +113,9 @@ function SolidStateDetectors.Simulation{T}(::Type{LegendData}, diode_filename::S
 end
 
 function SolidStateDetectors.Simulation{T}(::Type{LegendData}, diode_meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(); kwargs...) where {T<:AbstractFloat}
+    if xtal_meta isa LegendDataManagement.NoSuchPropsDBEntry
+        @warn "Crystal metadata not provided. No impurity density information will be passed to the simulation."
+    end
     config_dict = create_SSD_config_dict_from_LEGEND_metadata(diode_meta, xtal_meta, env; kwargs...)
     Simulation{T}(config_dict)
 end
