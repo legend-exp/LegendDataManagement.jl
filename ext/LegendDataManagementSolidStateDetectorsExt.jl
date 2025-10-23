@@ -13,82 +13,110 @@ const DEFAULT_N_THICKNESS_IN_MM = 1.0
 const DEFAULT_P_THICKNESS_IN_MM = 0.1
 
 """
-    SolidStateDetector[{T<:AbstractFloat}](data::LegendData, detector::DetectorIdLike)
-    SolidStateDetector[{T<:AbstractFloat}(::Type{LegendData}, detector_props::AbstractDict)
-    SolidStateDetector[{T<:AbstractFloat}(::Type{LegendData}, json_filename::AbstractString)
+    SolidStateDetector{T<:AbstractFloat}(data::LegendData, detector::DetectorIdLike; kwargs...)
+    SolidStateDetector{T<:AbstractFloat}(::Type{LegendData}, diode_filename::String; kwargs...)
+    SolidStateDetector{T<:AbstractFloat}(::Type{LegendData}, diode_filename::String, xtal_filename::String; kwargs...)
+    SolidStateDetector{T<:AbstractFloat}(::Type{LegendData}, diode_meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}; kwargs...)
 
 LegendDataManagement provides an extension for SolidStateDetectors, a
 `SolidStateDetector` can be constructed from LEGEND metadata using the
-methods above.
+methods above. Uses LEGEND defaults, such as ADLChargeDriftModel2016.
+
+## Arguments
+* `data::LegendData`: LEGEND data structure containing metadata.
+* `detector::DetectorIdLike`: Identifier for the detector, in the form of a symbol.
+* `diode_filename::String`: Path to the diode metadata file.
+* `xtal_filename::String`: Path to the crystal metadata file.
+* `diode_meta::PropDict`: Diode metadata as a `PropDict`.
+* `xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}`: Crystal metadata as a `PropDict` or `NoSuchPropsDBEntry` if not available.
+* `env::HPGeEnvironment`: Environment configuration for the detector. Default is `HPGeEnvironment()`: Vacuum and 77 K.
+
+## Keywords
+* `operational_voltage::Number`: Operational voltage for the n+ contact. Accepts units, if non are given will interpret as `V`. If not provided, it will be taken from the metadata if available or defaulted.
+* `n_thickness::Number`: Thickness of the n+ contact in mm. Accepts units, if non are given will interpret as `mm`. If not provided, it will be taken from the metadata if available or defaulted.
+* `verbose::Bool`: Whether to print detailed information during the creation process. Default is `true`.
 """
-function SolidStateDetectors.SolidStateDetector(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true)
-    SolidStateDetector{_SSDDefaultNumtype}(data, detector, env, verbose = verbose)
+
+function SolidStateDetectors.SolidStateDetector(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); kwargs...)
+    SolidStateDetector{_SSDDefaultNumtype}(data, detector, env; kwargs...)
 end
 
-function SolidStateDetectors.SolidStateDetector(::LegendData, meta::Union{<:String, <:AbstractDict}, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true)
-    SolidStateDetector{_SSDDefaultNumtype}(LegendData, meta, env, verbose = verbose)
+function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, diode_filename::String, env::HPGeEnvironment = HPGeEnvironment(); kwargs...) where {T<:AbstractFloat}
+    diode_meta = readlprops(diode_filename)
+    SolidStateDetector{T}(LegendData, diode_meta, LegendDataManagement.NoSuchPropsDBEntry("",[]), env; kwargs...)
 end
 
-function SolidStateDetectors.SolidStateDetector{T}(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true) where {T<:AbstractFloat}
+function SolidStateDetectors.SolidStateDetector{T}(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); kwargs...) where {T<:AbstractFloat}
     detector_props = getproperty(data.metadata.hardware.detectors.germanium.diodes, Symbol(detector))
     xtal_props = getproperty(data.metadata.hardware.detectors.germanium.crystals, Symbol(string(detector)[1:end-1]))
-    SolidStateDetector{T}(LegendData, detector_props, xtal_props, env, verbose = verbose)
+    SolidStateDetector{T}(LegendData, detector_props, xtal_props, env; kwargs...)
 end
 
-function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, filename::String, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true) where {T<:AbstractFloat}
-    SolidStateDetector{T}(LegendData, readprops(filename, subst_pathvar = false, subst_env = false, trim_null = false), env, verbose = verbose)
+function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, diode_filename::String, xtal_filename::String, env::HPGeEnvironment = HPGeEnvironment(); kwargs...) where {T<:AbstractFloat}
+    diode_meta = readlprops(diode_filename)
+    xtal_meta = readlprops(xtal_filename)
+    SolidStateDetector{T}(LegendData, diode_meta, xtal_meta, env; kwargs...)
 end
 
-function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::AbstractDict, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true) where {T<:AbstractFloat}
-    SolidStateDetector{T}(LegendData, convert(PropDict, meta), env, verbose = verbose)
-end
-
-function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::PropDict, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true) where {T<:AbstractFloat}
-    SolidStateDetector{T}(LegendData, meta, LegendDataManagement.NoSuchPropsDBEntry("",[]), env, verbose = verbose)
-end
-
-function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true) where {T<:AbstractFloat}
-    config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta, env, verbose = verbose)
+function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, diode_meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(); kwargs...) where {T<:AbstractFloat}
+    if xtal_meta isa LegendDataManagement.NoSuchPropsDBEntry
+        @warn "Crystal metadata not provided. No impurity density information will be passed to the simulation."
+    end
+    config_dict = create_SSD_config_dict_from_LEGEND_metadata(diode_meta, xtal_meta, env; kwargs...)
     SolidStateDetector{T}(config_dict, SolidStateDetectors.construct_units(config_dict))
 end
 
 """
-    Simulation[{T<:AbstractFloat}](data::LegendData, detector::DetectorIdLike)
-    Simulation[{T<:AbstractFloat}(::Type{LegendData}, detector_props::AbstractDict)
-    Simulation[{T<:AbstractFloat}(::Type{LegendData}, json_filename::AbstractString)
+    Simulation{T<:AbstractFloat}(data::LegendData, detector::DetectorIdLike; kwargs...)
+    Simulation{T<:AbstractFloat}(::Type{LegendData}, diode_filename::String; kwargs...)
+    Simulation{T<:AbstractFloat}(::Type{LegendData}, diode_filename::String, xtal_filename::String; kwargs...)
+    Simulation{T<:AbstractFloat}(::Type{LegendData}, diode_meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}; kwargs...)
 
 LegendDataManagement provides an extension for SolidStateDetectors, a
 `Simulation` can be constructed from LEGEND metadata using the
-methods above.
+methods above. Uses LEGEND defaults, such as ADLChargeDriftModel2016.
+
+## Arguments
+* `data::LegendData`: LEGEND data structure containing metadata.
+* `detector::DetectorIdLike`: Identifier for the detector, in the form of a symbol.
+* `diode_filename::String`: Path to the diode metadata file.
+* `xtal_filename::String`: Path to the crystal metadata file.
+* `diode_meta::PropDict`: Diode metadata as a `PropDict`.
+* `xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}`: Crystal metadata as a `PropDict` or `NoSuchPropsDBEntry` if not available.
+* `env::HPGeEnvironment`: Environment configuration for the detector. Default is `HPGeEnvironment()`: Vacuum and 77 K.
+
+## Keywords
+* `operational_voltage::Number`: Operational voltage for the n+ contact. Accepts units, if non are given will interpret as `V`. If not provided, it will be taken from the metadata if available or defaulted.
+* `n_thickness::Number`: Thickness of the n+ contact in mm. Accepts units, if non are given will interpret as `mm`. If not provided, it will be taken from the metadata if available or defaulted.
+* `verbose::Bool`: Whether to print detailed information during the creation process. Default is `true`.
+
 """
-function SolidStateDetectors.Simulation(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true)
-    Simulation{_SSDDefaultNumtype}(data, detector, env, verbose = verbose)
+function SolidStateDetectors.Simulation(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); kwargs...)
+    Simulation{_SSDDefaultNumtype}(data, detector, env; kwargs...)
 end
 
-function SolidStateDetectors.Simulation(::Type{LegendData}, meta::Union{<:String, <:AbstractDict}, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true)
-    Simulation{_SSDDefaultNumtype}(LegendData, meta, env, verbose = verbose)
-end
-
-function SolidStateDetectors.Simulation{T}(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true) where {T<:AbstractFloat}
+function SolidStateDetectors.Simulation{T}(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); kwargs...) where {T<:AbstractFloat}
     detector_props = getproperty(data.metadata.hardware.detectors.germanium.diodes, Symbol(detector))
     xtal_props = getproperty(data.metadata.hardware.detectors.germanium.crystals, Symbol(string(detector)[1:end-1]))
-    Simulation{T}(LegendData, detector_props, xtal_props, env, verbose = verbose)
+    Simulation{T}(LegendData, detector_props, xtal_props, env; kwargs...)
 end
 
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, filename::String, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true) where {T<:AbstractFloat}
-    Simulation{T}(LegendData, readprops(filename, subst_pathvar = false, subst_env = false, trim_null = false), env, verbose = verbose)
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, diode_filename::String, env::HPGeEnvironment = HPGeEnvironment(); kwargs...) where {T<:AbstractFloat}
+    diode_meta = readlprops(diode_filename)
+    Simulation{T}(LegendData, diode_meta, LegendDataManagement.NoSuchPropsDBEntry("",[]), env; kwargs...)
 end
 
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::AbstractDict, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true) where {T<:AbstractFloat}
-    Simulation{T}(LegendData, convert(PropDict, meta), env, verbose = verbose)
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, diode_filename::String, xtal_filename::String, env::HPGeEnvironment = HPGeEnvironment(); kwargs...) where {T<:AbstractFloat}
+    diode_meta = readlprops(diode_filename)
+    xtal_meta = readlprops(xtal_filename)
+    Simulation{T}(LegendData, diode_meta, xtal_meta, env; kwargs...)
 end
 
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::PropDict, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true) where {T<:AbstractFloat}
-    Simulation{T}(LegendData, meta, LegendDataManagement.NoSuchPropsDBEntry("",[]), env, verbose = verbose)
-end
-
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(); verbose::Bool = true) where {T<:AbstractFloat}
-    config_dict = create_SSD_config_dict_from_LEGEND_metadata(meta, xtal_meta, env, verbose = verbose)
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, diode_meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(); kwargs...) where {T<:AbstractFloat}
+    if xtal_meta isa LegendDataManagement.NoSuchPropsDBEntry
+        @warn "Crystal metadata not provided. No impurity density information will be passed to the simulation."
+    end
+    config_dict = create_SSD_config_dict_from_LEGEND_metadata(diode_meta, xtal_meta, env; kwargs...)
     Simulation{T}(config_dict)
 end
 
@@ -130,15 +158,18 @@ function get_unicode_rep(::Val{:coax})
     "╰───╯ ╰───╯"
 end
 
-function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::X, env::HPGeEnvironment = HPGeEnvironment(); dicttype = Dict{String,Any}, verbose::Bool = true) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
+function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_meta::X, env::HPGeEnvironment = HPGeEnvironment(); 
+    dicttype = Dict{String,Any}, verbose::Bool = true, operational_voltage::Number = NaN, n_thickness::Number = NaN) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
 
     # Not all possible configurations are yet implemented!
     gap = 1.0 # to ensure negative volumes do not match at surfaces
 
-    dl_thickness_in_mm, dl_val_used = if hasproperty(meta.characterization, :combined_0vbb_analysis) && meta.characterization.combined_0vbb_analysis.fccd_in_mm.value > 0
-        meta.characterization.combined_0vbb_analysis.fccd_in_mm.value, "✔ n⁺contact thickness (0νββ analysis):"
-    elseif hasproperty(meta.characterization.manufacturer, :dl_thickness_in_mm) && meta.characterization.manufacturer.dl_thickness_in_mm > 0
-        meta.characterization.manufacturer.dl_thickness_in_mm, "✔ n⁺contact thickness (manufacturer):"
+    dl_thickness_in_mm, dl_val_used = if ustrip(n_thickness) >= 0
+        n_thickness isa Unitful.Quantity ? ustrip(u"mm", n_thickness) : n_thickness, "✔ n⁺contact thickness (user):"
+    elseif hasproperty(diode_meta.characterization, :combined_0vbb_analysis) && diode_meta.characterization.combined_0vbb_analysis.fccd_in_mm.value > 0
+        diode_meta.characterization.combined_0vbb_analysis.fccd_in_mm.value, "✔ n⁺contact thickness (0νββ analysis):"
+    elseif hasproperty(diode_meta.characterization.manufacturer, :dl_thickness_in_mm) && diode_meta.characterization.manufacturer.dl_thickness_in_mm > 0
+        diode_meta.characterization.manufacturer.dl_thickness_in_mm, "✔ n⁺contact thickness (manufacturer):"
     else
         DEFAULT_N_THICKNESS_IN_MM, "⚠ n⁺contact thickness (DEFAULT):"
     end
@@ -146,16 +177,16 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
     li_thickness =  dl_thickness_in_mm
     pp_thickness = DEFAULT_P_THICKNESS_IN_MM
 
-    crystal_radius = meta.geometry.radius_in_mm
-    crystal_height = meta.geometry.height_in_mm
+    crystal_radius = diode_meta.geometry.radius_in_mm
+    crystal_height = diode_meta.geometry.height_in_mm
 
-    pp_radius = meta.geometry.pp_contact.radius_in_mm
-    pp_depth = meta.geometry.pp_contact.depth_in_mm
+    pp_radius = diode_meta.geometry.pp_contact.radius_in_mm
+    pp_depth = diode_meta.geometry.pp_contact.depth_in_mm
     
-    is_coax = meta.type == "coax"
+    is_coax = diode_meta.type == "coax"
 
     config_dict = dicttype(
-        "name" => meta.name,
+        "name" => diode_meta.name,
         "units" => dicttype(
             "length" => "mm",
             "potential" => "V",
@@ -189,7 +220,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         "semiconductor" => dicttype(
             "material" => "HPGe",
             "charge_drift_model" => dicttype(
-                "include" => joinpath(SolidStateDetectors.get_path_to_example_config_files(), "ADLChargeDriftModel", "drift_velocity_config.yaml"),
+                "include" => joinpath(SolidStateDetectors.get_path_to_example_config_files(), "ADLChargeDriftModel", "drift_velocity_config_2016.yaml"), #change to 2016
             ),
             # "impurity_density" => dicttype("parameters" => Vector()),
             "geometry" => dicttype(),
@@ -207,13 +238,13 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
     semiconductor_geometry_subtractions = []
     begin
         # borehole
-        has_borehole = hasproperty(meta.geometry, :borehole)
+        has_borehole = hasproperty(diode_meta.geometry, :borehole)
         if is_coax && !has_borehole
             error("Coax detectors should have boreholes")
         end
         if has_borehole
-            borehole_depth = meta.geometry.borehole.depth_in_mm
-            borehole_radius = meta.geometry.borehole.radius_in_mm
+            borehole_depth = diode_meta.geometry.borehole.depth_in_mm
+            borehole_radius = diode_meta.geometry.borehole.radius_in_mm
             push!(semiconductor_geometry_subtractions, dicttype("cone" => dicttype(
                 "r" => borehole_radius,
                 "h" => borehole_depth + 2*gap,
@@ -231,14 +262,14 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         end
         
         # borehole taper
-        has_borehole_taper = hasproperty(meta.geometry.taper, :borehole)
+        has_borehole_taper = hasproperty(diode_meta.geometry.taper, :borehole)
         if has_borehole_taper
-            borehole_taper_height = meta.geometry.taper.borehole.height_in_mm
-            if hasproperty(meta.geometry.taper.borehole, :radius_in_mm)
-                borehole_taper_radius = meta.geometry.taper.borehole.radius_in_mm
+            borehole_taper_height = diode_meta.geometry.taper.borehole.height_in_mm
+            if hasproperty(diode_meta.geometry.taper.borehole, :radius_in_mm)
+                borehole_taper_radius = diode_meta.geometry.taper.borehole.radius_in_mm
                 borehole_taper_angle = atand(borehole_taper_radius, borehole_taper_height)
-            elseif hasproperty(meta.geometry.taper.borehole, :angle_in_deg)
-                borehole_taper_angle = meta.geometry.taper.borehole.angle_in_deg
+            elseif hasproperty(diode_meta.geometry.taper.borehole, :angle_in_deg)
+                borehole_taper_angle = diode_meta.geometry.taper.borehole.angle_in_deg
                 borehole_taper_radius = borehole_taper_height * tand(borehole_taper_angle)
             else
                 error("The borehole taper needs either radius_in_mm or angle_in_deg")
@@ -267,13 +298,13 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         end
 
         # top taper
-        if hasproperty(meta.geometry.taper, :top)
-            top_taper_height = meta.geometry.taper.top.height_in_mm
-            if hasproperty(meta.geometry.taper.top, :radius_in_mm)
-                top_taper_radius = meta.geometry.taper.top.radius_in_mm
+        if hasproperty(diode_meta.geometry.taper, :top)
+            top_taper_height = diode_meta.geometry.taper.top.height_in_mm
+            if hasproperty(diode_meta.geometry.taper.top, :radius_in_mm)
+                top_taper_radius = diode_meta.geometry.taper.top.radius_in_mm
                 top_taper_angle = atand(top_taper_radius, top_taper_height)
-            elseif hasproperty(meta.geometry.taper.top, :angle_in_deg)
-                top_taper_angle = meta.geometry.taper.top.angle_in_deg
+            elseif hasproperty(diode_meta.geometry.taper.top, :angle_in_deg)
+                top_taper_angle = diode_meta.geometry.taper.top.angle_in_deg
                 top_taper_radius = top_taper_height * tand(top_taper_angle)
             else
                 error("The top taper needs either radius_in_mm or angle_in_deg")
@@ -305,12 +336,12 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         end
 
         # bot outer taper
-        bot_taper_height = meta.geometry.taper.bottom.height_in_mm
-        if hasproperty(meta.geometry.taper.bottom, :radius_in_mm)
-            bot_taper_radius = meta.geometry.taper.bottom.radius_in_mm
+        bot_taper_height = diode_meta.geometry.taper.bottom.height_in_mm
+        if hasproperty(diode_meta.geometry.taper.bottom, :radius_in_mm)
+            bot_taper_radius = diode_meta.geometry.taper.bottom.radius_in_mm
             bot_taper_angle = atand(bot_taper_radius, bot_taper_height)
-        elseif hasproperty(meta.geometry.taper.bottom, :angle_in_deg)
-            bot_taper_angle = meta.geometry.taper.bottom.angle_in_deg
+        elseif hasproperty(diode_meta.geometry.taper.bottom, :angle_in_deg)
+            bot_taper_angle = diode_meta.geometry.taper.bottom.angle_in_deg
             bot_taper_radius = bot_taper_height * tand(bot_taper_angle)
         else
             error("The bottom outer tape needs either radius_in_mm or angle_in_deg")
@@ -340,11 +371,11 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         end
 
         # groove
-        has_groove = hasproperty(meta.geometry, :groove)
+        has_groove = hasproperty(diode_meta.geometry, :groove)
         if has_groove
-            groove_inner_radius = meta.geometry.groove.radius_in_mm.inner
-            groove_outer_radius = meta.geometry.groove.radius_in_mm.outer
-            groove_depth = meta.geometry.groove.depth_in_mm
+            groove_inner_radius = diode_meta.geometry.groove.radius_in_mm.inner
+            groove_outer_radius = diode_meta.geometry.groove.radius_in_mm.outer
+            groove_depth = diode_meta.geometry.groove.depth_in_mm
             has_groove = groove_outer_radius > 0 && groove_depth > 0 && groove_inner_radius > 0
             if has_groove
                 hZ = groove_depth / 2 + gap
@@ -373,11 +404,11 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
     
     
     # bulletization
-    # is_bulletized = !all(values(meta.geometry.bulletization) .== 0)
+    # is_bulletized = !all(values(diode_meta.geometry.bulletization) .== 0)
     # is_bulletized && @warn "Bulletization is not implemented yet, ignore for now."
 
     # extras
-    hasproperty(meta.geometry, :extra) && @warn "Extras are not implemented yet, ignore for now."
+    hasproperty(diode_meta.geometry, :extra) && @warn "Extras are not implemented yet, ignore for now."
 
 
     ### P+ CONTACT ###
@@ -440,10 +471,12 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
 
 
     ### MANTLE CONTACT ###
-    Vop, Vop_val_used = if hasproperty(meta.characterization.l200_site, :recommended_voltage_in_V) && meta.characterization.l200_site.recommended_voltage_in_V > 0
-        meta.characterization.l200_site.recommended_voltage_in_V,  "✔ Operational voltage (L200 characterization):"
-    elseif hasproperty(meta.characterization.manufacturer, :recommended_voltage_in_V) && meta.characterization.manufacturer.recommended_voltage_in_V > 0
-        meta.characterization.manufacturer.recommended_voltage_in_V,  "✔ Operational voltage (manufacturer):"
+    Vop, Vop_val_used = if ustrip(operational_voltage) >= 0
+        operational_voltage isa Unitful.Quantity ? ustrip(u"V", operational_voltage) : operational_voltage, "✔ Operational voltage (user):"
+    elseif hasproperty(diode_meta.characterization.l200_site, :recommended_voltage_in_V) && diode_meta.characterization.l200_site.recommended_voltage_in_V > 0
+        diode_meta.characterization.l200_site.recommended_voltage_in_V,  "✔ Operational voltage (L200 characterization):"
+    elseif hasproperty(diode_meta.characterization.manufacturer, :recommended_voltage_in_V) && diode_meta.characterization.manufacturer.recommended_voltage_in_V > 0
+        diode_meta.characterization.manufacturer.recommended_voltage_in_V,  "✔ Operational voltage (manufacturer):"
     else
         DEFAULT_OPERATIONAL_VOLTAGE_IN_V,   "⚠ Operational voltage (DEFAULT):"
     end
@@ -632,7 +665,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         mantle_contact_parts
     end
     
-    slice = Symbol(meta.name[end])
+    slice = Symbol(diode_meta.name[end])
     config_dict["detectors"][1]["semiconductor"]["impurity_density"] = if hasproperty(xtal_meta,:impurity_curve) && hasproperty(xtal_meta.slices, slice)
         impurity_scale =  hasproperty(xtal_meta.impurity_curve.corrections, :scale) ? xtal_meta.impurity_curve.corrections.scale : 1.0
         impurity_offset = hasproperty(xtal_meta.impurity_curve.corrections, :offset) ? xtal_meta.impurity_curve.corrections.offset * -1e6 : 0.0 ## 1e9cm^-3 -> mm^-3
@@ -704,14 +737,14 @@ function create_SSD_config_dict_from_LEGEND_metadata(meta::PropDict, xtal_meta::
         imp_warn = hasproperty(xtal_meta,:impurity_curve) && hasproperty(xtal_meta.slices, slice) ? ("✔", "") : ("⚠","(DEFAULT)")
         imp_scale = hasproperty(xtal_meta.impurity_curve.corrections, :scale) ? xtal_meta.impurity_curve.corrections.scale : "-"
         imp_offset = hasproperty(xtal_meta.impurity_curve.corrections, :offset) ? xtal_meta.impurity_curve.corrections.offset : "-"
-        g1,g2,g3,g4,g5,g6 = get_unicode_rep(meta.type)
-        vol = round(typeof(1u"cm^3"), LegendDataManagement.get_active_volume(meta, Val(Symbol(meta.type)), .0))
-        actvol = round(typeof(1u"cm^3"), LegendDataManagement.get_active_volume(meta, Val(Symbol(meta.type)), li_thickness))
+        g1,g2,g3,g4,g5,g6 = get_unicode_rep(diode_meta.type)
+        vol = round(typeof(1u"cm^3"), LegendDataManagement.get_active_volume(diode_meta, Val(Symbol(diode_meta.type)), .0))
+        actvol = round(typeof(1u"cm^3"), LegendDataManagement.get_active_volume(diode_meta, Val(Symbol(diode_meta.type)), 1.0*li_thickness))
         actvol_check = actvol == vol ? "⚠" : "✔"
         @info """
-        Legend SolidStateDetector - $(meta.name)
-        $g1  ╰─ $Vop_val_used $Vop V
-        $g2  ╰─ $dl_val_used $dl_thickness_in_mm mm
+        Legend SolidStateDetector - $(diode_meta.name)
+        $g1  ╰─ $Vop_val_used $(Vop isa Rational ? float(Vop) : Vop) V
+        $g2  ╰─ $dl_val_used $(dl_thickness_in_mm isa Rational ? float(dl_thickness_in_mm) : dl_thickness_in_mm) mm
         $g3  ╰─ $(imp_warn[1]) Impurity model $(imp_warn[2]) / Detector Offset: $imp_model / $det_offset
         $g4     ╰─ $imp_val
         $g5     ╰─ Corrections: Scale / Offset: $imp_scale / $imp_offset
