@@ -37,6 +37,7 @@ methods above. Uses LEGEND defaults, such as ADLChargeDriftModel2016.
 * `operational_voltage::Number`: Operational voltage for the n+ contact. Accepts units, if non are given will interpret as `V`. If not provided, it will be taken from the metadata if available or defaulted.
 * `n_thickness::Number`: Thickness of the n+ contact in mm. Accepts units, if non are given will interpret as `mm`. If not provided, it will be taken from the metadata if available or defaulted.
 * `verbose::Bool`: Whether to print detailed information during the creation process. Default is `true`.
+* `save_ssd_config::Bool`: Whether to save the SSD configuration to a YAML file. Default is `false`.
 """
 
 function SolidStateDetectors.SolidStateDetector(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); kwargs...)
@@ -65,7 +66,7 @@ function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, diode_met
         @warn "Crystal metadata not provided. No impurity density information will be passed to the simulation."
     end
     config_dict = create_SSD_config_dict_from_LEGEND_metadata(diode_meta, xtal_meta, env; kwargs...)
-    if save_ssd_config YAML.write_file(config_dict["name"] * ".yaml", config_dict) end
+    if save_ssd_config YAML.write_file(config_dict["name"] * "_ssd_config.yaml", config_dict) end
     SolidStateDetector{T}(config_dict, SolidStateDetectors.construct_units(config_dict))
 end
 
@@ -120,7 +121,7 @@ function SolidStateDetectors.Simulation{T}(::Type{LegendData}, diode_meta::PropD
         @warn "Crystal metadata not provided. No impurity density information will be passed to the simulation."
     end
     config_dict = create_SSD_config_dict_from_LEGEND_metadata(diode_meta, xtal_meta, env; kwargs...)
-    if save_ssd_config YAML.write_file(config_dict["name"] * ".yaml", config_dict) end
+    if save_ssd_config YAML.write_file(config_dict["name"] * "_ssd_config.yaml", config_dict) end
     Simulation{T}(config_dict)
 end
 
