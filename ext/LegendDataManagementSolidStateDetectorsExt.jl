@@ -60,11 +60,12 @@ function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, diode_fil
     SolidStateDetector{T}(LegendData, diode_meta, xtal_meta, env; kwargs...)
 end
 
-function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, diode_meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(); kwargs...) where {T<:AbstractFloat}
+function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, diode_meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(); save_ssd_config::Bool = false, kwargs...) where {T<:AbstractFloat}
     if xtal_meta isa LegendDataManagement.NoSuchPropsDBEntry
         @warn "Crystal metadata not provided. No impurity density information will be passed to the simulation."
     end
     config_dict = create_SSD_config_dict_from_LEGEND_metadata(diode_meta, xtal_meta, env; kwargs...)
+    if save_ssd_config YAML.write_file(config_dict["name"] * ".yaml", config_dict) end
     SolidStateDetector{T}(config_dict, SolidStateDetectors.construct_units(config_dict))
 end
 
