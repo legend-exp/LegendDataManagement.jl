@@ -6,6 +6,8 @@ using SolidStateDetectors
 using LegendDataManagement
 using Unitful
 using PropDicts
+using OrderedCollections
+using YAML
 
 const _SSDDefaultNumtype = Float32
 const DEFAULT_OPERATIONAL_VOLTAGE_IN_V = 5000
@@ -112,11 +114,12 @@ function SolidStateDetectors.Simulation{T}(::Type{LegendData}, diode_filename::S
     Simulation{T}(LegendData, diode_meta, xtal_meta, env; kwargs...)
 end
 
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, diode_meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(); kwargs...) where {T<:AbstractFloat}
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, diode_meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(); save_ssd_config::Bool = false, kwargs...) where {T<:AbstractFloat}
     if xtal_meta isa LegendDataManagement.NoSuchPropsDBEntry
         @warn "Crystal metadata not provided. No impurity density information will be passed to the simulation."
     end
     config_dict = create_SSD_config_dict_from_LEGEND_metadata(diode_meta, xtal_meta, env; kwargs...)
+    if save_ssd_config YAML.write_file(config_dict["name"] * ".yaml", config_dict) end
     Simulation{T}(config_dict)
 end
 
@@ -159,7 +162,7 @@ function get_unicode_rep(::Val{:coax})
 end
 
 function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_meta::X, env::HPGeEnvironment = HPGeEnvironment(); 
-    dicttype = Dict{String,Any}, verbose::Bool = true, operational_voltage::Number = NaN, n_thickness::Number = NaN) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
+    dicttype = OrderedDict{String,Any}, verbose::Bool = true, operational_voltage::Number = NaN, n_thickness::Number = NaN) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
 
     # Not all possible configurations are yet implemented!
     gap = 1.0 # to ensure negative volumes do not match at surfaces
