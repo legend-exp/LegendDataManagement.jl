@@ -61,12 +61,11 @@ function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, diode_fil
     SolidStateDetector{T}(LegendData, diode_meta, xtal_meta, env; kwargs...)
 end
 
-function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, diode_meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(); save_ssd_config::Bool = false, kwargs...) where {T<:AbstractFloat}
+function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, diode_meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(); kwargs...) where {T<:AbstractFloat}
     if xtal_meta isa LegendDataManagement.NoSuchPropsDBEntry
         @warn "Crystal metadata not provided. No impurity density information will be passed to the simulation."
     end
     config_dict = create_SSD_config_dict_from_LEGEND_metadata(diode_meta, xtal_meta, env; kwargs...)
-    if save_ssd_config YAML.write_file(config_dict["name"] * "_ssd_config.yaml", config_dict) end
     SolidStateDetector{T}(config_dict, SolidStateDetectors.construct_units(config_dict))
 end
 
@@ -116,12 +115,11 @@ function SolidStateDetectors.Simulation{T}(::Type{LegendData}, diode_filename::S
     Simulation{T}(LegendData, diode_meta, xtal_meta, env; kwargs...)
 end
 
-function SolidStateDetectors.Simulation{T}(::Type{LegendData}, diode_meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(); save_ssd_config::Bool = false, kwargs...) where {T<:AbstractFloat}
+function SolidStateDetectors.Simulation{T}(::Type{LegendData}, diode_meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(); kwargs...) where {T<:AbstractFloat}
     if xtal_meta isa LegendDataManagement.NoSuchPropsDBEntry
         @warn "Crystal metadata not provided. No impurity density information will be passed to the simulation."
     end
     config_dict = create_SSD_config_dict_from_LEGEND_metadata(diode_meta, xtal_meta, env; kwargs...)
-    if save_ssd_config YAML.write_file(config_dict["name"] * "_ssd_config.yaml", config_dict) end
     Simulation{T}(config_dict)
 end
 
@@ -164,7 +162,7 @@ function get_unicode_rep(::Val{:coax})
 end
 
 function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_meta::X, env::HPGeEnvironment = HPGeEnvironment(); 
-    dicttype = OrderedDict{String,Any}, verbose::Bool = true, operational_voltage::Number = NaN, n_thickness::Number = NaN) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
+    dicttype = OrderedDict{String,Any}, verbose::Bool = true, operational_voltage::Number = NaN, n_thickness::Number = NaN, save_ssd_config::Bool = false) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
 
     # Not all possible configurations are yet implemented!
     gap = 1.0 # to ensure negative volumes do not match at surfaces
@@ -224,12 +222,11 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
     push!(config_dict["detectors"], dicttype(
         "semiconductor" => dicttype(
             "material" => "HPGe",
+            "temperature" => ustrip(u"K", env.temperature),
             "charge_drift_model" => dicttype(
-                "include" => joinpath(SolidStateDetectors.get_path_to_example_config_files(), "ADLChargeDriftModel", "drift_velocity_config_2016.yaml"), #change to 2016
+                "include" => joinpath(SolidStateDetectors.get_path_to_example_config_files(), "ADLChargeDriftModel", "drift_velocity_config_2016.yaml"),
             ),
-            # "impurity_density" => dicttype("parameters" => Vector()),
-            "geometry" => dicttype(),
-            "temperature" => ustrip(u"K", env.temperature)
+            "geometry" => dicttype()
         ),
         "contacts" => []
         ))
@@ -414,7 +411,6 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
 
     # extras
     hasproperty(diode_meta.geometry, :extra) && @warn "Extras are not implemented yet, ignore for now."
-
 
     ### P+ CONTACT ###
 
@@ -759,6 +755,9 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
 
     # evaluate "include" statements - needed for the charge drift model
     SolidStateDetectors.scan_and_merge_included_json_files!(config_dict, "")
+    
+    if save_ssd_config YAML.write_file(config_dict["name"] * "_ssd_config.yaml", config_dict) end
+
     return config_dict
 end
 
