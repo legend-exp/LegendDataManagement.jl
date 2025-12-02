@@ -162,7 +162,7 @@ function get_unicode_rep(::Val{:coax})
 end
 
 function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_meta::X, env::HPGeEnvironment = HPGeEnvironment(); 
-    dicttype = OrderedDict{String,Any}, verbose::Bool = true, operational_voltage::Number = NaN, n_thickness::Number = NaN, use_impurity_corrections::Bool = true, save_ssd_config::Bool = false) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
+    dicttype = OrderedDict{String,Any}, verbose::Bool = true, operational_voltage::Number = NaN, n_thickness::Number = NaN, use_impurity_corrections::Bool = true, ssd_config_filename::Union{Missing, AbstractString} = missing) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
 
     # Not all possible configurations are yet implemented!
     gap = 1.0 # to ensure negative volumes do not match at surfaces
@@ -761,13 +761,13 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
     # evaluate "include" statements - needed for the charge drift model
     SolidStateDetectors.scan_and_merge_included_json_files!(config_dict, "")
     
-    if save_ssd_config 
+    if !ismissing(ssd_config_filename)
         buf = IOBuffer()
         YAML.write(buf, config_dict)
         raw = String(take!(buf))
         # remove quotes from strings
         clean = replace(raw, r": \"([^\"]+)\"" => s": \1")
-        open(config_dict["name"] * "_ssd_config.yaml", "w") do io
+        open(ssd_config_filename, "w") do io
             write(io, clean)
         end
     end
