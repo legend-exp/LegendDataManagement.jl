@@ -162,7 +162,7 @@ function get_unicode_rep(::Val{:coax})
 end
 
 function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_meta::X, env::HPGeEnvironment = HPGeEnvironment(); 
-    dicttype = OrderedDict{String,Any}, verbose::Bool = true, operational_voltage::Number = NaN, n_thickness::Number = NaN, save_ssd_config::Bool = false) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
+    dicttype = OrderedDict{String,Any}, verbose::Bool = true, operational_voltage::Number = NaN, n_thickness::Number = NaN, use_impurity_corrections::Bool = true, save_ssd_config::Bool = false) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
 
     # Not all possible configurations are yet implemented!
     gap = 1.0 # to ensure negative volumes do not match at surfaces
@@ -667,58 +667,49 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
     end
     
     slice = Symbol(diode_meta.name[end])
-    config_dict["detectors"][1]["semiconductor"]["impurity_density"] = if hasproperty(xtal_meta,:impurity_curve) && hasproperty(xtal_meta.slices, slice)
-        impurity_scale =  hasproperty(xtal_meta.impurity_curve.corrections, :scale) ? xtal_meta.impurity_curve.corrections.scale : 1.0
-        impurity_offset = hasproperty(xtal_meta.impurity_curve.corrections, :offset) ? xtal_meta.impurity_curve.corrections.offset * -1e6 : 0.0 ## 1e9cm^-3 -> mm^-3
-        impurity_corrections_dict = dicttype(
-            "scale" => impurity_scale, 
-            "offset" => impurity_offset,
-        )
+    xtal_imp = -1e9 #xtal metadata gives impurity values in units of 1e9 cm^-3 with no sign. We use negative values for p-type in SSD.
+    xtal_imp_unit = "cm^-3"
+    impurity_dict = if hasproperty(xtal_meta,:impurity_curve) && hasproperty(xtal_meta.slices, slice)
         if xtal_meta.impurity_curve.model == "constant_boule"
             dicttype(
                 "name" => "constant", 
-                "value" => xtal_meta.impurity_curve.parameters.value * -1e6, ## 1e9cm^-3 -> mm^-3
-                "corrections" => impurity_corrections_dict
+                "value" => string(xtal_meta.impurity_curve.parameters.value * xtal_imp) * xtal_imp_unit
             )
         elseif xtal_meta.impurity_curve.model == "linear_boule"
             dicttype(
                 "name" => xtal_meta.impurity_curve.model, 
-                "a" => xtal_meta.impurity_curve.parameters.a * -1e6, ## 1e9cm^-3 -> mm^-3
-                "b" => xtal_meta.impurity_curve.parameters.b * -1e6, ## 1e9cm^-3 * mm^-1 -> mm^-4
-                "det_z0" => xtal_meta.slices[slice].detector_offset_in_mm, ## already in mm
-                "corrections" => impurity_corrections_dict
+                "a" => string(xtal_meta.impurity_curve.parameters.a * xtal_imp) * xtal_imp_unit,
+                "b" => string(xtal_meta.impurity_curve.parameters.b * xtal_imp) * xtal_imp_unit * "*mm^-1",
+                "det_z0" => string(xtal_meta.slices[slice].detector_offset_in_mm) * "mm"
             )
         elseif xtal_meta.impurity_curve.model == "parabolic_boule"
             dicttype(
                 "name" => xtal_meta.impurity_curve.model, 
-                "a" => xtal_meta.impurity_curve.parameters.a * -1e6, ## 1e9cm^-3 -> mm^-3
-                "b" => xtal_meta.impurity_curve.parameters.b * -1e6, ## 1e9cm^-3 * mm^-1 -> mm^-4
-                "c" => xtal_meta.impurity_curve.parameters.c * -1e6, ## 1e9cm^-3 * mm^-2 -> mm^-5
-                "det_z0" => xtal_meta.slices[slice].detector_offset_in_mm, ## already in mm
-                "corrections" => impurity_corrections_dict
+                "a" => string(xtal_meta.impurity_curve.parameters.a * xtal_imp) * xtal_imp_unit,
+                "b" => string(xtal_meta.impurity_curve.parameters.b * xtal_imp) * xtal_imp_unit * "*mm^-1",
+                "c" => string(xtal_meta.impurity_curve.parameters.c * xtal_imp) * xtal_imp_unit * "*mm^-2",
+                "det_z0" => string(xtal_meta.slices[slice].detector_offset_in_mm) * "mm"
             )
         elseif xtal_meta.impurity_curve.model == "linear_exponential_boule"
             dicttype(
                 "name" => xtal_meta.impurity_curve.model, 
-                "a" => xtal_meta.impurity_curve.parameters.a * -1e6, ## 1e9cm^-3 -> mm^-3
-                "b" => xtal_meta.impurity_curve.parameters.b * -1e6, ## 1e9cm^-3 * mm^-1 -> mm^-4
-                "n" => xtal_meta.impurity_curve.parameters.n * -1e6, ## 1e9cm^-3 -> mm^-3
-                "l" => xtal_meta.impurity_curve.parameters.l, ## already in mm
-                "m" => xtal_meta.impurity_curve.parameters.m, ## already in mm
-                "det_z0" => xtal_meta.slices[slice].detector_offset_in_mm, ## already in mm
-                "corrections" => impurity_corrections_dict
+                "a" => string(xtal_meta.impurity_curve.parameters.a * xtal_imp) * xtal_imp_unit,
+                "b" => string(xtal_meta.impurity_curve.parameters.b * xtal_imp) * xtal_imp_unit * "*mm^-1",
+                "n" => string(xtal_meta.impurity_curve.parameters.n * xtal_imp) * xtal_imp_unit,
+                "l" => string(xtal_meta.impurity_curve.parameters.l) * "mm", 
+                "m" => string(xtal_meta.impurity_curve.parameters.m) * "mm", 
+                "det_z0" => string(xtal_meta.slices[slice].detector_offset_in_mm) * "mm"
             )
         elseif xtal_meta.impurity_curve.model == "parabolic_exponential_boule"
             dicttype(
                 "name" => xtal_meta.impurity_curve.model, 
-                "a" => xtal_meta.impurity_curve.parameters.a * -1e6, ## 1e9cm^-3 -> mm^-3
-                "b" => xtal_meta.impurity_curve.parameters.b * -1e6, ## 1e9cm^-3 * mm^-1 -> mm^-4
-                "c" => xtal_meta.impurity_curve.parameters.c * -1e6, ## 1e9cm^-3 * mm^-2 -> mm^-5
-                "n" => xtal_meta.impurity_curve.parameters.n * -1e6, ## 1e9cm^-3 -> mm^-3
-                "l" => xtal_meta.impurity_curve.parameters.l, ## already in mm
-                "m" => xtal_meta.impurity_curve.parameters.m, ## already in mm
-                "det_z0" => xtal_meta.slices[slice].detector_offset_in_mm, ## already in mm
-                "corrections" => impurity_corrections_dict
+                "a" => string(xtal_meta.impurity_curve.parameters.a * xtal_imp) * xtal_imp_unit,
+                "b" => string(xtal_meta.impurity_curve.parameters.b * xtal_imp) * xtal_imp_unit * "*mm^-1",
+                "c" => string(xtal_meta.impurity_curve.parameters.c * xtal_imp) * xtal_imp_unit * "*mm^-2",
+                "n" => string(xtal_meta.impurity_curve.parameters.n * xtal_imp) * xtal_imp_unit,
+                "l" => string(xtal_meta.impurity_curve.parameters.l) * "mm", 
+                "m" => string(xtal_meta.impurity_curve.parameters.m) * "mm", 
+                "det_z0" => string(xtal_meta.slices[slice].detector_offset_in_mm) * "mm"
             )
         end
     else
@@ -727,6 +718,20 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
             "value" => 0,
         )
     end
+    
+    if hasproperty(xtal_meta.impurity_curve, :corrections) && use_impurity_corrections
+        impurity_corrections_dict = dicttype()
+        if hasproperty(xtal_meta.impurity_curve.corrections, :scale) 
+            impurity_corrections_dict["scale"] = xtal_meta.impurity_curve.corrections.scale
+        end
+        if hasproperty(xtal_meta.impurity_curve.corrections, :offset)
+            impurity_corrections_dict["offset"] = string(xtal_meta.impurity_curve.corrections.offset * xtal_imp) * xtal_imp_unit
+        end
+        impurity_dict["corrections"] = impurity_corrections_dict
+    end
+
+    config_dict["detectors"][1]["semiconductor"]["impurity_density"] = impurity_dict
+
     if verbose
         imp_model = config_dict["detectors"][1]["semiconductor"]["impurity_density"]["name"]
         imp_val = if hasproperty(xtal_meta,:impurity_curve) && hasproperty(xtal_meta.slices, slice)
@@ -736,8 +741,8 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
         end
         det_offset = hasproperty(xtal_meta.slices, slice) ? xtal_meta.slices[slice].detector_offset_in_mm*u"mm" : "unknown"
         imp_warn = hasproperty(xtal_meta,:impurity_curve) && hasproperty(xtal_meta.slices, slice) ? ("✔", "") : ("⚠","(DEFAULT)")
-        imp_scale = hasproperty(xtal_meta.impurity_curve.corrections, :scale) ? xtal_meta.impurity_curve.corrections.scale : "-"
-        imp_offset = hasproperty(xtal_meta.impurity_curve.corrections, :offset) ? xtal_meta.impurity_curve.corrections.offset : "-"
+        imp_scale = use_impurity_corrections && hasproperty(xtal_meta.impurity_curve.corrections, :scale) ? xtal_meta.impurity_curve.corrections.scale : "-"
+        imp_offset = use_impurity_corrections && hasproperty(xtal_meta.impurity_curve.corrections, :offset) ? xtal_meta.impurity_curve.corrections.offset : "-"
         g1,g2,g3,g4,g5,g6 = get_unicode_rep(diode_meta.type)
         vol = round(typeof(1u"cm^3"), LegendDataManagement.get_active_volume(diode_meta, Val(Symbol(diode_meta.type)), .0))
         actvol = round(typeof(1u"cm^3"), LegendDataManagement.get_active_volume(diode_meta, Val(Symbol(diode_meta.type)), 1.0*li_thickness))
@@ -756,7 +761,16 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
     # evaluate "include" statements - needed for the charge drift model
     SolidStateDetectors.scan_and_merge_included_json_files!(config_dict, "")
     
-    if save_ssd_config YAML.write_file(config_dict["name"] * "_ssd_config.yaml", config_dict) end
+    if save_ssd_config 
+        buf = IOBuffer()
+        YAML.write(buf, config_dict)
+        raw = String(take!(buf))
+        # remove quotes from strings
+        clean = replace(raw, r": \"([^\"]+)\"" => s": \1")
+        open(config_dict["name"] * "_ssd_config.yaml", "w") do io
+            write(io, clean)
+        end
+    end
 
     return config_dict
 end
