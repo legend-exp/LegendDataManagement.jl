@@ -194,7 +194,20 @@ function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, category:
     )
 end
 
+# Support detector name in tier file path (for Juleana output files)
+# Use Union{DetectorId, Symbol} to avoid ambiguity with ChannelIdLike (both include AbstractString)
+function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike, run::DataRunLike, det::Union{DetectorId, Symbol})
+    det_name = string(DetectorId(det))
+    joinpath(
+        tier_data[DataTier(tier), DataCategory(category), DataPeriod(period), DataRun(run)],
+        "$(get_setup_name(tier_data.data))-$period-$run-$category-$det_name-tier_$(first(split(string(tier), "ch"))).lh5"
+    )
+end
+
 _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, filekey::FileKey, ch::ChannelIdLike) = _getindex_impl(tier_data, tier, filekey.category, filekey.period, filekey.run, ch)
+
+# Support detector in FileKey access
+_getindex_impl(tier_data::LegendTierData, tier::DataTierLike, filekey::FileKey, det::Union{DetectorId, Symbol}) = _getindex_impl(tier_data, tier, filekey.category, filekey.period, filekey.run, det)
 
 
 function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, filekey::FileKey)
