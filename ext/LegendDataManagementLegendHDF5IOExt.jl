@@ -96,18 +96,80 @@ function __init__()
     (@isdefined DataPartition) && extend_datatype_dict(DataPartition, "datapartition")
 end
 
-function _lh5_data_open(f::Function, data::LegendData, tier::DataTierLike, filekey::FileKey, ch::ChannelIdLike, mode::AbstractString="r")
-    ch_filename = data.tier[DataTier(tier), filekey, ch]
-    filename = data.tier[DataTier(tier), filekey]
-    if isfile(ch_filename)
-        @debug "Read from $(basename(ch_filename))"
-        LegendHDF5IO.lh5open(f, ch_filename, mode)
-    elseif isfile(filename)
-        @debug "Read from $(basename(filename))"
-        LegendHDF5IO.lh5open(f, filename, mode)
-    else
-        throw(ArgumentError("Neither $(basename(filename)) nor $(basename(ch_filename)) found"))
+# Helper function to resolve channel/detector to (channel_id, detector_name) pair
+function _resolve_channel_detector(data::LegendData, filekey::FileKey, ch_or_det::ChannelOrDetectorIdLike)
+    if isempty(string(ch_or_det))
+        return nothing, nothing
     end
+    
+    chinfo = try
+        channelinfo(data, (filekey,); only_processable=false, only_usability=:all, system=:all)
+    catch
+        return nothing, nothing
+    end
+    
+    # Try to interpret as detector first
+    if LegendDataManagement._can_convert_to(DetectorId, ch_or_det)
+        det_id = DetectorId(ch_or_det)
+        det_row = findfirst(x -> DetectorId(x) == det_id, chinfo.detector)
+        if det_row !== nothing
+            return ChannelId(chinfo.channel[det_row]), string(det_id)
+        end
+    end
+    
+    # Try to interpret as channel
+    if LegendDataManagement._can_convert_to(ChannelId, ch_or_det)
+        ch_id = ChannelId(ch_or_det)
+        ch_row = findfirst(x -> ChannelId(x) == ch_id, chinfo.channel)
+        if ch_row !== nothing
+            return ch_id, string(chinfo.detector[ch_row])
+        end
+        # Channel not in channelinfo but might still be valid
+        return ch_id, nothing
+    end
+    
+    return nothing, nothing
+end
+
+function _lh5_data_open(f::Function, data::LegendData, tier::DataTierLike, filekey::FileKey, ch_or_det::ChannelOrDetectorIdLike, mode::AbstractString="r")
+    tier_obj = DataTier(tier)
+    
+    # Resolve input to channel_id and detector_name
+    ch_id, det_name = _resolve_channel_detector(data, filekey, ch_or_det)
+    
+    # Build list of candidate filenames to try
+    candidate_filenames = String[]
+    
+    if ch_id !== nothing
+        # Channel-ID based filename
+        ch_filename = data.tier[tier_obj, filekey, ch_id]
+        push!(candidate_filenames, ch_filename)
+        
+        # Detector-named filename (for Juleana output files)
+        if det_name !== nothing
+            det_filename = replace(ch_filename, "-$(string(ch_id))-" => "-$det_name-")
+            if det_filename ∉ candidate_filenames
+                push!(candidate_filenames, det_filename)
+            end
+        end
+    end
+    
+    # Run-level file (no channel in name) as fallback
+    run_filename = data.tier[tier_obj, filekey]
+    if run_filename ∉ candidate_filenames
+        push!(candidate_filenames, run_filename)
+    end
+    
+    # Try each candidate in order
+    for filename in candidate_filenames
+        if isfile(filename)
+            @debug "Read from $(basename(filename))"
+            return LegendHDF5IO.lh5open(f, filename, mode)
+        end
+    end
+    
+    # None found - throw error with all tried filenames
+    throw(ArgumentError("None of the following files found: $(join(basename.(candidate_filenames), ", "))"))
 end
 
 _skipnothingmissing(xv::AbstractVector) = [x for x in skipmissing(xv) if !isnothing(x)]
