@@ -96,18 +96,83 @@ function __init__()
     (@isdefined DataPartition) && extend_datatype_dict(DataPartition, "datapartition")
 end
 
-function _lh5_data_open(f::Function, data::LegendData, tier::DataTierLike, filekey::FileKey, ch::ChannelIdLike, mode::AbstractString="r")
-    ch_filename = data.tier[DataTier(tier), filekey, ch]
-    filename = data.tier[DataTier(tier), filekey]
-    if isfile(ch_filename)
-        @debug "Read from $(basename(ch_filename))"
-        LegendHDF5IO.lh5open(f, ch_filename, mode)
-    elseif isfile(filename)
-        @debug "Read from $(basename(filename))"
-        LegendHDF5IO.lh5open(f, filename, mode)
-    else
-        throw(ArgumentError("Neither $(basename(filename)) nor $(basename(ch_filename)) found"))
+# Helper function to resolve channel/detector to (channel_id, detector_name) pair
+function _resolve_channel_detector(data::LegendData, filekey::FileKey, ch_or_det::ChannelOrDetectorIdLike)
+    if isempty(string(ch_or_det))
+        return nothing, nothing
     end
+    
+    chinfo = try
+        channelinfo(data, filekey; only_processable=false, only_usability=:all, system=:all)
+    catch
+        return nothing, nothing
+    end
+    
+    # Try to interpret as detector first
+    if LegendDataManagement._can_convert_to(DetectorId, ch_or_det)
+        det_id = DetectorId(ch_or_det)
+        det_row = findfirst(x -> DetectorId(x) == det_id, chinfo.detector)
+        if det_row !== nothing
+            return ChannelId(chinfo.channel[det_row]), string(det_id)
+        end
+    end
+    
+    # Try to interpret as channel
+    if LegendDataManagement._can_convert_to(ChannelId, ch_or_det)
+        ch_id = ChannelId(ch_or_det)
+        ch_row = findfirst(x -> ChannelId(x) == ch_id, chinfo.channel)
+        if ch_row !== nothing
+            return ch_id, string(chinfo.detector[ch_row])
+        end
+        # Channel not in channelinfo but might still be valid
+        return ch_id, nothing
+    end
+    
+    return nothing, nothing
+end
+
+function _lh5_data_open(f::Function, data::LegendData, tier::DataTierLike, filekey::FileKey, ch_or_det::ChannelOrDetectorIdLike, mode::AbstractString="r")
+    tier_obj = DataTier(tier)
+    
+    # Build list of candidate filenames to try - prioritize run-level file since Juleana writes there
+    candidate_filenames = String[]
+    
+    # Run-level file (no channel in name) - PRIMARY for Juleana output
+    run_filename = data.tier[tier_obj, filekey]
+    push!(candidate_filenames, run_filename)
+    
+    # Also try channel/detector-specific files as fallback
+    if !isempty(string(ch_or_det))
+        # Resolve input to channel_id and detector_name for file path generation
+        ch_id, det_name = _resolve_channel_detector(data, filekey, ch_or_det)
+        
+        if ch_id !== nothing
+            # Channel-ID based filename (legacy format)
+            ch_filename = data.tier[tier_obj, filekey, ch_id]
+            if ch_filename ∉ candidate_filenames
+                push!(candidate_filenames, ch_filename)
+            end
+        end
+        
+        if det_name !== nothing
+            # Detector-named filename (for per-detector output files like jlhit)
+            det_filename = data.tier[tier_obj, filekey, DetectorId(det_name)]
+            if det_filename ∉ candidate_filenames
+                push!(candidate_filenames, det_filename)
+            end
+        end
+    end
+    
+    # Try each candidate in order
+    for filename in candidate_filenames
+        if isfile(filename)
+            @debug "Read from $(basename(filename))"
+            return LegendHDF5IO.lh5open(f, filename, mode)
+        end
+    end
+    
+    # None found - throw error with all tried filenames
+    throw(ArgumentError("None of the following files found: $(join(basename.(candidate_filenames), ", "))"))
 end
 
 _skipnothingmissing(xv::AbstractVector) = [x for x in skipmissing(xv) if !isnothing(x)]
@@ -124,19 +189,74 @@ _load_all_keys(x, n_evts::Int=-1) = x
 
 const _evt_tiers = DataTier.([:jlevt, :jlskm])
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, ChannelOrDetectorIdLike}; filterby::Base.Callable=Returns(true), filtertier::DataTierLike=first(rsel), n_evts::Int=-1, ignore_missing::Bool=false, parallel::Bool=false, wpool::WorkerPool=default_worker_pool())
-    tier, filekey, ch = DataTier(rsel[1]), rsel[2], if !isempty(string((rsel[3]))) _get_channelid(data, rsel[2], rsel[3]) else rsel[3] end
-    ch_tier = tier in _evt_tiers ? "/$tier" : "$ch/$tier"
-    data_tier = _lh5_data_open(data, tier, filekey, ch) do h
-        # check if channel exists in file or should be ignored
-        if !isempty(string((ch))) && !(tier in _evt_tiers) && !haskey(h, "$ch")
-            if ignore_missing
-                @warn "Channel $ch not found in $(basename(string(h.data_store)))"
-                return nothing
-            else
-                throw(ArgumentError("Channel $ch not found in $(basename(string(h.data_store)))"))
-            end
+# Helper function to find the correct key in HDF5 file (prefers detector name over channel id)
+function _find_hdf5_key(h, ch_id::Union{ChannelId, Nothing}, det_name::Union{String, Nothing})
+    file_keys = keys(h)
+    # Try detector name first (preferred for Juleana output)
+    if det_name !== nothing && det_name in file_keys
+        return det_name
+    end
+    # Then try channel id
+    if ch_id !== nothing
+        ch_str = string(ch_id)
+        if ch_str in file_keys
+            return ch_str
         end
+    end
+    return nothing
+end
+
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, ChannelOrDetectorIdLike}; filterby::Base.Callable=Returns(true), filtertier::DataTierLike=first(rsel), n_evts::Int=-1, ignore_missing::Bool=false, parallel::Bool=false, wpool::WorkerPool=default_worker_pool())
+    tier, filekey = DataTier(rsel[1]), rsel[2]
+    
+    # Resolve channel and detector info - keep both for searching in HDF5
+    ch_id, det_name = if !isempty(string(rsel[3]))
+        _resolve_channel_detector(data, filekey, rsel[3])
+    else
+        nothing, nothing
+    end
+    
+    # Keep original input for _lh5_data_open (it handles file searching)
+    ch_or_det_input = rsel[3]
+    
+    # For _evt_tiers filtering, we need the channel id
+    ch_for_evt = if ch_id !== nothing
+        ch_id
+    elseif !isempty(string(rsel[3])) && LegendDataManagement._can_convert_to(ChannelId, rsel[3])
+        ChannelId(rsel[3])
+    elseif !isempty(string(rsel[3]))
+        _get_channelid(data, filekey, rsel[3])
+    else
+        nothing
+    end
+    
+    data_tier = _lh5_data_open(data, tier, filekey, ch_or_det_input) do h
+        # Find the correct key in the HDF5 file (detector name or channel id)
+        hdf5_key = if !isempty(string(ch_or_det_input)) && !(tier in _evt_tiers)
+            found_key = _find_hdf5_key(h, ch_id, det_name)
+            # If _find_hdf5_key didn't find anything, try the original input directly as fallback
+            if found_key === nothing
+                ch_or_det_str = string(ch_or_det_input)
+                if ch_or_det_str in keys(h)
+                    found_key = ch_or_det_str
+                end
+            end
+            if found_key === nothing
+                if ignore_missing
+                    @warn "Neither detector $det_name nor channel $ch_id found in $(basename(string(h.data_store)))"
+                    return nothing
+                else
+                    # Use original input as fallback for error message if ch_id and det_name are both nothing
+                    ch_display = something(det_name, ch_id, string(ch_or_det_input))
+                    throw(ArgumentError("Channel $ch_display not found in $(basename(string(h.data_store)))"))
+                end
+            end
+            found_key
+        else
+            ""
+        end
+        
+        ch_tier = tier in _evt_tiers ? "/$tier" : "$hdf5_key/$tier"
         
         # load channel data
         if f isa PropSelFunction && filterby == Returns(true)
@@ -161,8 +281,8 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
             end
         end
     end
-    if tier in _evt_tiers && !isempty(string(ch))
-        data_tier[any.(map.(isequal(Int(ch)), data_tier.geds.trig_e_ch))]
+    if tier in _evt_tiers && ch_for_evt !== nothing
+        data_tier[any.(map.(isequal(Int(ch_for_evt)), data_tier.geds.trig_e_ch))]
     else
         data_tier
     end
