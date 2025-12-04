@@ -137,6 +137,11 @@ In cases where multiple values (or none) are available in the metadata, the dete
 - Operational Voltage: l200 characterization value (if available) → manufacturer's value (if available) → default value. Can also be overridden with `operational_voltage` keyword.
 - Impurity profile: model in crystal metadata (if available) → constant value of 0
 
+To create a SolidStateDetectors `Simulation` or `SolidStateDetector` LegendDataManagement creates a SolidStateDetectors config. Although this process is entirely internal, and does not require any files to be written to disk, the user can choose to do so by using the `ssd_config_filename` keyword (e.g. `ssd_config_filename = "../V99000A_ssd_config.yaml"`). If set, a YAML file will be written as specified. This file which can then be modified and used by SolidStateDetectors independently of LegendDataManagement (e.g. `Simulation{T}("../V99000A_ssd_config.yaml")`). By default `ssd_config_filename` is set to `missing`. 
+
+!!! note
+    Simulating a LEGEND detector from a modified `ssd_config` can lead to errors and divergent behavior from LEGEND defaults. Please read the [SolidStateDetectors documentation](https://juliaphysics.github.io/SolidStateDetectors.jl/stable/man/config_files/) before proceeding.
+
 In addition, when creating a `Simulation`, all simulation functions in SolidStateDetectors.jl can be applied. As usual, all fields stored in the `Simulation` can be written and read using `LegendHDF5IO`:
 
 ```julia

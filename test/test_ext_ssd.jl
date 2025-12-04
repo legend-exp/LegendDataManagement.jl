@@ -18,8 +18,14 @@ include("testing_utils.jl")
             @test det isa SolidStateDetector
             det = SolidStateDetector{Float64}(l200, detname) 
             @test det isa SolidStateDetector
-            sim = Simulation{Float64}(l200, detname)
+            @test !isfile("$(detname).yaml")
+            
+            sim = Simulation{Float64}(l200, detname, ssd_config_filename = "$detname.yaml")
             @test sim isa Simulation
+
+            sim2 = Simulation{Float64}("$detname.yaml")
+            @test sim2 == sim
+
 
             # Compare active volume from SSD to active volume from LegendDataManagement
             detector_props = getproperty(l200.metadata.hardware.detectors.germanium.diodes, detname)
