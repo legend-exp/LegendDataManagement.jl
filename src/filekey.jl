@@ -731,7 +731,7 @@ _can_convert_to(::Type{DetectorId}, s) = false
 function DetectorId(s::AbstractString)
     _can_convert_to(DetectorId, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND detector id"))
     length(s) < 4 && throw(ArgumentError("String \"$s\" is too short to be a valid LEGEND detector id"))
-    length(s) > 7 && throw(ArgumentError("String \"$s\" is too long to be a valid LEGEND detector id"))
+    length(s) > 9 && throw(ArgumentError("String \"$s\" is too long to be a valid LEGEND detector id"))
     DetectorId(Symbol(s))
 end
 
