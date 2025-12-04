@@ -234,12 +234,21 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
         # Find the correct key in the HDF5 file (detector name or channel id)
         hdf5_key = if !isempty(string(ch_or_det_input)) && !(tier in _evt_tiers)
             found_key = _find_hdf5_key(h, ch_id, det_name)
+            # If _find_hdf5_key didn't find anything, try the original input directly as fallback
+            if found_key === nothing
+                ch_or_det_str = string(ch_or_det_input)
+                if ch_or_det_str in keys(h)
+                    found_key = ch_or_det_str
+                end
+            end
             if found_key === nothing
                 if ignore_missing
                     @warn "Neither detector $det_name nor channel $ch_id found in $(basename(string(h.data_store)))"
                     return nothing
                 else
-                    throw(ArgumentError("Channel $(something(det_name, ch_id)) not found in $(basename(string(h.data_store)))"))
+                    # Use original input as fallback for error message if ch_id and det_name are both nothing
+                    ch_display = something(det_name, ch_id, string(ch_or_det_input))
+                    throw(ArgumentError("Channel $ch_display not found in $(basename(string(h.data_store)))"))
                 end
             end
             found_key
