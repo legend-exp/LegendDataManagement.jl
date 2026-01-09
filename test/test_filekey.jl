@@ -18,6 +18,9 @@ using Unitful
     @test @inferred(string(period)) == "p02"
     @test @inferred(DataPeriod("p02")) == period
     @test_throws ArgumentError DataPeriod("invalidperiod")
+    # test broadcasting of DataSelector
+    periods = [DataPeriod(1), DataPeriod(2), DataPeriod(3)]
+    @test (periods .== period) == [false, true, false]
 
     r = DataRun(6)
     @test r.no == 6
