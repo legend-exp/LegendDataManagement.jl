@@ -10,6 +10,8 @@ Abstract type for data selectors like
 """
 abstract type DataSelector end
 
+Base.broadcastable(x::DataSelector) = Ref(x)
+
 # make DataSelector compatible with PropDicts
 Base.getindex(p::PropDicts.PropDict, datasel::DataSelector) = p[Symbol(datasel)]
 Base.get(p::PropDicts.PropDict, datasel::DataSelector, default) = get(p, Symbol(datasel), default)
