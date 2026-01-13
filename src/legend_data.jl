@@ -194,7 +194,16 @@ function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, category:
     )
 end
 
+function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike, run::DataRunLike, det::DetectorIdLike)
+    joinpath(
+        tier_data[DataTier(tier), DataCategory(category), DataPeriod(period), DataRun(run)],
+        "$(get_setup_name(tier_data.data))-$period-$run-$category-$det-tier_$(first(split(string(tier), "ch"))).lh5"
+    )
+end
+
 _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, filekey::FileKey, ch::ChannelIdLike) = _getindex_impl(tier_data, tier, filekey.category, filekey.period, filekey.run, ch)
+
+_getindex_impl(tier_data::LegendTierData, tier::DataTierLike, filekey::FileKey, det::DetectorIdLike) = _getindex_impl(tier_data, tier, filekey.category, filekey.period, filekey.run, det)
 
 
 function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, filekey::FileKey)
