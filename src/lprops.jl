@@ -53,10 +53,11 @@ function _lprops2props(pd::PropDict)
 end
 
 _lprops2props(x) = x
+_lprops2props(x::AbstractFloat) = ifelse(isnan(x) || isinf(x), nothing, x)
 _lprops2props(A::AbstractArray) = _lprops2props.(A)
-_lprops2props(x::Unitful.Quantity{<:Real}) = PropDict(:val => x.val, :unit => string(unit(x)))
-_lprops2props(x::Unitful.Quantity{<:Measurements.Measurement{<:Real}}) = PropDict(:val => Measurements.value(ustrip(x)), :err => Measurements.uncertainty(ustrip(x)), :unit => string(unit(x)))
-_lprops2props(x::Measurements.Measurement) = PropDict(:val => Measurements.value(x), :err => Measurements.uncertainty(x))
+_lprops2props(x::Unitful.Quantity{<:Real}) = PropDict(:val => _lprops2props(x.val), :unit => string(unit(x)))
+_lprops2props(x::Unitful.Quantity{<:Measurements.Measurement{<:Real}}) = PropDict(:val => _lprops2props(Measurements.value(ustrip(x))), :err => _lprops2props(Measurements.uncertainty(ustrip(x))), :unit => string(unit(x)))
+_lprops2props(x::Measurements.Measurement) = PropDict(:val => _lprops2props(Measurements.value(x)), :err => _lprops2props(Measurements.uncertainty(x)))
 _lprops2props(d::Dict) = _lprops2props(PropDict(d))
 _lprops2props(nt::NamedTuple) = _lprops2props(PropDict(pairs(nt)))
 
