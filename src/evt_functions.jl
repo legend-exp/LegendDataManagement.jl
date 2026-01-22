@@ -17,34 +17,34 @@ end
 ### HPGe
 
 """
-    get_ged_evt_chdata_propfunc(data::LegendData, sel::AnyValiditySelection)
+    get_ged_evt_detdata_propfunc(data::LegendData, sel::AnyValiditySelection)
 
-Get the Ge-detector channel data output PropertyFunction.
+Get the Ge-detector detector data output PropertyFunction.
 """
-function get_ged_evt_chdata_propfunc(data::LegendData, sel::AnyValiditySelection)
-    ljl_propfunc(_dataprod_evt(data, sel, :geds).chdata_output)
+function get_ged_evt_detdata_propfunc(data::LegendData, sel::AnyValiditySelection)
+    ljl_propfunc(_dataprod_evt(data, sel, :geds).detdata_output)
 end
-export get_ged_evt_chdata_propfunc
+export get_ged_evt_detdata_propfunc
 
 """
-    get_ged_evt_chsel_propfunc(data::LegendData, sel::AnyValiditySelection)
+    get_ged_evt_detsel_propfunc(data::LegendData, sel::AnyValiditySelection)
 
-Get the Ge-detector channel selection PropertyFunction.
+Get the Ge-detector detector selection PropertyFunction.
 """
-function get_ged_evt_chsel_propfunc(data::LegendData, sel::AnyValiditySelection)
-    ljl_propfunc(_dataprod_evt(data, sel, :geds).channels)
+function get_ged_evt_detsel_propfunc(data::LegendData, sel::AnyValiditySelection)
+    ljl_propfunc(_dataprod_evt(data, sel, :geds).detectors)
 end
-export get_ged_evt_chsel_propfunc
+export get_ged_evt_detsel_propfunc
 
 """
-    get_ged_evt_hitchsel_propfunc(data::LegendData, sel::AnyValiditySelection)
+    get_ged_evt_hitdetsel_propfunc(data::LegendData, sel::AnyValiditySelection)
 
-Get the hit Ge-detector channel selection PropertyFunction.
+Get the hit Ge-detector detector selection PropertyFunction.
 """
-function get_ged_evt_hitchsel_propfunc(data::LegendData, sel::AnyValiditySelection)
-    ljl_propfunc(_dataprod_evt(data, sel, :geds).hitchannels)
+function get_ged_evt_hitdetsel_propfunc(data::LegendData, sel::AnyValiditySelection)
+    ljl_propfunc(_dataprod_evt(data, sel, :geds).hitdetectors)
 end
-export get_ged_evt_hitchsel_propfunc
+export get_ged_evt_hitdetsel_propfunc
 
 """
     get_ged_evt_is_valid_hit_properties(data::LegendData, sel::AnyValiditySelection)
@@ -90,14 +90,14 @@ end
 export get_aux_cal_propfunc
 
 """
-    get_aux_evt_chdata_propfunc(data::LegendData, sel::AnyValiditySelection)
+    get_aux_evt_detdata_propfunc(data::LegendData, sel::AnyValiditySelection)
 
-Get the aux channel data output PropertyFunction.
+Get the aux detector data output PropertyFunction.
 """
-function get_aux_evt_chdata_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    ljl_propfunc(_dataprod_evt(data, sel, :aux)[detector].chdata_output)
+function get_aux_evt_detdata_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    ljl_propfunc(_dataprod_evt(data, sel, :aux)[detector].detdata_output)
 end
-export get_aux_evt_chdata_propfunc
+export get_aux_evt_detdata_propfunc
 
 """
     get_aux_evt_levelname_propfunc(data::LegendData, sel::AnyValiditySelection)
@@ -112,28 +112,28 @@ export get_aux_evt_levelname_propfunc
 
 
 """
-    get_aux_evt_chsel_propfunc(data::LegendData, sel::AnyValiditySelection)
+    get_aux_evt_detsel_propfunc(data::LegendData, sel::AnyValiditySelection)
 
-Get the aux channel selection PropertyFunction.
+Get the aux detector selection PropertyFunction.
 """
-function get_aux_evt_chsel_propfunc(data::LegendData, sel::AnyValiditySelection)
-    ljl_propfunc(_dataprod_evt(data, sel, :aux).channels)
+function get_aux_evt_detsel_propfunc(data::LegendData, sel::AnyValiditySelection)
+    ljl_propfunc(_dataprod_evt(data, sel, :aux).detectors)
 end
-export get_aux_evt_chsel_propfunc
+export get_aux_evt_detsel_propfunc
 
 
 
 ### SPMS
 
 """
-    get_spms_evt_chdata_propfunc(data::LegendData, sel::AnyValiditySelection)
+    get_spms_evt_detdata_propfunc(data::LegendData, sel::AnyValiditySelection)
 
-Get the SiPM-detector channel data output PropertyFunction.
+Get the SiPM-detector detector data output PropertyFunction.
 """
-function get_spms_evt_chdata_propfunc(data::LegendData, sel::AnyValiditySelection)
-    ljl_propfunc(_dataprod_evt(data, sel, :spms).chdata_output)
+function get_spms_evt_detdata_propfunc(data::LegendData, sel::AnyValiditySelection)
+    ljl_propfunc(_dataprod_evt(data, sel, :spms).detdata_output)
 end
-export get_spms_evt_chdata_propfunc
+export get_spms_evt_detdata_propfunc
 
 """
     get_spms_evt_kwargs(data::LegendData, sel::AnyValiditySelection)
@@ -147,14 +147,14 @@ end
 export get_spms_evt_kwargs
 
 """
-    get_spms_evt_chsel_propfunc(data::LegendData, sel::AnyValiditySelection)
+    get_spms_evt_detsel_propfunc(data::LegendData, sel::AnyValiditySelection)
 
-Get the SiPM channel selection PropertyFunction.
+Get the SiPM detector selection PropertyFunction.
 """
-function get_spms_evt_chsel_propfunc(data::LegendData, sel::AnyValiditySelection)
-    ljl_propfunc(_dataprod_evt(data, sel, :spms).channels)
+function get_spms_evt_detsel_propfunc(data::LegendData, sel::AnyValiditySelection)
+    ljl_propfunc(_dataprod_evt(data, sel, :spms).detectors)
 end
-export get_spms_evt_chsel_propfunc
+export get_spms_evt_detsel_propfunc
 
 
 """
@@ -171,24 +171,24 @@ export get_spms_evt_lar_cut_props
 ### PMTS
 
 """
-    get_pmts_evt_chdata_propfunc(data::LegendData, sel::AnyValiditySelection)
+    get_pmts_evt_detdata_propfunc(data::LegendData, sel::AnyValiditySelection)
 
-Get the PMT-detector channel data output PropertyFunction.
+Get the PMT-detector detector data output PropertyFunction.
 """
-function get_pmts_evt_chdata_propfunc(data::LegendData, sel::AnyValiditySelection)
-    ljl_propfunc(_dataprod_evt(data, sel, :pmts).chdata_output)
+function get_pmts_evt_detdata_propfunc(data::LegendData, sel::AnyValiditySelection)
+    ljl_propfunc(_dataprod_evt(data, sel, :pmts).detdata_output)
 end
-export get_pmts_evt_chdata_propfunc
+export get_pmts_evt_detdata_propfunc
 
 """
-    get_pmts_evt_chsel_propfunc(data::LegendData, sel::AnyValiditySelection)
+    get_pmts_evt_detsel_propfunc(data::LegendData, sel::AnyValiditySelection)
 
-Get the PMT channel selection PropertyFunction.
+Get the PMT detector selection PropertyFunction.
 """
-function get_pmts_evt_chsel_propfunc(data::LegendData, sel::AnyValiditySelection)
-    ljl_propfunc(_dataprod_evt(data, sel, :pmts).channels)
+function get_pmts_evt_detsel_propfunc(data::LegendData, sel::AnyValiditySelection)
+    ljl_propfunc(_dataprod_evt(data, sel, :pmts).detectors)
 end
-export get_pmts_evt_chsel_propfunc
+export get_pmts_evt_detsel_propfunc
 
 
 """
