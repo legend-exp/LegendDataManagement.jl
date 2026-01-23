@@ -2,7 +2,7 @@ module LegendDataManagementLegendHDF5IOExt
 
 using LegendDataManagement
 LegendDataManagement._lh5_ext_loaded(::Val{true}) = true
-using LegendDataManagement.LDMUtils: detector2channel
+using LegendDataManagement.LDMUtils: detector2channel, channel2detector
 using LegendDataManagement: RunCategorySelLike
 using LegendHDF5IO
 using LegendDataTypes: fast_flatten, flatten_by_key
