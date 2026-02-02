@@ -506,3 +506,131 @@ function channel_info(data::LegendData, sel::AnyValiditySelection)
     )
 end
 export channel_info
+
+"""
+    period_channelinfo(data::LegendData, period::DataPeriod; kwargs...)
+Get channel information for a given period, combining all runs in that period.
+
+this channel info takes all runs in this period and creates a combined channelinfo
+for :usability, :is_blinded, :psd_usability, :low_aoe_status, :high_aoe_status, :lq_status, :ann_status, :coax_rt_status only the 'best' value is taken, i.e. the one with the highest priority in the hierarchy
+all the other column entries should remain the same over different runs
+
+all kwargs and filterby can be used as in the usual channelinfo
+
+make sure to include "Tables" by "using Tables" before using this function
+"""
+
+function period_channelinfo(data::LegendData, period::DataPeriod; kwargs...)
+    filekey_array = get_filekey_array(data, period)
+    chinfo_array = get_chinfo_array(data, filekey_array; kwargs...)
+    merged_chinfo = vcat(chinfo_array...)
+    red_chinfo = merge_and_reduce_chinfo(merged_chinfo)
+    sorted_chinfo = sort_chinfo(red_chinfo)
+    extended = get(kwargs, :extended, false)
+    hierarchies = get_hierarchies(extended)
+    column_order = get_column_order(extended)
+    final_chinfo = Table(apply_hierarchies(sorted_chinfo, hierarchies, column_order))
+    return final_chinfo
+end
+
+function get_filekey_array(l200, period)
+    rinfo = runinfo(l200, period) |> filterby(@pf $cal.is_analysis_run)
+    return [i.cal.startkey for i in rinfo]
+end
+
+
+function get_chinfo_array(l200, filekey_array; kwargs...)
+    extended = get(kwargs, :extended, false)
+    return [channelinfo(l200, fk; kwargs...) for fk in filekey_array]
+end
+
+function merge_and_reduce_chinfo(merged_chinfo)
+    grouped = Dict{Any, Dict{Symbol, Vector}}()
+    for row in Tables.rows(merged_chinfo)
+        detector = row.detector
+        detector_group = get!(grouped, detector, Dict(col => [] for col in propertynames(row) if col != :detector))
+        for col in propertynames(row)
+            if col != :detector
+                push!(detector_group[col], getproperty(row, col))
+            end
+        end
+    end
+    red_chinfo = (; detector = collect(keys(grouped)))
+    for col in propertynames(first(Tables.rows(merged_chinfo)))
+        if col != :detector
+            red_chinfo = merge(red_chinfo, (; (col => [grouped[d][col] for d in keys(grouped)])))
+        end
+    end
+    return red_chinfo
+end
+
+function sort_chinfo(red_chinfo)
+    sorted_indices = sortperm(red_chinfo.detector)
+    sorted_chinfo = (; detector = red_chinfo.detector[sorted_indices])
+    for col in propertynames(red_chinfo)
+        if col != :detector
+            sorted_chinfo = merge(sorted_chinfo, (; (col => red_chinfo[col][sorted_indices])))
+        end
+    end
+    return sorted_chinfo
+end
+
+function apply_hierarchies(sorted_chinfo, hierarchies, column_order)
+    final_chinfo = (;)
+    for col in column_order
+        if col in keys(hierarchies)
+            hierarchy = hierarchies[col]
+            if isempty(hierarchy)
+                # Skip applying hierarchy if it's empty
+                final_chinfo = merge(final_chinfo, (; (col => sorted_chinfo[col])))
+                continue
+            end
+            hierarchy_index = Dict(x => i for (i, x) in enumerate(hierarchy))
+            final_chinfo = merge(final_chinfo, (; (col => [
+                begin
+                    valid_values = filter(x -> haskey(hierarchy_index, x), sorted_chinfo[col][i])
+                    valid_values == [] ? nothing : valid_values[argmin(hierarchy_index[x] for x in valid_values)]
+                end for i in 1:length(sorted_chinfo.detector)
+            ])))
+        else
+            final_chinfo = merge(final_chinfo, (; (col => [
+                sorted_chinfo[col][i] isa AbstractVector ? first(unique(sorted_chinfo[col][i])) : sorted_chinfo[col][i]
+                for i in 1:length(sorted_chinfo.detector)
+            ])))
+        end
+    end
+    return final_chinfo
+end
+
+function get_hierarchies(extended::Bool)
+    base_hierarchies = Dict(
+        :usability => [:on, :ac, :off],
+        :is_blinded => [true, false],
+        :psd_usability => [:on, :off],
+        :low_aoe_status => [:valid, :present, :missing, :unknown],
+        :high_aoe_status => [:valid, :present, :missing, :unknown],
+        :lq_status => [:valid, :present, :missing, :unknown],
+        :ann_status => [:valid, :present, :missing, :unknown],
+        :coax_rt_status => [:valid, :present, :missing, :unknown]
+    )
+    return base_hierarchies
+end
+
+function get_column_order(extended::Bool)
+    base_columns = [
+        :detector, :channel, :fcid, :rawid, :system, :processable,
+        :usability, :is_blinded, :psd_usability, :low_aoe_status, :high_aoe_status,
+        :lq_status, :ann_status, :coax_rt_status, :is_bb_like,
+        :det_type, :location, :detstring, :fiber, :position
+    ]
+    if extended
+        extended_columns = [
+            :cc4ch, :daqcrate, :daqcard, :hvcard, :hvch,
+            :enrichment, :mass, :total_volume, :active_volume, :fccd
+        ]
+        return vcat(base_columns, extended_columns)
+    else
+        return base_columns
+    end
+end
+export period_channelinfo
