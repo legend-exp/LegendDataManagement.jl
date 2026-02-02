@@ -95,6 +95,9 @@ writelprops(db::MaybePropsDB, key::Union{Symbol, DataSelector}, p::PropDict; kwa
 
 Return a string representation of `x` according to LEGEND preferences.
 """
+function lstring end
+export lstring
+
 lstring(x) = string(x)
 
 function lstring(pd::PropDict)
