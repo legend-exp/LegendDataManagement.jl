@@ -42,4 +42,19 @@ A00000:
     @test PropDict(YAML.load(a)) == LegendDataManagement._lprops2props(
         LegendDataManagement._props2lprops(PropDict(YAML.load(a)))
     )
+
+  @testset "lstring" begin
+    pd = PropDict(
+        :energy => PropDict(:val => 2.3, :err => 0.1, :unit => "MeV"),
+        :wdw    => [1.0, 11.2],
+        :data   => PropDict(:type => "cal")
+    )
+
+    lstr = LegendDataManagement.lstring(pd)
+
+    # updated expectations to match JSON-like output
+    @test occursin("\"energy\":{\"unit\":\"MeV\",\"val\":2.3,\"err\":0.1}", lstr)
+    @test occursin("\"wdw\":[1.0,11.2]", lstr)
+    @test occursin("\"data\":{\"type\":\"cal\"}", lstr)
+  end
 end
