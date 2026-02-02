@@ -27,9 +27,9 @@ using TypedTables
         det_str, data_fk = lh5open(l200_lh5.tier[tier, fk]) do f
             first(keys(f)), f[Symbol(first(keys(f))), Symbol(tier)][:]
         end
-        @test DetectorlId(det_str) isa DetectorlId
+        @test DetectorId(det_str) isa DetectorId
         @test data_fk isa TypedTables.Table
-        det = DetectorlId(det_str)
+        det = DetectorId(det_str)
 
         # test read_ldata
         @test read_ldata(l200_lh5, tier, cat, period, run, det) isa TypedTables.Table
