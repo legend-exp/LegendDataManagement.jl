@@ -2,7 +2,7 @@ module LegendDataManagementLegendHDF5IOExt
 
 using LegendDataManagement
 LegendDataManagement._lh5_ext_loaded(::Val{true}) = true
-using LegendDataManagement.LDMUtils: detector2channel
+using LegendDataManagement.LDMUtils: detector2channel, channel2detector
 using LegendDataManagement: RunCategorySelLike
 using LegendHDF5IO
 using LegendDataTypes: fast_flatten, flatten_by_key
@@ -14,11 +14,11 @@ const ChannelOrDetectorIdLike = Union{ChannelIdLike, DetectorIdLike}
 const AbstractDataSelectorLike = Union{AbstractString, Symbol, DataTierLike, DataCategoryLike, DataPeriodLike, DataRunLike, DataPartitionLike, ChannelOrDetectorIdLike}
 const PossibleDataSelectors = [DataTier, DataCategory, DataPeriod, DataRun, DataPartition, ChannelId, DetectorId]
 
-function _is_valid_channel_or_tier(data::LegendData, rsel::Union{AnyValiditySelection, RunCategorySelLike}, det::ChannelOrDetectorIdLike)
-    if LegendDataManagement._can_convert_to(ChannelId, det) ||  LegendDataManagement._can_convert_to(DetectorId, det) ||  LegendDataManagement._can_convert_to(DataTier, det)
+function _is_valid_id_or_tier(data::LegendData, rsel::Union{AnyValiditySelection, RunCategorySelLike}, id::ChannelOrDetectorIdLike)
+    if LegendDataManagement._can_convert_to(ChannelId, id) ||  LegendDataManagement._can_convert_to(DetectorId, id) ||  LegendDataManagement._can_convert_to(DataTier, id)
         true  
     else  
-        @warn "Skipped $det since it is neither a valid `ChannelId`, `DetectorId` nor a `DataTier`"  
+        @warn "Skipped $id since it is neither a valid `ChannelId`, `DetectorId` nor a `DataTier`"  
         false  
     end  
 end
@@ -32,6 +32,17 @@ function _get_channelid(data::LegendData, rsel::Union{AnyValiditySelection, RunC
         throw(ArgumentError("$det is neither a ChannelId nor a DetectorId"))
     end
 end
+
+function _get_detectorid(data::LegendData, rsel::Union{AnyValiditySelection, RunCategorySelLike}, det::ChannelOrDetectorIdLike)
+    if LegendDataManagement._can_convert_to(DetectorId, det)
+        DetectorId(det)
+    elseif LegendDataManagement._can_convert_to(ChannelId, det)
+        channel2detector(data, rsel, det)
+    else
+        throw(ArgumentError("$det is neither a ChannelId nor a DetectorId"))
+    end
+end
+
 
 const dataselector_bytypes = Dict{Type, String}()
 
@@ -96,17 +107,17 @@ function __init__()
     (@isdefined DataPartition) && extend_datatype_dict(DataPartition, "datapartition")
 end
 
-function _lh5_data_open(f::Function, data::LegendData, tier::DataTierLike, filekey::FileKey, ch::ChannelIdLike, mode::AbstractString="r")
-    ch_filename = data.tier[DataTier(tier), filekey, ch]
+function _lh5_data_open(f::Function, data::LegendData, tier::DataTierLike, filekey::FileKey, det::DetectorIdLike, mode::AbstractString="r")
+    det_filename = data.tier[DataTier(tier), filekey, det]
     filename = data.tier[DataTier(tier), filekey]
-    if isfile(ch_filename)
-        @debug "Read from $(basename(ch_filename))"
-        LegendHDF5IO.lh5open(f, ch_filename, mode)
+    if isfile(det_filename)
+        @debug "Read from $(basename(det_filename))"
+        LegendHDF5IO.lh5open(f, det_filename, mode)
     elseif isfile(filename)
         @debug "Read from $(basename(filename))"
         LegendHDF5IO.lh5open(f, filename, mode)
     else
-        throw(ArgumentError("Neither $(basename(filename)) nor $(basename(ch_filename)) found"))
+        throw(ArgumentError("Neither $(basename(filename)) nor $(basename(det_filename)) found"))
     end
 end
 
@@ -125,29 +136,35 @@ _load_all_keys(x, n_evts::Int=-1) = x
 const _evt_tiers = DataTier.([:jlevt, :jlskm])
 
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, ChannelOrDetectorIdLike}; filterby::Base.Callable=Returns(true), filtertier::DataTierLike=first(rsel), n_evts::Int=-1, ignore_missing::Bool=false, parallel::Bool=false, wpool::WorkerPool=default_worker_pool())
-    tier, filekey, ch = DataTier(rsel[1]), rsel[2], if !isempty(string((rsel[3]))) _get_channelid(data, rsel[2], rsel[3]) else rsel[3] end
-    ch_tier = tier in _evt_tiers ? "/$tier" : "$ch/$tier"
-    data_tier = _lh5_data_open(data, tier, filekey, ch) do h
-        # check if channel exists in file or should be ignored
-        if !isempty(string((ch))) && !(tier in _evt_tiers) && !haskey(h, "$ch")
+    tier, filekey = DataTier(rsel[1]), rsel[2]
+
+    det = if !isempty(string((rsel[3])))
+            _get_detectorid(data, rsel[2], rsel[3])
+        else
+            rsel[3]
+    end
+    det_tier = tier in _evt_tiers ? "/$tier" : "$det/$tier"
+    
+    data_tier = _lh5_data_open(data, tier, filekey, det) do h
+        if !isempty(string(det)) && !(tier in _evt_tiers) && !haskey(h, "$det")
             if ignore_missing
-                @warn "Channel $ch not found in $(basename(string(h.data_store)))"
+                @warn "Detector $det not found in $(basename(string(h.data_store)))"
                 return nothing
             else
-                throw(ArgumentError("Channel $ch not found in $(basename(string(h.data_store)))"))
+                throw(ArgumentError("Detector $det not found in $(basename(string(h.data_store)))"))
             end
         end
         
-        # load channel data
+        # load detector data
         if f isa PropSelFunction && filterby == Returns(true)
             # if no filter given optimize performance for property selection functions by only loading required columns
             Table(if length(_propfunc_src_columnnames(f)) == 1
-                NamedTuple{_propfunc_trg_columnnames(f)}([_load_all_keys(getproperty(only(_propfunc_src_columnnames(f)))(h[ch_tier]), n_evts)])
+                NamedTuple{_propfunc_trg_columnnames(f)}([_load_all_keys(getproperty(only(_propfunc_src_columnnames(f)))(h[det_tier]), n_evts)])
             else
-                NamedTuple{_propfunc_trg_columnnames(f)}(Tuple(values(columns(_load_all_keys(getproperties(_propfunc_src_columnnames(f))(h[ch_tier]), n_evts)))))
+                NamedTuple{_propfunc_trg_columnnames(f)}(Tuple(values(columns(_load_all_keys(getproperties(_propfunc_src_columnnames(f))(h[det_tier]), n_evts)))))
             end)
         else
-            lh5_data = _load_all_keys(h[ch_tier], n_evts)
+            lh5_data = _load_all_keys(h[det_tier], n_evts)
             if filterby != Returns(true)
                 lh5_data = lh5_data |> PropertyFunctions.filterby(filterby)
             end
@@ -161,7 +178,8 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
             end
         end
     end
-    if tier in _evt_tiers && !isempty(string(ch))
+    if tier in _evt_tiers && !isempty(string(det))
+        ch = _get_channelid(data, filekey, det)
         data_tier[any.(map.(isequal(Int(ch)), data_tier.geds.trig_e_ch))]
     else
         data_tier
@@ -169,21 +187,21 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
 end
 
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey}; kwargs...)
-    ch_keys = _lh5_data_open(data, rsel[1], rsel[2], "") do h
+    ids = _lh5_data_open(data, rsel[1], rsel[2], "") do h
         keys(h)
     end
-    ch_keys = filter(x -> _is_valid_channel_or_tier(data, rsel[2], x), ch_keys)
-    @debug "Found keys: $ch_keys"
-    if length(ch_keys) == 1
-        if string(only(ch_keys)) == string(rsel[1])
+    ids = filter(x -> _is_valid_id_or_tier(data, rsel[2], x), ids)
+    @debug "Found keys: $ids"
+    if length(ids) == 1
+        if string(only(ids)) == string(rsel[1])
             LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], ""); kwargs...)
-        elseif LegendDataManagement._can_convert_to(ChannelId, only(ch_keys)) || LegendDataManagement._can_convert_to(DetectorId, only(ch_keys))
-            LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], string(only(ch_keys))); kwargs...)
+        elseif LegendDataManagement._can_convert_to(ChannelId, only(ids)) || LegendDataManagement._can_convert_to(DetectorId, only(ids))
+            LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], string(only(ids))); kwargs...)
         else
             throw(ArgumentError("No tier channel or detector found in $(basename(string(h.data_store)))"))
         end
     else
-        NamedTuple{Tuple(Symbol.(ch_keys))}([LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], ch); kwargs...) for ch in ch_keys])
+        NamedTuple{Tuple(Symbol.(ids))}([LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], ch); kwargs...) for ch in ids])
     end
 end
 
