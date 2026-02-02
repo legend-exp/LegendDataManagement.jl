@@ -37,7 +37,7 @@ using TypedTables
         @test read_ldata(:timestamp, l200_lh5, tier, cat, period, run, det).timestamp == data_fk.timestamp
         @test read_ldata((:timestamp, :baseline), l200_lh5, tier, cat, period, run, det).timestamp == data_fk.timestamp
         @test read_ldata((@pf (; bltime = $timestamp * $baseline, )), l200_lh5, tier, cat, period, run, det).bltime == data_fk.timestamp .* data_fk.baseline
-        @test read_ldata(l200_lh5, tier, fk, ch).timestamp == data_fk.timestamp
+        @test read_ldata(l200_lh5, tier, fk, det).timestamp == data_fk.timestamp
         @test read_ldata(l200_lh5, tier, cat, period, run) isa TypedTables.Table
 
         # test parallel read
