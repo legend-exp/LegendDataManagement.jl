@@ -775,15 +775,15 @@ Format (nibbles): RT XX XX XY
 * C000RGn: Encode as R[C][f200n][0]
 """
 struct DetectorId <: DataSelector
-    id::UInt32
+    _encoded::UInt32
 end
 export DetectorId
 
 @inline DetectorId(detector::DetectorId) = detector
 
-Base.:(==)(a::DetectorId, b::DetectorId) = a.id == b.id
-Base.isless(a::DetectorId, b::DetectorId) = isless(a.id, b.id)
-Base.hash(a::DetectorId, h::UInt) = hash(a.id, h)
+Base.:(==)(a::DetectorId, b::DetectorId) = a._encoded == b._encoded
+Base.isless(a::DetectorId, b::DetectorId) = isless(a._encoded, b._encoded)
+Base.hash(a::DetectorId, h::UInt) = hash(a._encoded, h)
 
 # Type encoding constants
 const _DETID_TYPE_C = UInt32(0x1)
@@ -980,18 +980,18 @@ Base.convert(::Type{DetectorId}, s::AbstractString) = DetectorId(s)
 Base.convert(::Type{DetectorId}, s::Symbol) = DetectorId(s)
 Base.convert(::Type{DetectorId}, id::Integer) = DetectorId(UInt32(id))
 
-Base.UInt32(detector::DetectorId) = detector.id
-Base.Int(detector::DetectorId) = Int(detector.id)
-Base.convert(::Type{UInt32}, detector::DetectorId) = detector.id
-Base.convert(::Type{Int}, detector::DetectorId) = Int(detector.id)
+Base.UInt32(detector::DetectorId) = detector._encoded
+Base.Int(detector::DetectorId) = Int(detector._encoded)
+Base.convert(::Type{UInt32}, detector::DetectorId) = detector._encoded
+Base.convert(::Type{Int}, detector::DetectorId) = Int(detector._encoded)
 
 # For backward compatibility, still support Symbol conversion
-Base.Symbol(detector::DetectorId) = Symbol(_detid_to_string(detector.id))
+Base.Symbol(detector::DetectorId) = Symbol(_detid_to_string(detector._encoded))
 Base.convert(::Type{Symbol}, detector::DetectorId) = Symbol(detector)
 
 # String representation
-Base.print(io::IO, detector::DetectorId) = print(io, _detid_to_string(detector.id))
-Base.show(io::IO, detector::DetectorId) = print(io, "DetectorId(\"", _detid_to_string(detector.id), "\")")
+Base.print(io::IO, detector::DetectorId) = print(io, _detid_to_string(detector._encoded))
+Base.show(io::IO, detector::DetectorId) = print(io, "DetectorId(\"", _detid_to_string(detector._encoded), "\")")
 
 
 """
