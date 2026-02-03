@@ -2,6 +2,7 @@
 Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
 LegendHDF5IO = "c9265ca6-b027-5446-b1a4-febfa8dd10b0"
 LegendTestData = "33d6da08-6349-5f7c-b5a4-6ff4d8795aaf"
 Measurements = "eff96d63-e80a-5855-80a2-b1b0885c5ab7"

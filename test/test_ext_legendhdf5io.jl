@@ -8,6 +8,8 @@ using LegendTestData
 using PropertyFunctions
 using TypedTables
 
+using HDF5
+
 @testset "test_ext_legendhdf5io" begin
 
     lh5testdata_dir = joinpath(legend_test_data_path(), "data", "lh5", "prod-ref-l200")
@@ -61,4 +63,77 @@ using TypedTables
         # rinfo = Table([(period = DataPeriod(3), run = DataRun(0)), (period = DataPeriod(3), run = DataRun(1))])
     end
     =#
+    
+    @testset "DetectorId LH5 I/O" begin
+        mktempdir() do tmpdir
+            # Create a temporary file for testing
+            test_filename = "detidtest.lh5"
+            
+            try
+                # Test writing and reading a single DetectorId
+                det1 = DetectorId("V99999J")
+                det2 = DetectorId("B59231A")
+                det3 = DetectorId("PULS99ANA")
+                
+                # Write DetectorIds
+                lh5open(test_filename, "w") do f
+                    f["single_det"] = det1
+                    f["det_array"] = [det1, det2, det3]
+                end
+                
+                # Read back and verify
+                lh5open(test_filename, "r") do f
+                    # Single DetectorId
+                    read_det1 = f["single_det"]
+                    @test read_det1 == det1
+                    @test read_det1 isa DetectorId
+                    
+                    # Array of DetectorIds
+                    read_dets = f["det_array"][:]
+                    @test read_dets == [det1, det2, det3]
+                    @test eltype(read_dets) <: DetectorId
+                end
+                
+                # Verify the data is stored as UInt32
+                HDF5.h5open(test_filename, "r") do h5f
+                    single_data = read(h5f["single_det"])
+                    @test single_data isa UInt32
+                    @test single_data == UInt32(det1)
+                    
+                    array_data = read(h5f["det_array"])
+                    @test eltype(array_data) == UInt32
+                    @test array_data == UInt32.([det1, det2, det3])
+                end
+                
+            finally
+                isfile(test_filename) && rm(test_filename)
+            end
+            
+            # Test reading DetectorId from string representation (backward compatibility)
+            test_filename_str = "strdetidtest.lh5"
+            try
+                # Write as string (simulating old format)
+                HDF5.h5open(test_filename_str, "w") do h5f
+                    h5f["det_string"] = "V99999J"
+                    HDF5.attributes(h5f["det_string"])["datatype"] = "detectorid"
+                    
+                    h5f["det_array_string"] = ["V99999J", "B59231A", "PULS99ANA"]
+                    HDF5.attributes(h5f["det_array_string"])["datatype"] = "array<1>{detectorid}"
+                end
+                
+                # Read back via LH5Array
+                lh5open(test_filename_str, "r") do f
+                    read_det = f["det_string"]
+                    @test read_det == DetectorId("V99999J")
+                    @test read_det isa DetectorId
+                    
+                    read_dets = f["det_array_string"][:]
+                    @test read_dets == [DetectorId("V99999J"), DetectorId("B59231A"), DetectorId("PULS99ANA")]
+                end
+                
+            finally
+                isfile(test_filename_str) && rm(test_filename_str)
+            end
+        end # tmpdir
+    end
 end

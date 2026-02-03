@@ -64,12 +64,30 @@ function LegendHDF5IO.create_entry(parent::LHDataStore, name::AbstractString,
     nothing
 end
 
+# write DetectorId - use UInt32 encoding
+function LegendHDF5IO.create_entry(parent::LHDataStore, name::AbstractString, 
+    data::DetectorId; kwargs...)
+    
+    LegendHDF5IO.create_entry(parent, name, UInt32(data); kwargs...)
+    LegendHDF5IO.setdatatype!(parent.data_store[name], DetectorId)
+    nothing
+end
+
 # write AbstractArray{<:LegendDataManagement.DataSelector}
 function LegendHDF5IO.create_entry(parent::LHDataStore, name::AbstractString, 
     data::T; kwargs...) where {T <:AbstractArray{<:LegendDataManagement.DataSelector}}
     
     LegendHDF5IO.create_entry(parent, name, string.(data); kwargs...)
     LegendHDF5IO.setdatatype!(parent.data_store[name], T)
+    nothing
+end
+
+# write AbstractArray{<:DetectorId} - use UInt32 encoding
+function LegendHDF5IO.create_entry(parent::LHDataStore, name::AbstractString, 
+    data::AbstractArray{<:DetectorId}; kwargs...)
+    
+    LegendHDF5IO.create_entry(parent, name, UInt32.(data); kwargs...)
+    LegendHDF5IO.setdatatype!(parent.data_store[name], typeof(data))
     nothing
 end
 
@@ -80,11 +98,37 @@ LegendHDF5IO.LH5Array(ds::LegendHDF5IO.HDF5.Dataset, ::Type{<:T}
     T(s)
 end
 
+# Read DetectorId - support both string and UInt32 encoding
+function LegendHDF5IO.LH5Array(ds::LegendHDF5IO.HDF5.Dataset, ::Type{<:DetectorId})
+    data = read(ds)
+    if data isa AbstractString
+        DetectorId(data)
+    elseif data isa Integer
+        DetectorId(data)
+    else
+        throw(ArgumentError("Cannot read DetectorId from data of type $(typeof(data))"))
+    end
+end
+
 function LegendHDF5IO.LH5Array(ds::LegendHDF5IO.HDF5.Dataset, 
     ::Type{<:AbstractArray{<:T, N}}) where {T <: LegendDataManagement.DataSelector, N}
 
     s = read(ds)
     T.(s)
+end
+
+# Read array of DetectorId - support both string and UInt32 encoding
+function LegendHDF5IO.LH5Array(ds::LegendHDF5IO.HDF5.Dataset, 
+    ::Type{<:AbstractArray{<:DetectorId, N}}) where {N}
+    
+    data = read(ds)
+    if eltype(data) <: AbstractString
+        DetectorId.(data)
+    elseif eltype(data) <: Integer
+        DetectorId.(data)
+    else
+        throw(ArgumentError("Cannot read DetectorId array from data of element type $(eltype(data))"))
+    end
 end
 
 function __init__()

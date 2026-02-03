@@ -702,55 +702,302 @@ export ChannelIdLike
 """
     struct DetectorId <: DataSelector
 
-Represents a LEGEND detector id id.
+Represents a LEGEND detector id.
+
+Detector IDs are stored encoded as an `UInt32` internally.
 
 Example:
 
 ```julia
 detector = DetectorId(:V99000A)
-detector.label == :V99000A
 string(detector) == "V99000A"
 DetectorId("V99000A") == detector
+UInt32(detector)  # returns the binary encoding
 ```
+
+# Implementation
+
+The following 32-bit unsigned integer encoding is used for LEGEND detector
+IDs:
+
+## Binary encoding
+
+Encoding length: 4-byte unsigned integer value, stored as a 32-bit or 64-bit
+integer.
+
+Format (nibbles): RT XX XX XY
+
+* Reserved (R): 1 Nibble, always zero
+
+* Type (T), 1 Nibble:
+
+    * 0x0: reserved
+    * 0x1: C (Coax HPGe)
+    * 0x2: B (BEGe HPGe)
+    * 0x3: P (PPC HPGe)
+    * 0x4: V (ICPC HPGe)
+    * 0x5: reserved
+    * 0x6: reserved
+    * 0x7: reserved
+    * 0x8: reserved
+	* 0x9: S (SiPM)
+    * 0xa: PMT (PMT)
+	* 0xb: PULS
+    * 0xc: AUX
+    * 0xd: DUMMY
+    * 0xe: BSLN
+    * 0xf: MUON
+
+* Serial-Number (XXXXX), 5 Nibbles, unsigned integer in binary form (not BCD).
+
+* Sub-Serial-Number (Y), 1 Nibble, unsigned integer in binary form (not BCD):
+
+    * For HPGe: Detector slice, 0 = A, 1 = B, 2 = C, ...
+    * For SiPM: always 0
+    * For PMT: always 0
+    * For Pulser: 0 = PULSnn, 1 = PULSnnANA
+    * For Dummy: always 0
+
+## String representation
+
+* [B|C|P|V]nnnnn[A|B|C|D|M]: represent serial number with five digits in string
+* Snnn: represent serial number with three digits in string
+* PMTnnn:  represent serial number with three digits in string
+* PULSnn, PULSnnANA: represent serial number with two digits in string
+* AUXnn:  represent serial number with two digits in string
+* DUMMYnn: represent serial number with two digits in string. Special case: legacy data may contain DUMMY0 to DUMMY9, with a single digit, it should be possible to parse these as well, but when converting integer to string representation, two digits should be used.
+* BSLNnn: represent serial number with two digits in string
+* MUONnn: represent serial number with two digits in string
+
+## Special cases:
+
+* C00ANGn: Encode as R[C][f100n][0]
+* C000RGn: Encode as R[C][f200n][0]
 """
 struct DetectorId <: DataSelector
-    label::Symbol
+    id::UInt32
 end
 export DetectorId
 
 @inline DetectorId(detector::DetectorId) = detector
 
-Base.:(==)(a::DetectorId, b::DetectorId) = a.label == b.label
-Base.isless(a::DetectorId, b::DetectorId) = isless(a.label, b.label)
+Base.:(==)(a::DetectorId, b::DetectorId) = a.id == b.id
+Base.isless(a::DetectorId, b::DetectorId) = isless(a.id, b.id)
+Base.hash(a::DetectorId, h::UInt) = hash(a.id, h)
 
-const detectorid_expr = r"^([A-Z][A-Z0-9]+)$"
+# Type encoding constants
+const _DETID_TYPE_C = UInt32(0x1)
+const _DETID_TYPE_B = UInt32(0x2)
+const _DETID_TYPE_P = UInt32(0x3)
+const _DETID_TYPE_V = UInt32(0x4)
+const _DETID_TYPE_S = UInt32(0x9)
+const _DETID_TYPE_PMT = UInt32(0xa)
+const _DETID_TYPE_PULS = UInt32(0xb)
+const _DETID_TYPE_AUX = UInt32(0xc)
+const _DETID_TYPE_DUMMY = UInt32(0xd)
+const _DETID_TYPE_BSLN = UInt32(0xe)
+const _DETID_TYPE_MUON = UInt32(0xf)
 
-_can_convert_to(::Type{DetectorId}, s::AbstractString) = !isnothing(match(detectorid_expr, s))
+# Special serial number offsets for C00ANG and C000RG
+const _DETID_SPECIAL_ANG_BASE = UInt32(0xf1000)  # f100n for C00ANGn
+const _DETID_SPECIAL_RG_BASE = UInt32(0xf2000)   # f200n for C000RGn
+
+# Regex patterns for parsing detector IDs
+# Note: Sub-serial is limited to A-P (0-15) to fit in 4 bits
+const _detid_hpge_expr = r"^([BCPV])([0-9]{5})([A-P])$"
+const _detid_sipm_expr = r"^S([0-9]{3})$"
+const _detid_pmt_expr = r"^PMT([0-9]{3})$"
+const _detid_puls_expr = r"^PULS([0-9]{2})(ANA)?$"
+const _detid_aux_expr = r"^AUX([0-9]{2})$"
+const _detid_dummy_expr = r"^DUMMY([0-9]{1,2})$"
+const _detid_bsln_expr = r"^BSLN([0-9]{2})$"
+const _detid_muon_expr = r"^MUON([0-9]{2})$"
+const _detid_ang_expr = r"^C00ANG([0-9])$"
+const _detid_rg_expr = r"^C000RG([0-9])$"
+
+function _encode_detid(type_code::UInt32, serial::UInt32, sub_serial::UInt32)
+    UInt32((type_code << 24) | (serial << 4) | sub_serial)
+end
+
+function _decode_detid(id::UInt32)
+    type_code = (id >> 24) & 0xf
+    serial = (id >> 4) & 0xfffff
+    sub_serial = id & 0xf
+    (type_code = type_code, serial = serial, sub_serial = sub_serial)
+end
+
+function _detid_from_string(s::AbstractString)
+    # Check special cases first: C00ANG and C000RG
+    m = match(_detid_ang_expr, s)
+    if m !== nothing
+        n = parse(UInt32, m.captures[1])
+        return _encode_detid(_DETID_TYPE_C, _DETID_SPECIAL_ANG_BASE + n, UInt32(0))
+    end
+    
+    m = match(_detid_rg_expr, s)
+    if m !== nothing
+        n = parse(UInt32, m.captures[1])
+        return _encode_detid(_DETID_TYPE_C, _DETID_SPECIAL_RG_BASE + n, UInt32(0))
+    end
+    
+    # HPGe detectors: B, C, P, V
+    m = match(_detid_hpge_expr, s)
+    if m !== nothing
+        type_char = m.captures[1][1]
+        type_code = if type_char == 'B'
+            _DETID_TYPE_B
+        elseif type_char == 'C'
+            _DETID_TYPE_C
+        elseif type_char == 'P'
+            _DETID_TYPE_P
+        else  # V
+            _DETID_TYPE_V
+        end
+        serial = parse(UInt32, m.captures[2])
+        sub_serial = UInt32(m.captures[3][1] - 'A')
+        return _encode_detid(type_code, serial, sub_serial)
+    end
+    
+    # SiPM: S
+    m = match(_detid_sipm_expr, s)
+    if m !== nothing
+        serial = parse(UInt32, m.captures[1])
+        return _encode_detid(_DETID_TYPE_S, serial, UInt32(0))
+    end
+    
+    # PMT
+    m = match(_detid_pmt_expr, s)
+    if m !== nothing
+        serial = parse(UInt32, m.captures[1])
+        return _encode_detid(_DETID_TYPE_PMT, serial, UInt32(0))
+    end
+    
+    # Pulser
+    m = match(_detid_puls_expr, s)
+    if m !== nothing
+        serial = parse(UInt32, m.captures[1])
+        sub_serial = m.captures[2] === nothing ? UInt32(0) : UInt32(1)
+        return _encode_detid(_DETID_TYPE_PULS, serial, sub_serial)
+    end
+    
+    # AUX
+    m = match(_detid_aux_expr, s)
+    if m !== nothing
+        serial = parse(UInt32, m.captures[1])
+        return _encode_detid(_DETID_TYPE_AUX, serial, UInt32(0))
+    end
+    
+    # DUMMY (supports 1 or 2 digits)
+    m = match(_detid_dummy_expr, s)
+    if m !== nothing
+        serial = parse(UInt32, m.captures[1])
+        return _encode_detid(_DETID_TYPE_DUMMY, serial, UInt32(0))
+    end
+    
+    # BSLN
+    m = match(_detid_bsln_expr, s)
+    if m !== nothing
+        serial = parse(UInt32, m.captures[1])
+        return _encode_detid(_DETID_TYPE_BSLN, serial, UInt32(0))
+    end
+    
+    # MUON
+    m = match(_detid_muon_expr, s)
+    if m !== nothing
+        serial = parse(UInt32, m.captures[1])
+        return _encode_detid(_DETID_TYPE_MUON, serial, UInt32(0))
+    end
+    
+    throw(ArgumentError("String \"$s\" does not look like a valid LEGEND detector id"))
+end
+
+function _detid_to_string(id::UInt32)
+    dec = _decode_detid(id)
+    type_code = dec.type_code
+    serial = dec.serial
+    sub_serial = dec.sub_serial
+    
+    if type_code == _DETID_TYPE_B
+        return string('B', lpad(serial, 5, '0'), Char('A' + sub_serial))
+    elseif type_code == _DETID_TYPE_C
+        # Check for special cases
+        if serial >= _DETID_SPECIAL_ANG_BASE && serial < _DETID_SPECIAL_ANG_BASE + 10
+            n = serial - _DETID_SPECIAL_ANG_BASE
+            return "C00ANG$n"
+        elseif serial >= _DETID_SPECIAL_RG_BASE && serial < _DETID_SPECIAL_RG_BASE + 10
+            n = serial - _DETID_SPECIAL_RG_BASE
+            return "C000RG$n"
+        else
+            return string('C', lpad(serial, 5, '0'), Char('A' + sub_serial))
+        end
+    elseif type_code == _DETID_TYPE_P
+        return string('P', lpad(serial, 5, '0'), Char('A' + sub_serial))
+    elseif type_code == _DETID_TYPE_V
+        return string('V', lpad(serial, 5, '0'), Char('A' + sub_serial))
+    elseif type_code == _DETID_TYPE_S
+        return string('S', lpad(serial, 3, '0'))
+    elseif type_code == _DETID_TYPE_PMT
+        return string("PMT", lpad(serial, 3, '0'))
+    elseif type_code == _DETID_TYPE_PULS
+        base = string("PULS", lpad(serial, 2, '0'))
+        return sub_serial == 1 ? base * "ANA" : base
+    elseif type_code == _DETID_TYPE_AUX
+        return string("AUX", lpad(serial, 2, '0'))
+    elseif type_code == _DETID_TYPE_DUMMY
+        return string("DUMMY", lpad(serial, 2, '0'))
+    elseif type_code == _DETID_TYPE_BSLN
+        return string("BSLN", lpad(serial, 2, '0'))
+    elseif type_code == _DETID_TYPE_MUON
+        return string("MUON", lpad(serial, 2, '0'))
+    else
+        throw(ArgumentError("Invalid detector type code: $type_code"))
+    end
+end
+
+# Check if string can be converted to DetectorId
+function _can_convert_to(::Type{DetectorId}, s::AbstractString)
+    !isnothing(match(_detid_hpge_expr, s)) ||
+    !isnothing(match(_detid_sipm_expr, s)) ||
+    !isnothing(match(_detid_pmt_expr, s)) ||
+    !isnothing(match(_detid_puls_expr, s)) ||
+    !isnothing(match(_detid_aux_expr, s)) ||
+    !isnothing(match(_detid_dummy_expr, s)) ||
+    !isnothing(match(_detid_bsln_expr, s)) ||
+    !isnothing(match(_detid_muon_expr, s)) ||
+    !isnothing(match(_detid_ang_expr, s)) ||
+    !isnothing(match(_detid_rg_expr, s))
+end
 _can_convert_to(::Type{DetectorId}, s::Symbol) = _can_convert_to(DetectorId, string(s))
 _can_convert_to(::Type{DetectorId}, s::DetectorId) = true
+_can_convert_to(::Type{DetectorId}, s::Integer) = true
 _can_convert_to(::Type{DetectorId}, s) = false
 
-function DetectorId(s::AbstractString)
-    _can_convert_to(DetectorId, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND detector id"))
-    length(s) < 4 && throw(ArgumentError("String \"$s\" is too short to be a valid LEGEND detector id"))
-    length(s) > 7 && throw(ArgumentError("String \"$s\" is too long to be a valid LEGEND detector id"))
-    DetectorId(Symbol(s))
-end
+DetectorId(s::AbstractString) = DetectorId(_detid_from_string(s))
+DetectorId(s::Symbol) = DetectorId(string(s))
+DetectorId(id::Integer) = DetectorId(UInt32(id))
 
 Base.convert(::Type{DetectorId}, s::AbstractString) = DetectorId(s)
 Base.convert(::Type{DetectorId}, s::Symbol) = DetectorId(s)
+Base.convert(::Type{DetectorId}, id::Integer) = DetectorId(UInt32(id))
 
-Base.Symbol(detector::DetectorId) = detector.label
-Base.convert(::Type{Symbol}, detector::DetectorId) = detector.label
+Base.UInt32(detector::DetectorId) = detector.id
+Base.Int(detector::DetectorId) = Int(detector.id)
+Base.convert(::Type{UInt32}, detector::DetectorId) = detector.id
+Base.convert(::Type{Int}, detector::DetectorId) = Int(detector.id)
 
-# ToDo: Improve implementation
-Base.print(io::IO, detector::DetectorId) = print(io, detector.label)
+# For backward compatibility, still support Symbol conversion
+Base.Symbol(detector::DetectorId) = Symbol(_detid_to_string(detector.id))
+Base.convert(::Type{Symbol}, detector::DetectorId) = Symbol(detector)
+
+# String representation
+Base.print(io::IO, detector::DetectorId) = print(io, _detid_to_string(detector.id))
+Base.show(io::IO, detector::DetectorId) = print(io, "DetectorId(\"", _detid_to_string(detector.id), "\")")
 
 
 """
-    DetectorIdLike = Union{DetectorId, Symbol, AbstractString}
+    DetectorIdLike = Union{DetectorId, Symbol, AbstractString, Integer}
 
 Anything that can represent a detector id.
 """
-const DetectorIdLike = Union{DetectorId, Symbol, AbstractString}
+const DetectorIdLike = Union{DetectorId, Symbol, AbstractString, Integer}
 export DetectorIdLike
