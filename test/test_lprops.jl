@@ -6,6 +6,7 @@ using Test
 using Dates
 using PropDicts
 using YAML
+using JSON
 using Unitful, Measurements
 
 using LegendDataManagement: PropsDB, AnyProps, ValiditySelection
@@ -42,4 +43,21 @@ A00000:
     @test PropDict(YAML.load(a)) == LegendDataManagement._lprops2props(
         LegendDataManagement._props2lprops(PropDict(YAML.load(a)))
     )
+
+  @testset "lstring" begin
+    pd = PropDict(
+        :energy => PropDict(:val => 2.3, :err => 0.1, :unit => "MeV"),
+        :wdw    => [1.0, 11.2],
+        :data   => PropDict(:type => "cal")
+    )
+
+    lstr = LegendDataManagement.lstring(pd)
+
+    # Convert the parsed structure back into a PropDict
+    parsed_lstr = JSON.parse(lstr)
+    reconstructed_pd = PropDict(parsed_lstr)
+
+    # Compare the reconstructed PropDict with the original
+    @test reconstructed_pd == pd
+  end
 end

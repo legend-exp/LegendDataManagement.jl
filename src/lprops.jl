@@ -90,6 +90,22 @@ writelprops(filename::AbstractString, p::PropDict; multiline::Bool = true, inden
 
 writelprops(db::MaybePropsDB, key::Union{Symbol, DataSelector}, p::PropDict; kwargs...) = writelprops(joinpath(mkpath(data_path(db)), "$(string(key)).yaml"), p; kwargs...)
 
+"""
+    lstring(x)
+
+Return a string representation of `x` according to LEGEND preferences.
+"""
+function lstring end
+export lstring
+
+lstring(x) = string(x)
+
+function lstring(pd::PropDict)
+    io = IOBuffer()
+    writelprops(io, pd; multiline=false)
+    s = String(take!(io))
+    return s
+end
 
 """
     get_values(x::Unitful.Quantity{<:Measurements.Measurement{<:Real}})
