@@ -19,6 +19,4 @@ YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [compat]
 Documenter = "1"
-JSON = "0.21.4"
 LegendTestData = "0.3.2"
-YAML = "0.4.6"
