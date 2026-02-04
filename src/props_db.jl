@@ -190,6 +190,7 @@ function _get_md_property(missing_props::NoSuchPropsDBEntry, s::Symbol)
     NoSuchPropsDBEntry(_base_path(missing_props), push!(copy(_rel_path(missing_props)), string(s)))
 end
 
+# ToDo: Specialize and use writelprops instead of PropDicts.writeprops?
 function PropDicts.writeprops(@nospecialize(missing_props::NoSuchPropsDBEntry), @nospecialize(props::PropDict))
     rp = _rel_path(missing_props)
     dir = joinpath(_base_path(missing_props), rp[begin:end-1]...)
@@ -270,8 +271,7 @@ end
 
 function _load_validity(validity_path::AbstractString; mode_default::AbstractString = "append")
     if isfile(validity_path)
-        # TODO: Cannot use readlprops here because this can be a Vector of PropDicts and not a PropDict
-        #       Can readlprops be updated so that we can drop the explicit YAML dependency here?
+        # TODO: Use readlprops instead of YAML.load_file:
         raw = ParallelProcessingTools.read_files(validity_path) do io
             YAML.load_file(io)
         end
