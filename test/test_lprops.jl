@@ -6,6 +6,7 @@ using Test
 using Dates
 using PropDicts
 using YAML
+using JSON
 using Unitful, Measurements
 
 using LegendDataManagement: PropsDB, AnyProps, ValiditySelection
@@ -52,9 +53,11 @@ A00000:
 
     lstr = LegendDataManagement.lstring(pd)
 
-    # updated expectations to match JSON-like output
-    @test occursin("\"energy\":{\"unit\":\"MeV\",\"val\":2.3,\"err\":0.1}", lstr)
-    @test occursin("\"wdw\":[1.0,11.2]", lstr)
-    @test occursin("\"data\":{\"type\":\"cal\"}", lstr)
+    # Convert the parsed structure back into a PropDict
+    parsed_lstr = JSON.parse(lstr)
+    reconstructed_pd = PropDict(parsed_lstr)
+
+    # Compare the reconstructed PropDict with the original
+    @test reconstructed_pd == pd
   end
 end
