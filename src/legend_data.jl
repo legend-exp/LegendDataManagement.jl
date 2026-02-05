@@ -416,8 +416,9 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
             end
             c
         end
-
-        StructVector(make_row.(channel_keys))
+        # Filter out invalid detector IDs
+        valid_channel_keys = filter(k -> _can_convert_to(DetectorId, k), channel_keys)
+        StructVector(make_row.(valid_channel_keys))
     end
     # apply filters and masks
     if !(system == :all)
