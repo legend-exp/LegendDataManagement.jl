@@ -363,8 +363,23 @@ function _get_larcal_props(data::LegendData, sel::AnyValiditySelection, detector
     _get_larcal_props(data, sel; kwargs...)[Symbol(detector)]
 end
 
-function _get_larcal_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol; kwargs...)
-    ecal_props::String = get(get(get(_get_larcal_props(data, sel, detector; kwargs...), e_filter, PropDict()), :cal, PropDict()), :func, "$(e_filter) .* (NaN*e)")
+function _get_larcal_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol; cal_type::Symbol=:gmm, kwargs...)
+    larcal_props = _get_larcal_props(data, sel, detector; kwargs...)
+    
+    # Check if this energy_type has a cal_source alias (use calibration parameters from another energy_type)
+    dataprod_lar = _dataprod_lar_cal(data, sel, detector; kwargs...)
+    cal_source = Symbol(get(get(dataprod_lar.energy_types, e_filter, PropDict()), :cal_source, e_filter))
+    
+    filter_props = get(larcal_props, cal_source, PropDict())
+    # Try to get the cal_type specific function first (func_gmm or func_simple), then fall back to :cal :func
+    func_key = Symbol("func_", cal_type)
+    ecal_props::String = if haskey(filter_props, func_key)
+        # Replace cal_source column reference with e_filter so the formula applies to the correct DSP column
+        replace(filter_props[func_key], string(cal_source) => string(e_filter))
+    else
+        func_str = get(get(filter_props, :cal, PropDict()), :func, "$(cal_source) .* (NaN*e)")
+        replace(func_str, string(cal_source) => string(e_filter))
+    end
     return ecal_props
 end
 
@@ -387,12 +402,17 @@ end
 
 Get the LAr/SPMS calibration function for the given data, validity selection
 and detector.
+
+# Keyword Arguments
+- `pars_type::Symbol=:ppars`: Parameter type to use (`:ppars` or `:rpars`).
+- `pars_cat::Symbol=:sipmcal`: Parameter category.
+- `cal_type::Symbol=:gmm`: Calibration type to use (`:gmm` or `:simple`).
 """
-function get_spm_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:sipmcal)
+function get_spm_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:sipmcal, cal_type::Symbol=:gmm)
     let energies = keys(_dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types), energies_cal = Symbol.(string.(keys(_dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types)) .* "_cal")
         ljl_propfunc(
             Dict{Symbol, String}(
-                energies_cal .=> _get_larcal_propfunc_str.(Ref(data), Ref(sel), Ref(detector), energies; pars_type=pars_type, pars_cat=pars_cat)
+                energies_cal .=> _get_larcal_propfunc_str.(Ref(data), Ref(sel), Ref(detector), energies; pars_type=pars_type, pars_cat=pars_cat, cal_type=cal_type)
             )
         )
     end
