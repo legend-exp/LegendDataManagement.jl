@@ -666,7 +666,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
         mantle_contact_parts
     end
     
-    slice = Symbol(diode_meta.name[end])
+    slice = Symbol(diode_meta.production.slice)
     xtal_imp = -1e9 #xtal metadata gives impurity values in units of 1e9 cm^-3 with no sign. We use negative values for p-type in SSD.
     xtal_imp_unit = "cm^-3"
     impurity_dict = if hasproperty(xtal_meta,:impurity_curve) && hasproperty(xtal_meta.slices, slice)
