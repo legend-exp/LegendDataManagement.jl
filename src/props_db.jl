@@ -2,7 +2,8 @@
 
 const validity_filename = "validity.yaml"
 
-const _ValidityTimesFiles = NamedTuple{(:valid_from, :filelist), Tuple{Vector{Timestamp}, Vector{Vector{String}}}}
+# Extended to include mode for overrides
+const _ValidityTimesFiles = NamedTuple{(:valid_from, :filelist, :mode), Tuple{Vector{Timestamp}, Vector{Vector{String}}, Vector{String}}}
 const _ValidityDict = IdDict{DataCategory,_ValidityTimesFiles}
 
 _merge_validity_info!!(::Nothing, ::Nothing) = nothing
@@ -10,31 +11,44 @@ _merge_validity_info!!(a::_ValidityDict, ::Nothing) = a
 _merge_validity_info!!(::Nothing, b::_ValidityDict) = b
 
 function _merge_validity_info!!(a::_ValidityDict, b::_ValidityDict)
+    # Merge validity info from primary (a) and override (b).
+    # Rule: If timestamp AND mode are the same → override (b) wins.
+    #       If timestamp is same but mode differs → combine filelists.
+    #       Otherwise, follow normal timestamp-based ordering.
     for k in keys(b)
         if haskey(a, k)
             tf_a, tf_b = a[k], b[k]
-            vf_a, fl_a = tf_a.valid_from, tf_a.filelist
-            vf_b, fl_b = tf_b.valid_from, tf_b.filelist
-            vf_new, fl_new = similar(vf_a, 0), similar(fl_a, 0)
+            vf_a, fl_a, md_a = tf_a.valid_from, tf_a.filelist, tf_a.mode
+            vf_b, fl_b, md_b = tf_b.valid_from, tf_b.filelist, tf_b.mode
+            vf_new, fl_new, md_new = similar(vf_a, 0), similar(fl_a, 0), similar(md_a, 0)
             ia, ib = firstindex(vf_a), firstindex(vf_b)
             while ia <= lastindex(vf_a) || ib <= lastindex(vf_b)
                 if ib > lastindex(vf_b) || ia <= lastindex(vf_a) && vf_a[ia] < vf_b[ib]
                     push!(vf_new, vf_a[ia])
                     push!(fl_new, fl_a[ia])
+                    push!(md_new, md_a[ia])
                     ia += 1
                 elseif ia > lastindex(vf_a) || vf_a[ia] > vf_b[ib]
                     push!(vf_new, vf_b[ib])
                     push!(fl_new, fl_b[ib])
+                    push!(md_new, md_b[ib])
                     ib += 1
                 else
+                    # Same timestamp
                     @assert vf_a[ia] == vf_b[ib]
                     push!(vf_new, vf_a[ia])
-                    push!(fl_new, vcat(fl_a[ia], fl_b[ib]))
+                    if md_a[ia] == md_b[ib]
+                        push!(fl_new, fl_b[ib])
+                        push!(md_new, md_b[ib])
+                    else
+                        push!(fl_new, vcat(fl_a[ia], fl_b[ib]))
+                        push!(md_new, "merged")
+                    end
                     ia += 1
                     ib += 1
                 end
             end
-            a[k] = (valid_from = vf_new, filelist = fl_new)
+            a[k] = (valid_from = vf_new, filelist = fl_new, mode = md_new)
         else
             a[k] = b[k]
         end
@@ -68,7 +82,9 @@ export AnyValiditySelection
 
 
 function _get_validity_sel_filelist(validity::_ValidityDict, category::DataCategory, sel_time::Timestamp)
-    validity_times, validity_filelists = validity[category]
+    validity_entry = validity[category]
+    validity_times = validity_entry.valid_from
+    validity_filelists = validity_entry.filelist
     idx = searchsortedlast(validity_times, sel_time)
     if idx < firstindex(validity_times)
         throw(ArgumentError("Selected validity date $(sel_time) is before first available validity date $(first(validity_times)) for category :$category"))
@@ -230,12 +246,14 @@ function _any_props(base_path::String, override_base::String, rel_path::Vector{S
     !isdir(base_path) && throw(ArgumentError("PropsDB base path \"$base_path\" is not a directory"))
     full_primary_path = String(joinpath(base_path, rel_path...))
     full_override_path = String(joinpath(override_base, rel_path...))
-    if !isdir(full_override_path)
+    primary_path_exists = isdir(full_primary_path)
+    override_path_exists = !isempty(override_base) && isdir(full_override_path)
+    if !override_path_exists
         full_override_path = ""
     end
 
     validity_primary_path = joinpath(full_primary_path, validity_filename)
-    validity_primary_info = _load_validity(String(validity_primary_path))
+    validity_primary_info = primary_path_exists ? _load_validity(String(validity_primary_path)) : nothing
     validity_info = if !isempty(override_base)
         validity_override_path = joinpath(override_base, rel_path..., validity_filename)
         if ispath(validity_override_path)
@@ -248,7 +266,11 @@ function _any_props(base_path::String, override_base::String, rel_path::Vector{S
         validity_primary_info
     end
 
-    files_in_dir = Set(String.(readdir(full_primary_path)))
+    # Collect files from both directories
+    files_in_dir = Set{String}()
+    if primary_path_exists
+        union!(files_in_dir, Set(String.(readdir(full_primary_path))))
+    end
     if !isempty(full_override_path)
         union!(files_in_dir, Set(String.(readdir(full_override_path))))
     end
@@ -283,7 +305,7 @@ function _load_validity(validity_path::AbstractString; mode_default::AbstractStr
                 categories = DataCategory.(let s = get(props, :category, "all"); s isa AbstractVector ? s : [s]; end)
                 filelist = let fk = props.apply; fk isa AbstractString ? [fk] : fk end
                 for category in categories
-                    dict_entry = get!(new_validity, category, (valid_from = FileKey[], filelist = Vector{String}[]))
+                    dict_entry = get!(new_validity, category, (valid_from = FileKey[], filelist = Vector{String}[], mode = String[]))
                     mode = isempty(dict_entry.filelist) ? "reset" : get(props, :mode, mode_default)
                     if mode == "reset"
                         new = filelist
@@ -306,6 +328,7 @@ function _load_validity(validity_path::AbstractString; mode_default::AbstractStr
                     end
                     push!(dict_entry.valid_from, valid_from)
                     push!(dict_entry.filelist, new)
+                    push!(dict_entry.mode, mode)
                 end
             end
         end   
@@ -380,9 +403,10 @@ end
 
 
 function Base.getproperty(@nospecialize(pd::MaybePropsDB), s::Symbol)
-    # Include internal fields:
     if s == :_base_path
         _base_path(pd)
+    elseif s == :_override_base
+        _override_base(pd)
     elseif s == :_rel_path
         _rel_path(pd)
     elseif s == :_validity_sel
@@ -417,7 +441,7 @@ function _get_md_property(@nospecialize(pd::PropsDB), s::Symbol)
     if isdir(joinpath(_base_path(pd), new_relpath...))
         _any_props(_base_path(pd), _override_base(pd), new_relpath, _validity_sel(pd))
     elseif isdir(joinpath(_override_base(pd), new_relpath...))
-        _any_props(_override_base(pd), "", new_relpath, _validity_sel(pd))
+        _any_props(_base_path(pd), _override_base(pd), new_relpath, _validity_sel(pd))
     elseif ispath(yaml_primary_filename)
         _check_propery_access(pd, yaml_primary_filename)
         if ispath(yaml_override_filename)
