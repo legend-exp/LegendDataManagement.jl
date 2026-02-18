@@ -344,10 +344,34 @@ function _dataprod_spms_cal(data::LegendData, sel::AnyValiditySelection)
     end
 end
 
+"""
+    _build_energy_types_from_filter(selected_filter::String)
+
+Build energy_types dict from selected_filter string (e.g., "sg_150").
+Returns a PropDict with the filter as key and pos/dc/dc_pos/pos_diff as values.
+"""
+function _build_energy_types_from_filter(selected_filter::AbstractString)
+    PropDict(
+        Symbol("trig_max_$(selected_filter)") => PropDict(
+            :pos => "trig_pos_1_$(selected_filter)",
+            :dc => "trig_max_DC_$(selected_filter)",
+            :dc_pos => "trig_pos_1_DC_$(selected_filter)",
+            :pos_diff => "trig_pos_diff_$(selected_filter)"
+        )
+    )
+end
+
 function _dataprod_lar_cal(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars)
     @assert pars_type in (:ppars, :rpars) "pars_type must be either :ppars or :rpars"
     dataprod_lar_config = _dataprod_spms_cal(data, sel).lar
-    merge(dataprod_lar_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_lar_config, :p, PropDict()), dataprod_lar_config), detector, PropDict()))
+    base_config = merge(dataprod_lar_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_lar_config, :p, PropDict()), dataprod_lar_config), detector, PropDict()))
+    
+    # If selected_filter is present, auto-generate energy_types
+    if haskey(base_config, :selected_filter) && !haskey(base_config, :energy_types)
+        energy_types = _build_energy_types_from_filter(base_config.selected_filter)
+        return merge(base_config, PropDict(:energy_types => energy_types))
+    end
+    return base_config
 end
 
 const _cached_get_larcal_props = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
@@ -425,6 +449,59 @@ function get_spm_dc_cal_propfunc(data::LegendData, sel::AnyValiditySelection, de
     end
 end
 export get_spm_dc_cal_propfunc
+
+
+### is_valid_tot functions for SiPM calibration
+
+"""
+    _get_larcal_tot_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol; kwargs...)
+
+Get the PropertyFunction that computes is_valid_tot for each trigger.
+Returns true for triggers where trig_pos_diff is within tot_valid_range.
+"""
+function _get_larcal_tot_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol; kwargs...)
+    dataprod_lar = _dataprod_lar_cal(data, sel, detector; kwargs...)
+    tot_range = dataprod_lar.tot_valid_range
+    let min_tot = first(tot_range), max_tot = last(tot_range)
+        @pf ($pos_diff .>= min_tot) .&& ($pos_diff .<= max_tot)
+    end
+end
+
+"""
+    _get_larcal_tot_sel_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol; kwargs...)
+
+Get the selector PropertyFunction for is_valid_tot.
+"""
+function _get_larcal_tot_sel_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol; kwargs...)
+    dataprod_lar_filter = _dataprod_lar_cal(data, sel, detector; kwargs...).energy_types[e_filter]
+    PropSelFunction{Symbol.((dataprod_lar_filter.pos_diff,)), (:pos_diff,)}()
+end
+
+"""
+    get_spm_tot_sel_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+
+Get the LAr/SPMS TOT validity selector function for the given data, validity selection
+and detector.
+"""
+function get_spm_tot_sel_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars)
+    let energies = keys(_dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types), energies_tot = Symbol.(string.(keys(_dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types)) .* "_is_valid_tot")
+        NamedTuple{Tuple(energies_tot)}(_get_larcal_tot_sel_propfunc.(Ref(data), Ref(sel), Ref(detector), energies; pars_type=pars_type))
+    end
+end
+export get_spm_tot_sel_propfunc
+
+"""
+    get_spm_tot_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+
+Get the LAr/SPMS TOT validity function for the given data, validity selection
+and detector.
+"""
+function get_spm_tot_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars)
+    let energies = keys(_dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types), energies_tot = Symbol.(string.(keys(_dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types)) .* "_is_valid_tot")
+        NamedTuple{Tuple(energies_tot)}(_get_larcal_tot_propfunc.(Ref(data), Ref(sel), Ref(detector), energies; pars_type=pars_type))
+    end
+end
+export get_spm_tot_cal_propfunc
 
 
 ### PMT Muon cal functions

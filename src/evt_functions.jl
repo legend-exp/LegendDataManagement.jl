@@ -161,9 +161,24 @@ export get_spms_evt_detsel_propfunc
     get_spms_evt_lar_cut_props(data::LegendData, sel::AnyValiditySelection)
 
 Get the SiPM LAr cut properties.
+If `selected_filter` is present without `energy_types`, auto-generate energy_types.
 """
 function get_spms_evt_lar_cut_props(data::LegendData, sel::AnyValiditySelection)
-    _dataprod_evt(data, sel, :spms).lar_cut
+    lar_cut_config = _dataprod_evt(data, sel, :spms).lar_cut
+    
+    # If selected_filter is present, auto-generate energy_types
+    if haskey(lar_cut_config, :selected_filter) && !haskey(lar_cut_config, :energy_types)
+        sf = lar_cut_config.selected_filter
+        energy_types = PropDict(
+            Symbol("trig_max_$(sf)_cal") => PropDict(
+                :pos => "trig_pos_1_$(sf)",
+                :is_dc => "trig_max_$(sf)_is_dc",
+                :is_valid_tot => "trig_max_$(sf)_is_valid_tot"
+            )
+        )
+        return merge(lar_cut_config, PropDict(:energy_types => energy_types))
+    end
+    return lar_cut_config
 end
 export get_spms_evt_lar_cut_props
 
