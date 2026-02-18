@@ -227,6 +227,37 @@ function get_ged_qc_is_baseline_propfunc(data::LegendData, sel::AnyValiditySelec
 end
 export get_ged_qc_is_baseline_propfunc
 
+const _cached_dataprod_is_waveform_pf = LRU{Tuple{UInt, AnyValiditySelection}, PropertyFunction}(maxsize = 10^2)
+
+"""
+    get_ged_qc_is_waveform_propfunc(data::LegendData, sel::AnyValiditySelection)
+
+Get a `PropertyFunction` that returns `true` for events that fullfill the `is_waveform` definition.
+"""
+function get_ged_qc_is_waveform_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    key = (objectid(data), sel)
+    get!(_cached_dataprod_is_waveform_pf, key) do
+        is_waveform_def_props = _dataprod_qc(data, sel, detector).is_waveform
+        return ljl_propfunc(is_waveform_def_props)
+    end
+end
+export get_ged_qc_is_waveform_propfunc
+
+const _cached_dataprod_is_pulse_pf = LRU{Tuple{UInt, AnyValiditySelection}, PropertyFunction}(maxsize = 10^2)
+
+"""
+    get_ged_qc_is_pulse_propfunc(data::LegendData, sel::AnyValiditySelection)
+
+Get a `PropertyFunction` that returns `true` for events that fullfill the `is_pulse` definition.
+"""
+function get_ged_qc_is_pulse_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    key = (objectid(data), sel)
+    get!(_cached_dataprod_is_pulse_pf, key) do
+        is_pulse_def_props = _dataprod_qc(data, sel, detector).is_pulse
+        return ljl_propfunc(is_pulse_def_props)
+    end
+end
+export get_ged_qc_is_pulse_propfunc
 
 
 
