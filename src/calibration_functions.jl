@@ -195,69 +195,69 @@ function get_ged_qc_is_trig_propfunc(data::LegendData, sel::AnyValiditySelection
 end
 export get_ged_qc_is_trig_propfunc
 
-const _cached_dataprod_is_physical_pf = LRU{Tuple{UInt, AnyValiditySelection}, PropertyFunction}(maxsize = 10^2)
+const _cached_dataprod_is_physical_ml_pf = LRU{Tuple{UInt, AnyValiditySelection}, PropertyFunction}(maxsize = 10^2)
 
 """
-    get_ged_qc_is_physical_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    get_ged_qc_is_physical_ml_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
 
-Get a `PropertyFunction` that returns `true` for events that fullfill the `is_physical` definition.
+Get a `PropertyFunction` that returns `true` for events that fullfill the `is_physical_ml` definition.
 """
-function get_ged_qc_is_physical_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+function get_ged_qc_is_physical_ml_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
     key = (objectid(data), sel)
-    get!(_cached_dataprod_is_physical_pf, key) do
-        is_physical_def_props = _dataprod_qc(data, sel, detector).is_physical
-        return ljl_propfunc(is_physical_def_props)
+    get!(_cached_dataprod_is_physical_ml_pf, key) do
+        is_physical_ml_def_props = _dataprod_qc(data, sel, detector).is_physical_ml
+        return ljl_propfunc(is_physical_ml_def_props)
     end
 end
-export get_ged_qc_is_physical_propfunc
+export get_ged_qc_is_physical_ml_propfunc
 
-const _cached_dataprod_is_baseline_pf = LRU{Tuple{UInt, AnyValiditySelection}, PropertyFunction}(maxsize = 10^2)
+const _cached_dataprod_is_baseline_ml_pf = LRU{Tuple{UInt, AnyValiditySelection}, PropertyFunction}(maxsize = 10^2)
 
 """
-    get_ged_qc_is_baseline_propfunc(data::LegendData, sel::AnyValiditySelection)
+    get_ged_qc_is_baseline_ml_propfunc(data::LegendData, sel::AnyValiditySelection)
 
-Get a `PropertyFunction` that returns `true` for events that fullfill the `is_baseline` definition.
+Get a `PropertyFunction` that returns `true` for events that fullfill the `is_baseline_ml` definition.
 """
-function get_ged_qc_is_baseline_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+function get_ged_qc_is_baseline_ml_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
     key = (objectid(data), sel)
-    get!(_cached_dataprod_is_baseline_pf, key) do
-        is_baseline_def_props = _dataprod_qc(data, sel, detector).is_baseline
-        return ljl_propfunc(is_baseline_def_props)
+    get!(_cached_dataprod_is_baseline_ml_pf, key) do
+        is_baseline_ml_def_props = _dataprod_qc(data, sel, detector).is_baseline_ml
+        return ljl_propfunc(is_baseline_ml_def_props)
     end
 end
-export get_ged_qc_is_baseline_propfunc
+export get_ged_qc_is_baseline_ml_propfunc
 
-const _cached_dataprod_is_waveform_pf = LRU{Tuple{UInt, AnyValiditySelection}, PropertyFunction}(maxsize = 10^2)
+const _cached_dataprod_is_physical_classical_pf = LRU{Tuple{UInt, AnyValiditySelection}, PropertyFunction}(maxsize = 10^2)
 
 """
-    get_ged_qc_is_waveform_propfunc(data::LegendData, sel::AnyValiditySelection)
+    get_ged_qc_is_physical_classical_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
 
-Get a `PropertyFunction` that returns `true` for events that fullfill the `is_waveform` definition.
+Get a `PropertyFunction` that returns `true` for events that fullfill the `is_physical_classical` definition.
 """
-function get_ged_qc_is_waveform_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+function get_ged_qc_is_physical_classical_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
     key = (objectid(data), sel)
-    get!(_cached_dataprod_is_waveform_pf, key) do
-        is_waveform_def_props = _dataprod_qc(data, sel, detector).is_waveform
-        return ljl_propfunc(is_waveform_def_props)
+    get!(_cached_dataprod_is_physical_classical_pf, key) do
+        is_physical_classical_def_props = _dataprod_qc(data, sel, detector).is_physical_classical
+        return ljl_propfunc(is_physical_classical_def_props)
     end
 end
-export get_ged_qc_is_waveform_propfunc
+export get_ged_qc_is_physical_classical_propfunc
 
-const _cached_dataprod_is_pulse_pf = LRU{Tuple{UInt, AnyValiditySelection}, PropertyFunction}(maxsize = 10^2)
+const _cached_dataprod_is_baseline_classical_pf = LRU{Tuple{UInt, AnyValiditySelection}, PropertyFunction}(maxsize = 10^2)
 
 """
-    get_ged_qc_is_pulse_propfunc(data::LegendData, sel::AnyValiditySelection)
+    get_ged_qc_is_baseline_classical_propfunc(data::LegendData, sel::AnyValiditySelection)
 
-Get a `PropertyFunction` that returns `true` for events that fullfill the `is_pulse` definition.
+Get a `PropertyFunction` that returns `true` for events that fullfill the `is_baseline_classical` definition.
 """
-function get_ged_qc_is_pulse_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+function get_ged_qc_is_baseline_classical_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
     key = (objectid(data), sel)
-    get!(_cached_dataprod_is_pulse_pf, key) do
-        is_pulse_def_props = _dataprod_qc(data, sel, detector).is_pulse
-        return ljl_propfunc(is_pulse_def_props)
+    get!(_cached_dataprod_is_baseline_classical_pf, key) do
+        is_baseline_classical_def_props = _dataprod_qc(data, sel, detector).is_baseline_classical
+        return ljl_propfunc(is_baseline_classical_def_props)
     end
 end
-export get_ged_qc_is_pulse_propfunc
+export get_ged_qc_is_baseline_classical_propfunc
 
 
 
