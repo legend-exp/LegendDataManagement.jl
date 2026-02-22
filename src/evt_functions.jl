@@ -172,8 +172,7 @@ function get_spms_evt_lar_cut_props(data::LegendData, sel::AnyValiditySelection)
         energy_types = PropDict(
             Symbol("trig_max_$(sf)_cal") => PropDict(
                 :pos => "trig_pos_1_$(sf)",
-                :is_dc => "trig_max_$(sf)_is_dc",
-                :is_valid_tot => "trig_max_$(sf)_is_valid_tot"
+                :is_dc => "trig_max_$(sf)_is_dc"
             )
         )
         return merge(lar_cut_config, PropDict(:energy_types => energy_types))
