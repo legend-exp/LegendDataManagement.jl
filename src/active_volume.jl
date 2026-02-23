@@ -38,6 +38,14 @@ function get_extra_volume(geometry::PropDict, ::Val{:topgroove}, fccd::AbstractF
     return π * ((rg + fccd)^2 - (rb + fccd)^2) * dg
 end
 
+function get_extra_volume(geometry::PropDict, ::Val{:top_cylinder}, fccd::AbstractFloat)
+    r = geometry.extra.top_cylinder.radius_in_mm - fccd
+    h = geometry.extra.top_cylinder.height_in_mm - fccd
+    R = geometry.radius_in_mm - fccd
+    # Volume of the outer annular shell removed at the top
+    return π * h * (R^2 - r^2)
+end
+
 function get_extra_volume(geometry::PropDict, ::Val{:bottom_cylinder}, fccd::AbstractFloat)
     # Find a picture of the definition of bottom_cylinder here:
     # https://github.com/legend-exp/legend-metadata/blob/archived/hardware/detectors/detector-metadata_6.pdf
