@@ -8,7 +8,7 @@
 @inline get_inner_taper_volume(r1, r2, h) = get_truncated_cone_volume(extrema((r1, r2))..., h)
 @inline get_outer_taper_volume(r1, r2, h) = -get_truncated_cone_volume(reverse(extrema((r1, r2)))..., h)
 
-# Find a defintion of the special detectorcases here:
+# Find a definition of the special detector cases here:
 # https://github.com/legend-exp/legend-detectors/tree/main/germanium/diodes#readme
 
 function get_extra_volume(geometry::PropDict, ::Val{:crack}, fccd::T) where {T <: AbstractFloat}
