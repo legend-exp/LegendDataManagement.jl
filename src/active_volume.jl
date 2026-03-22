@@ -8,6 +8,9 @@
 @inline get_inner_taper_volume(r1, r2, h) = get_truncated_cone_volume(extrema((r1, r2))..., h)
 @inline get_outer_taper_volume(r1, r2, h) = -get_truncated_cone_volume(reverse(extrema((r1, r2)))..., h)
 
+# Find a definition of the special detector cases here:
+# https://github.com/legend-exp/legend-detectors/tree/main/germanium/diodes#readme
+
 function get_extra_volume(geometry::PropDict, ::Val{:crack}, fccd::T) where {T <: AbstractFloat}
     # Find a picture of the definition of crack here:
     # https://github.com/legend-exp/legend-metadata/blob/archived/hardware/detectors/detector-metadata_5.pdf
@@ -36,6 +39,16 @@ function get_extra_volume(geometry::PropDict, ::Val{:topgroove}, fccd::AbstractF
     dg = geometry.extra.topgroove.depth_in_mm
     db <= dg && @warn "The depth of the borehole ($(db)mm) should be bigger than the depth of the topgroove ($(dg)mm)."
     return π * ((rg + fccd)^2 - (rb + fccd)^2) * dg
+end
+
+function get_extra_volume(geometry::PropDict, ::Val{:top_cylinder}, fccd::AbstractFloat)
+    # Find a drawing of the top_cylinder as well as a discussion about the top cylinder here:
+    # https://github.com/legend-exp/LegendDataManagement.jl/pull/159#issuecomment-4107068035
+    r = geometry.extra.top_cylinder.radius_in_mm - fccd
+    h = geometry.extra.top_cylinder.height_in_mm
+    R = geometry.radius_in_mm - fccd
+    # Volume of the outer annular shell removed at the top
+    return π * h * (R^2 - r^2)
 end
 
 function get_extra_volume(geometry::PropDict, ::Val{:bottom_cylinder}, fccd::AbstractFloat)
