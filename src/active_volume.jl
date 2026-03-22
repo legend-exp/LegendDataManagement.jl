@@ -40,7 +40,7 @@ end
 
 function get_extra_volume(geometry::PropDict, ::Val{:top_cylinder}, fccd::AbstractFloat)
     r = geometry.extra.top_cylinder.radius_in_mm - fccd
-    h = geometry.extra.top_cylinder.height_in_mm - fccd
+    h = geometry.extra.top_cylinder.height_in_mm
     R = geometry.radius_in_mm - fccd
     # Volume of the outer annular shell removed at the top
     return π * h * (R^2 - r^2)
