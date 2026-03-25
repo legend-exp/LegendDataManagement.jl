@@ -76,17 +76,23 @@ readlprops(filename::AbstractString; trim_null::Bool=false, kwargs...) = _props2
 readlprops(filenames::Vector{<:AbstractString}; trim_null::Bool=false, kwargs...) = _props2lprops(readprops(filenames; trim_null=trim_null, kwargs...))
 
 """
-    writelprops(f::IO, p::PropDict; write_units::Bool=true, write_errors::Bool=true, mutliline::Bool=true)
+    writelprops(f::IO, p::PropDict; multiline::Bool=true)
     writelprops(filename::AbstractString, p::PropDict; multiline::Bool=true)
-    writelprops(db::PropsDB, key::Union{Symbol, DataSelector}, p::PropDict; kwargs...)
+    writelprops(db::MaybePropsDB, key::Union{Symbol, DataSelector}, p::PropDict; kwargs...)
 
 Write a PropDict to a file and strip it to `:val` and `:unit` fields and `:val` and `:err` fields.
 """
 function writelprops end
 export writelprops
 
-writelprops(io::IO, p::PropDict; multiline::Bool = true) = writeprops(io, _lprops2props(p); multiline=multiline)
-writelprops(filename::AbstractString, p::PropDict; multiline::Bool = true) = writeprops(filename, _lprops2props(p); multiline=multiline)
+function writelprops(io::IO, p::PropDict; multiline::Bool = true, indent::Union{Int,Nothing} = nothing)
+    indent !== nothing && Base.depwarn("`indent` keyword argument to `writelprops` is deprecated and will be ignored", :writelprops)
+    writeprops(io, _lprops2props(p); multiline=multiline)
+end
+function writelprops(filename::AbstractString, p::PropDict; multiline::Bool = true, indent::Union{Int,Nothing} = nothing)
+    indent !== nothing && Base.depwarn("`indent` keyword argument to `writelprops` is deprecated and will be ignored", :writelprops)
+    writeprops(filename, _lprops2props(p); multiline=multiline)
+end
 
 writelprops(db::MaybePropsDB, key::Union{Symbol, DataSelector}, p::PropDict; kwargs...) = writelprops(joinpath(mkpath(data_path(db)), "$(string(key)).yaml"), p; kwargs...)
 
