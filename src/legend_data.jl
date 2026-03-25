@@ -324,7 +324,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
         diodmap = data.metadata.hardware.detectors.germanium.diodes
         dpcfg = data.metadata(sel).datasets.statuses
         
-        channel_keys = collect(keys(chmap))
+        channel_keys = filter(k -> !occursin(r"^BF862-\d+$", string(k)), collect(keys(chmap)))
 
         _convert_location(l::AbstractString) = (location = Symbol(l), detstring = -1, position = -1, fiber = "")
 
