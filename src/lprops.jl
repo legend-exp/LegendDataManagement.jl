@@ -85,13 +85,12 @@ Write a PropDict to a file and strip it to `:val` and `:unit` fields and `:val` 
 function writelprops end
 export writelprops
 
-function writelprops(io::IO, p::PropDict; multiline::Bool = true, indent::Union{Int,Nothing} = nothing)
-    indent !== nothing && Base.depwarn("`indent` keyword argument to `writelprops` is deprecated and will be ignored", :writelprops)
-    writeprops(io, _lprops2props(p); multiline=multiline)
-end
-function writelprops(filename::AbstractString, p::PropDict; multiline::Bool = true, indent::Union{Int,Nothing} = nothing)
-    indent !== nothing && Base.depwarn("`indent` keyword argument to `writelprops` is deprecated and will be ignored", :writelprops)
-    writeprops(filename, _lprops2props(p); multiline=multiline)
+writelprops(io::IO, p::PropDict; multiline::Bool = true) = writeprops(io, _lprops2props(p); multiline=multiline)
+writelprops(filename::AbstractString, p::PropDict; multiline::Bool = true) = writeprops(filename, _lprops2props(p); multiline=multiline)
+
+function writelprops(f::Union{IO, AbstractString}, p::PropDict; indent::Int, kwargs...)
+    Base.depwarn("`indent` keyword argument to `writelprops` is deprecated and will be ignored", :writelprops)
+    writelprops(f, p; kwargs...)
 end
 
 writelprops(db::MaybePropsDB, key::Union{Symbol, DataSelector}, p::PropDict; kwargs...) = writelprops(joinpath(mkpath(data_path(db)), "$(string(key)).yaml"), p; kwargs...)
