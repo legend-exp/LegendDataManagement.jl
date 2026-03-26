@@ -88,7 +88,7 @@ export writelprops
 writelprops(io::IO, p::PropDict; multiline::Bool = true) = writeprops(io, _lprops2props(p); multiline=multiline)
 writelprops(filename::AbstractString, p::PropDict; multiline::Bool = true) = writeprops(filename, _lprops2props(p); multiline=multiline)
 
-function writelprops(f::Union{IO, AbstractString}, p::PropDict; indent::Int, kwargs...)
+function writelprops(f, p; indent::Int, kwargs...)
     Base.depwarn("`indent` keyword argument to `writelprops` is deprecated and will be ignored", :writelprops)
     writelprops(f, p; kwargs...)
 end
