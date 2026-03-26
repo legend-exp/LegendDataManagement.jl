@@ -310,7 +310,6 @@ end
 
 const _cached_channelinfo = LRU{Tuple{UInt, AnyValiditySelection, Bool}, StructVector}(maxsize = 10^3)
 const _bf862_expr = r"^BF862-\d{2}$"
-_is_valid_channel_key(k) = !occursin(_bf862_expr, string(k))
 
 """
     channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, extended::Bool = false)
