@@ -309,6 +309,7 @@ end
 
 
 const _cached_channelinfo = LRU{Tuple{UInt, AnyValiditySelection, Bool}, StructVector}(maxsize = 10^3)
+const _bf862_expr = r"^BF862-\d{2}$"
 
 """
     channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, extended::Bool = false)
@@ -324,7 +325,7 @@ function channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol
         diodmap = data.metadata.hardware.detectors.germanium.diodes
         dpcfg = data.metadata(sel).datasets.statuses
         
-        channel_keys = collect(keys(chmap))
+        channel_keys = filter(s -> isnothing(match(_bf862_expr, string(s))), keys(chmap))
 
         _convert_location(l::AbstractString) = (location = Symbol(l), detstring = -1, position = -1, fiber = "")
 
