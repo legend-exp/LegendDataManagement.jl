@@ -223,8 +223,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
         end
     end
     if tier in _evt_tiers && !isempty(string(det))
-        ch = _get_channelid(data, filekey, det)
-        data_tier[any.(map.(isequal(Int(ch)), data_tier.geds.trig_e_ch))]
+        data_tier[any.(map.(isequal(det), data_tier.geds.trig_e_det))]
     else
         data_tier
     end
