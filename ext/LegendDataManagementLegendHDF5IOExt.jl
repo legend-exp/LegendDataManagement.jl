@@ -15,7 +15,7 @@ const AbstractDataSelectorLike = Union{AbstractString, Symbol, DataTierLike, Dat
 const PossibleDataSelectors = [DataTier, DataCategory, DataPeriod, DataRun, DataPartition, ChannelId, DetectorId]
 
 function _is_valid_id_or_tier(data::LegendData, rsel::Union{AnyValiditySelection, RunCategorySelLike}, id::ChannelOrDetectorIdLike)
-    if LegendDataManagement._can_convert_to(ChannelId, id) ||  LegendDataManagement._can_convert_to(DetectorId, id) ||  LegendDataManagement._can_convert_to(DataTier, id)
+    if LegendDataManagement._can_convert_to(DetectorId, id)
         true  
     else  
         @warn "Skipped $id since it is neither a valid `ChannelId`, `DetectorId` nor a `DataTier`"  
