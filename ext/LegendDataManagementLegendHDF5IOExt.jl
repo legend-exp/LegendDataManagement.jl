@@ -198,11 +198,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
         haskey(h, "$tier") ? collect(keys(h["$tier"])) : String[]
     end
     isempty(dets) && throw(ArgumentError("No detectors found under /$tier in $(basename(data.tier[tier, rsel[2]]))"))
-    if length(dets) == 1
-        LegendDataManagement.read_ldata(f, data, (tier, rsel[2], only(dets)); kwargs...)
-    else
-        NamedTuple{Tuple(Symbol.(dets))}([LegendDataManagement.read_ldata(f, data, (tier, rsel[2], d); kwargs...) for d in dets])
-    end
+    NamedTuple{Tuple(Symbol.(dets))}([LegendDataManagement.read_ldata(f, data, (tier, rsel[2], d); kwargs...) for d in dets])
 end
 
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, AbstractVector{FileKey}, DetectorIdLike}; parallel::Bool=false, wpool::WorkerPool=default_worker_pool(), kwargs...)
