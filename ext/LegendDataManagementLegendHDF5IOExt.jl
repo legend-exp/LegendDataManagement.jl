@@ -115,18 +115,17 @@ function __init__()
     (@isdefined DataCategory) && extend_datatype_dict(DataCategory, "datacategory")
     (@isdefined Timestamp) && extend_datatype_dict(Timestamp, "timestamp")
     (@isdefined FileKey) && extend_datatype_dict(FileKey, "filekey")
-    (@isdefined ChannelId) && extend_datatype_dict(ChannelId, "channelid")
     (@isdefined DetectorId) && extend_datatype_dict(DetectorId, "detectorid")
     (@isdefined DataPartition) && extend_datatype_dict(DataPartition, "datapartition")
 end
 
-# Open a tier/filekey LH5 file. Prefers a global tier file (DetID inside);
-# falls back to a legacy per-detector file when requested.
+const _evt_tiers = DataTier.([:jlevt, :jlskm])
+const _perdet_tiers = DataTier.([:jlpeaks, :jlhit, :jlpls])
+
+# Open the LH5 file for a given tier/filekey (+det for per-detector tiers).
 function _lh5_data_open(f::Function, data::LegendData, tier::DataTierLike, filekey::FileKey, det::DetectorIdLike=DetectorId(""), mode::AbstractString="r")
-    filename = try data.tier[DataTier(tier), filekey] catch; "" end
-    det_filename = isempty(string(det)) ? "" : try data.tier[DataTier(tier), filekey, det] catch; "" end
-    path = isfile(filename) ? filename : isfile(det_filename) ? det_filename : throw(ArgumentError("Neither $(basename(filename)) nor $(basename(det_filename)) exists"))
-    @debug "Read from $(basename(path))"
+    t = DataTier(tier)
+    path = t in _perdet_tiers ? data.tier[t, filekey, DetectorId(det)] : data.tier[t, filekey]
     LegendHDF5IO.lh5open(f, path, mode)
 end
 
@@ -141,8 +140,6 @@ _load_all_keys(nt::NamedTuple, n_evts::Int=-1) = if length(nt) == 1 _load_all_ke
 _load_all_keys(arr::AbstractArray, n_evts::Int=-1) = arr[:][if (n_evts < 1 || n_evts > length(arr)) 1:length(arr) else rand(1:length(arr), n_evts) end]
 _load_all_keys(t::Table, n_evts::Int=-1) = t[:][if (n_evts < 1 || n_evts > length(t)) 1:length(t) else rand(1:length(t), n_evts) end]
 _load_all_keys(x, n_evts::Int=-1) = x
-
-const _evt_tiers = DataTier.([:jlevt, :jlskm])
 
 # Apply PropSelFunction / filter / function to a loaded HDF5 node, return a Table or array
 function _apply_read(h_node, f::Base.Callable, filterby::Base.Callable, n_evts::Int)
@@ -255,9 +252,11 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
 end
 
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPeriod, DataRun, DetectorIdLike}; kwargs...)
-    fks = search_disk(FileKey, data.tier[rsel[1], rsel[2], rsel[3], rsel[4]])
+    tier = DataTier(rsel[1])
+    tier in _perdet_tiers && return LegendDataManagement.read_ldata(f, data, (tier, start_filekey(data, (rsel[3], rsel[4], rsel[2])), rsel[5]); kwargs...)
+    fks = search_disk(FileKey, data.tier[tier, rsel[2], rsel[3], rsel[4]])
     isempty(fks) && throw(ArgumentError("No filekeys found for $(rsel[2]) $(rsel[3]) $(rsel[4])"))
-    LegendDataManagement.read_ldata(f, data, (rsel[1], fks, rsel[5]); kwargs...)
+    LegendDataManagement.read_ldata(f, data, (tier, fks, rsel[5]); kwargs...)
 end
 
 
