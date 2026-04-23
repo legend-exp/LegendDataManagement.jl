@@ -123,9 +123,14 @@ const _evt_tiers = DataTier.([:jlevt, :jlskm])
 const _perdet_tiers = DataTier.([:jlpeaks, :jlhit, :jlpls])
 
 # Open the LH5 file for a given tier/filekey (+det for per-detector tiers).
-function _lh5_data_open(f::Function, data::LegendData, tier::DataTierLike, filekey::FileKey, det::DetectorIdLike=DetectorId(""), mode::AbstractString="r")
+function _lh5_data_open(f::Function, data::LegendData, tier::DataTierLike, filekey::FileKey, det::Union{DetectorIdLike, Nothing}=nothing, mode::AbstractString="r")
     t = DataTier(tier)
-    path = t in _perdet_tiers ? data.tier[t, filekey, DetectorId(det)] : data.tier[t, filekey]
+    if t in _perdet_tiers
+        isnothing(det) && throw(ArgumentError("DetectorId required for per-detector tier $t"))
+        path = data.tier[t, filekey, DetectorId(det)]
+    else
+        path = data.tier[t, filekey]
+    end
     LegendHDF5IO.lh5open(f, path, mode)
 end
 
@@ -133,8 +138,9 @@ _skipnothingmissing(xv::AbstractVector) = [x for x in skipmissing(xv) if !isnoth
 lflatten(x) = fast_flatten(collect(_skipnothingmissing(x)))
 lflatten(nt::AbstractVector{<:NamedTuple}) = flatten_by_key(collect(_skipnothingmissing(nt)))
 
-_propfunc_src_columnnames(f::PropSelFunction{src_cols, trg_cols}) where {src_cols, trg_cols} = src_cols
-_propfunc_trg_columnnames(f::PropSelFunction{src_cols, trg_cols}) where {src_cols, trg_cols} = trg_cols
+_propfunc_src_columnnames(::PropertyFunctions.PropertyFunction{names}) where names = names
+_propfunc_src_columnnames(::Any) = ()
+_propfunc_trg_columnnames(::PropSelFunction{src, trg}) where {src, trg} = trg
 
 _load_all_keys(nt::NamedTuple, n_evts::Int=-1) = if length(nt) == 1 _load_all_keys(nt[first(keys(nt))], n_evts) else NamedTuple{keys(nt)}(map(x -> _load_all_keys(nt[x], n_evts), keys(nt))) end
 _load_all_keys(arr::AbstractArray, n_evts::Int=-1) = arr[:][if (n_evts < 1 || n_evts > length(arr)) 1:length(arr) else rand(1:length(arr), n_evts) end]
@@ -159,23 +165,106 @@ function _apply_read(h_node, f::Base.Callable, filterby::Base.Callable, n_evts::
     end
 end
 
-# Per-detector read from an event-tier file: filter events where `det` triggered and
-# apply `f` (PropSelFunction targets columns in jlevt/geds by default).
-function _read_evt_perdet(h, tier::DataTier, det::DetectorId, f::Base.Callable, filterby::Base.Callable, n_evts::Int)
-    mask = any.(isequal(det), h["$tier/geds/trig_e_det"][:])
-    geds = _apply_read(h["$tier/geds"], f, filterby, -1)
-    geds[mask]
+# Per-detector read from an event-tier file. Routes by det system: geds via
+# `trig_e_det`, spms via `detector`. For each event, picks the index where
+# `det` appears, masks events without it, unwraps VoV columns at that index.
+# Event-scalar sibling subgroups (ged_spm, ft_spm, ged_pmt) and aux/<sub>/<col>
+# (flattened as `<sub>_<col>`) are exposed as flat scalar columns so a single
+# `filterby` can combine per-det and event-global flags. Fast path: when called
+# with a PropSelFunction and a PropertyFunction filterby, only the columns
+# referenced by their src tuples are materialized.
+_unwrap_perdet(col::AbstractVector{<:AbstractVector}, idxs::Vector{Int}) = getindex.(col, idxs)
+_unwrap_perdet(col::AbstractVector, ::Vector{Int}) = col
+
+const _evt_scalar_subgroups = ("ged_spm", "ft_spm", "ged_pmt")
+
+# Load one named column from the right subgroup. Per-det subgroup cols are
+# VoV-unwrapped at `idxs`; event-scalar and aux cols are masked only.
+function _load_perdet_col(h, tier::DataTier, persubdet, col::Symbol, mask::AbstractVector{Bool}, idxs::Vector{Int})
+    if col in propertynames(persubdet)
+        return _unwrap_perdet(getproperty(persubdet, col)[mask], idxs)
+    end
+    for g in _evt_scalar_subgroups
+        haskey(h, "$tier/$g") || continue
+        sub = h["$tier/$g"]
+        col in propertynames(sub) && return getproperty(sub, col)[:][mask]
+    end
+    if haskey(h, "$tier/aux")
+        aux_grp = h["$tier/aux"]
+        col_str = string(col)
+        for sub in propertynames(aux_grp)
+            pref = string(sub, "_")
+            if startswith(col_str, pref)
+                rest = Symbol(col_str[length(pref)+1:end])
+                subtbl = getproperty(aux_grp, sub)
+                rest in propertynames(subtbl) && return getproperty(subtbl, rest)[:][mask]
+            end
+        end
+    end
+    error("column $col not found in $tier subgroups")
+end
+
+function _read_evt_perdet(h, data::LegendData, filekey::FileKey, tier::DataTier, det::DetectorId, f::Base.Callable, filterby::Base.Callable, n_evts::Int)
+    system = channelinfo(data, filekey, det).system
+    subgrp, mask_col = if system == :geds
+        "geds", :trig_e_det
+    elseif system == :spms
+        "spms", :detector
+    else
+        error("read_ldata(:$tier, ..., $det): no per-det data in $tier for system :$system")
+    end
+    persubdet = h["$tier/$subgrp"]
+    keep = [findfirst(isequal(det), t) for t in getproperty(persubdet, mask_col)[:]]
+    mask = .!isnothing.(keep)
+    idxs = Int.(keep[mask])
+
+    # Fast path: lazy load only the columns needed by PropSel + filterby
+    if f isa PropSelFunction && (filterby isa PropertyFunctions.PropertyFunction || filterby === Returns(true))
+        src_cols = _propfunc_src_columnnames(f)
+        trg_cols = _propfunc_trg_columnnames(f)
+        filt_cols = _propfunc_src_columnnames(filterby)
+        needed = Tuple(unique((src_cols..., filt_cols...)))
+        cols = map(c -> _load_perdet_col(h, tier, persubdet, c, mask, idxs), needed)
+        tbl = Table(NamedTuple{needed}(cols))
+        filt_tbl = filterby === Returns(true) ? tbl : (tbl |> PropertyFunctions.filterby(filterby))
+        n_evts > 0 && (filt_tbl = filt_tbl[1:min(n_evts, length(filt_tbl))])
+        out_cols = Tuple(getproperty(filt_tbl, c) for c in src_cols)
+        return Table(NamedTuple{trg_cols}(out_cols))
+    end
+
+    # Eager fallback: build full merged table
+    col_names = propertynames(persubdet)
+    cols = map(c -> _unwrap_perdet(getproperty(persubdet, c)[mask], idxs), col_names)
+    nt = NamedTuple{col_names}(cols)
+    for g in _evt_scalar_subgroups
+        haskey(h, "$tier/$g") || continue
+        sub = h["$tier/$g"]
+        sub_names = propertynames(sub)
+        sub_cols = map(c -> getproperty(sub, c)[:][mask], sub_names)
+        nt = merge(nt, NamedTuple{sub_names}(sub_cols))
+    end
+    if haskey(h, "$tier/aux")
+        aux_grp = h["$tier/aux"]
+        for sub in propertynames(aux_grp)
+            subtbl = getproperty(aux_grp, sub)
+            sub_names = propertynames(subtbl)
+            prefixed = Tuple(Symbol(sub, :_, n) for n in sub_names)
+            sub_cols = map(c -> getproperty(subtbl, c)[:][mask], sub_names)
+            nt = merge(nt, NamedTuple{prefixed}(sub_cols))
+        end
+    end
+    _apply_read(Table(nt), f, filterby, n_evts)
 end
 
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, DetectorIdLike}; filterby::Base.Callable=Returns(true), n_evts::Int=-1, ignore_missing::Bool=false, kwargs...)
     tier, filekey = DataTier(rsel[1]), rsel[2]
     has_det = !isempty(string(rsel[3]))
-    det_arg = has_det ? DetectorId(rsel[3]) : DetectorId("")
+    det_arg = has_det ? DetectorId(rsel[3]) : nothing
 
     _lh5_data_open(data, tier, filekey, det_arg) do h
         if tier in _evt_tiers
             has_det || return _apply_read(h["$tier"], f, filterby, n_evts)
-            _read_evt_perdet(h, tier, det_arg, f, filterby, n_evts)
+            _read_evt_perdet(h, data, filekey, tier, det_arg, f, filterby, n_evts)
         else
             has_det || throw(ArgumentError("DetectorId required for tier $tier"))
             path = haskey(h, "$tier/$det_arg") ? "$tier/$det_arg" : "$tier"
@@ -219,6 +308,9 @@ LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{
 ### Argument distinction for different DataSelector Types
 function _convert_rsel2dsel(rsel::NTuple{<:Any, AbstractDataSelectorLike})
     selector_types = [PossibleDataSelectors[LegendDataManagement._can_convert_to.(PossibleDataSelectors, Ref(s))] for s in rsel]
+    if length(selector_types[1]) > 1 && DataTier in selector_types[1]
+        selector_types[1] = [DataTier]
+    end
     if length(selector_types[2]) > 1 && DataCategory in selector_types[2]
         selector_types[2] = [DataCategory]
     end
