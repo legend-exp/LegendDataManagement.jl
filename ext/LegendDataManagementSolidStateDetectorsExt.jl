@@ -771,8 +771,72 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
                 )
             )
         end
-        
         mantle_contact_parts
+    end
+
+    if haskey(diode_meta.geometry, :extra) 
+        if haskey(diode_meta.geometry.extra, :crack)
+            
+            # cut the crack volume from the semiconductor
+            radius_crack = diode_meta.geometry.extra.crack.radius_in_mm
+            α = diode_meta.geometry.extra.crack.angle_in_deg
+            
+
+            crack_cutout = dicttype(
+                "translate" => dicttype(
+                    "box" => dicttype(
+                        "widths" => [100,200,200],
+                        "rotation" => dicttype("Y" => α),
+                    ),
+                    "x" => crystal_radius - radius_crack + 50*cosd(α),
+                    "z" => -50*sind(α)
+                )
+            )
+            semiconductor_geometry = config_dict["detectors"][1]["semiconductor"]["geometry"]
+            if haskey(semiconductor_geometry, "difference")
+                #Existing difference: append the crack substraction to the list of subtractions
+                push!(semiconductor_geometry["difference"], crack_cutout)
+            else
+                #No difference: wrap the existing geometry as the basis and add the crack cutout as the first subtraction
+                config_dict["detectors"][1]["semiconductor"]["geometry"] = dicttype(
+                    "difference" => [semiconductor_geometry, crack_cutout],
+                )
+            end
+
+            # cut the crack from the mantle contact 
+            semiconductor_volume = config_dict["detectors"][1]["semiconductor"]["geometry"]
+
+            config_dict["detectors"][1]["contacts"][2]["geometry"] = dicttype(
+                "union" => [
+                    dicttype(
+                        "difference" => vcat(
+                            config_dict["detectors"][1]["contacts"][2]["geometry"],
+                            # cut out from the contact
+                            crack_cutout
+                        )
+                    ),
+                    #addition to the contact 
+                    dicttype(
+                        "intersection" => [
+                            dicttype(
+                                "translate" => dicttype(
+                                    "box" => dicttype(
+                                        "widths" => [li_thickness / cosd(α), 200,200],
+                                        "rotation" => dicttype("Y" => α),
+                                    ),
+                                    #"rotation" => dicttype("Y" => α),
+                                    "x" => crystal_radius - radius_crack,
+                                )
+                            ),
+                            semiconductor_volume                              
+                        ]
+                    )
+                ]
+            )
+
+            # make sure that the simulation is performed in 3D
+            config_dict["grid"]["axes"]["phi"]["to"] = 360
+        end
     end
     
     slice = Symbol(diode_meta.production.slice)
