@@ -173,16 +173,24 @@ end
 # `filterby` can combine per-det and event-global flags. Fast path: when called
 # with a PropSelFunction and a PropertyFunction filterby, only the columns
 # referenced by their src tuples are materialized.
-_unwrap_perdet(col::AbstractVector{<:AbstractVector}, idxs::Vector{Int}) = getindex.(col, idxs)
-_unwrap_perdet(col::AbstractVector, ::Vector{Int}) = col
+# jlevt/geds uses two VoV indexing schemes per event:
+#   - per-trigger    (length == #triggers, e.g. trig_e_*)            → use trig_idxs
+#   - per-det-list   (length == #all_dets_in_array, e.g. e_cusp_*)   → use det_idxs
+# Decision is per-row by inner-vector length so SPMs (only per-trigger) and
+# GEDs (mixed) both work without a hardcoded column list.
+_unwrap_perdet(col::AbstractVector, _, _, _) = col
+function _unwrap_perdet(col::AbstractVector{<:AbstractVector}, trig_idxs::Vector{Int}, det_idxs::Vector{Int}, n_trig::Vector{Int})
+    [length(col[k]) == n_trig[k] ? col[k][trig_idxs[k]] : col[k][det_idxs[k]] for k in eachindex(col)]
+end
 
 const _evt_scalar_subgroups = ("ged_spm", "ft_spm", "ged_pmt")
 
 # Load one named column from the right subgroup. Per-det subgroup cols are
-# VoV-unwrapped at `idxs`; event-scalar and aux cols are masked only.
-function _load_perdet_col(h, tier::DataTier, persubdet, col::Symbol, mask::AbstractVector{Bool}, idxs::Vector{Int})
+# VoV-unwrapped using trig_idxs OR det_idxs (chosen per-row by length, see
+# `_unwrap_perdet`); event-scalar and aux cols are masked only.
+function _load_perdet_col(h, tier::DataTier, persubdet, col::Symbol, mask::AbstractVector{Bool}, trig_idxs::Vector{Int}, det_idxs::Vector{Int}, n_trig::Vector{Int})
     if col in propertynames(persubdet)
-        return _unwrap_perdet(getproperty(persubdet, col)[mask], idxs)
+        return _unwrap_perdet(getproperty(persubdet, col)[mask], trig_idxs, det_idxs, n_trig)
     end
     for g in _evt_scalar_subgroups
         haskey(h, "$tier/$g") || continue
@@ -214,9 +222,20 @@ function _read_evt_perdet(h, data::LegendData, filekey::FileKey, tier::DataTier,
         error("read_ldata(:$tier, ..., $det): no per-det data in $tier for system :$system")
     end
     persubdet = h["$tier/$subgrp"]
-    keep = [findfirst(isequal(det), t) for t in getproperty(persubdet, mask_col)[:]]
+    trig_list = getproperty(persubdet, mask_col)[:]
+    keep = [findfirst(isequal(det), t) for t in trig_list]
     mask = .!isnothing.(keep)
-    idxs = Int.(keep[mask])
+    trig_idxs = Int.(keep[mask])
+    n_trig    = length.(trig_list[mask])
+    # det-list position (e.g. for /jlevt/geds/e_cusp_ctc_cal which is indexed
+    # by the all-dets-in-array list, not by trigger position). Falls back to
+    # trig_idxs for systems / files without trig_e_det_idxs (SPMs etc.).
+    det_idxs = if hasproperty(persubdet, :trig_e_det_idxs)
+        di = getproperty(persubdet, :trig_e_det_idxs)[mask]
+        [Int(di[k][trig_idxs[k]]) for k in eachindex(trig_idxs)]
+    else
+        trig_idxs
+    end
 
     # Fast path: lazy load only the columns needed by PropSel + filterby
     if f isa PropSelFunction && (filterby isa PropertyFunctions.PropertyFunction || filterby === Returns(true))
@@ -224,7 +243,7 @@ function _read_evt_perdet(h, data::LegendData, filekey::FileKey, tier::DataTier,
         trg_cols = _propfunc_trg_columnnames(f)
         filt_cols = _propfunc_src_columnnames(filterby)
         needed = Tuple(unique((src_cols..., filt_cols...)))
-        cols = map(c -> _load_perdet_col(h, tier, persubdet, c, mask, idxs), needed)
+        cols = map(c -> _load_perdet_col(h, tier, persubdet, c, mask, trig_idxs, det_idxs, n_trig), needed)
         tbl = Table(NamedTuple{needed}(cols))
         filt_tbl = filterby === Returns(true) ? tbl : (tbl |> PropertyFunctions.filterby(filterby))
         n_evts > 0 && (filt_tbl = filt_tbl[1:min(n_evts, length(filt_tbl))])
@@ -234,7 +253,7 @@ function _read_evt_perdet(h, data::LegendData, filekey::FileKey, tier::DataTier,
 
     # Eager fallback: build full merged table
     col_names = propertynames(persubdet)
-    cols = map(c -> _unwrap_perdet(getproperty(persubdet, c)[mask], idxs), col_names)
+    cols = map(c -> _unwrap_perdet(getproperty(persubdet, c)[mask], trig_idxs, det_idxs, n_trig), col_names)
     nt = NamedTuple{col_names}(cols)
     for g in _evt_scalar_subgroups
         haskey(h, "$tier/$g") || continue
@@ -256,7 +275,16 @@ function _read_evt_perdet(h, data::LegendData, filekey::FileKey, tier::DataTier,
     _apply_read(Table(nt), f, filterby, n_evts)
 end
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, DetectorIdLike}; filterby::Base.Callable=Returns(true), n_evts::Int=-1, ignore_missing::Bool=false, kwargs...)
+# Resolve the inner HDF5 path for (tier, det). Primary: "tier/det". Legacy
+# fallback: "det/tier" — Returns `nothing` if neither layout is present.
+function _resolve_perdet_path(h, tier::DataTier, det::DetectorId)
+    haskey(h, "$tier/$det") && return "$tier/$det"
+    haskey(h, "$det/$tier") && return "$det/$tier"
+    haskey(h, "$tier")      && return "$tier"
+    nothing
+end
+
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, DetectorIdLike}; filterby::Base.Callable=Returns(true), n_evts::Int=-1, ignore_missing::Bool=false, subgroup::Union{Symbol,Nothing}=nothing, kwargs...)
     tier, filekey = DataTier(rsel[1]), rsel[2]
     has_det = !isempty(string(rsel[3]))
     det_arg = has_det ? DetectorId(rsel[3]) : nothing
@@ -267,12 +295,15 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
             _read_evt_perdet(h, data, filekey, tier, det_arg, f, filterby, n_evts)
         else
             has_det || throw(ArgumentError("DetectorId required for tier $tier"))
-            path = haskey(h, "$tier/$det_arg") ? "$tier/$det_arg" : "$tier"
-            if !haskey(h, path)
+            path = _resolve_perdet_path(h, tier, det_arg)
+            if path === nothing
                 ignore_missing && (@warn "Detector $det_arg not found in $(basename(string(h.data_store)))"; return nothing)
                 throw(ArgumentError("Detector $det_arg not found in $(basename(string(h.data_store)))"))
             end
-            _apply_read(h[path], f, filterby, n_evts)
+            # Optional sub-group descent (e.g. jlhit/<det>/dataQC).
+            full = subgroup === nothing ? path : "$path/$subgroup"
+            haskey(h, full) || throw(ArgumentError("Subgroup $subgroup not found at $path in $(basename(string(h.data_store)))"))
+            _apply_read(h[full], f, filterby, n_evts)
         end
     end
 end
@@ -280,8 +311,14 @@ end
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey}; kwargs...)
     tier = DataTier(rsel[1])
     tier in _evt_tiers && return LegendDataManagement.read_ldata(f, data, (tier, rsel[2], ""); kwargs...)
+    # Discover detectors: primary "tier/<det>" listing, fallback to legacy
+    # "<det>/tier" layout (top-level keys with a $tier subkey).
     dets = _lh5_data_open(data, tier, rsel[2]) do h
-        haskey(h, "$tier") ? collect(keys(h["$tier"])) : String[]
+        if haskey(h, "$tier")
+            collect(keys(h["$tier"]))
+        else
+            [k for k in keys(h) if haskey(h, "$k/$tier")]
+        end
     end
     isempty(dets) && throw(ArgumentError("No detectors found under /$tier in $(basename(data.tier[tier, rsel[2]]))"))
     NamedTuple{Tuple(Symbol.(dets))}([LegendDataManagement.read_ldata(f, data, (tier, rsel[2], d); kwargs...) for d in dets])
