@@ -237,63 +237,56 @@ function _index_col(col, det_idxs, trig_idxs, det_inner_lens, trig_inner_lens)
     end
 end
 
-# Read an event-tier table. With `det = nothing`, every column is materialized
-# in its native shape (event-scalar or VoV) under the prefix-flattened name.
-# With `det` given, only events where the detector is present are kept:
-# the mask comes from `trig_e_det` when available (for systems with a
-# per-trigger view, e.g. GEDs in jlevt) or `detector` otherwise (SPMs in
-# jlevt, PMTs in jlpmt). For surviving events, per-det-list and per-trigger
-# VoV columns are unwrapped at the detector's respective index. Other
-# subgroup columns (`ged_spm_*`, `aux_pulser_*`, …) remain event-scalar and
-# are masked alongside.
+# Read an event-tier table for a single detector. Only events where the
+# detector is present are kept: the mask comes from `trig_e_det` when
+# available (for systems with a per-trigger view, e.g. GEDs in jlevt) or
+# `detector` otherwise (SPMs in jlevt, PMTs in jlpmt). For surviving events,
+# per-det-list and per-trigger VoV columns are unwrapped at the detector's
+# respective index. Other subgroup columns (`ged_spm_*`, `aux_pulser_*`, …)
+# remain event-scalar and are masked alongside.
 function _read_evt_table(h::LegendHDF5IO.LHDataStore, data::LegendData, filekey::FileKey,
-        tier::DataTier, det::Union{DetectorId,Nothing}, f::Base.Callable,
+        tier::DataTier, det::DetectorId, f::Base.Callable,
         filterby::Base.Callable, n_evts::Int)
 
     nmap = _build_evt_namemap(h, tier)
 
-    persubdet_path = nothing
+    sys = channelinfo(data, filekey, det).system
+    persubdet_path = _evt_persubdet_path(tier, sys)
+    persubdet_path === nothing &&
+        error("read_ldata(:$tier, ..., $det): no per-det data in $tier for system :$sys")
+    haskey(h, persubdet_path) ||
+        error("read_ldata(:$tier, ..., $det): /$persubdet_path missing in file")
+    psd = h[persubdet_path]
+
+    # Find the detector's per-event position in `trig_e_det` (preferred,
+    # exists for GED-like systems) or `detector` (fallback for SPMs/PMTs).
+    # The chosen list also drives the event mask: events where the detector
+    # did not trigger / is not in the array are dropped.
     mask = nothing
     det_idxs = trig_idxs = nothing
     det_inner_lens = trig_inner_lens = nothing
-    if det !== nothing
-        sys = channelinfo(data, filekey, det).system
-        persubdet_path = _evt_persubdet_path(tier, sys)
-        persubdet_path === nothing &&
-            error("read_ldata(:$tier, ..., $det): no per-det data in $tier for system :$sys")
-        haskey(h, persubdet_path) ||
-            error("read_ldata(:$tier, ..., $det): /$persubdet_path missing in file")
-        psd = h[persubdet_path]
-
-        # Find the detector's per-event position in `trig_e_det` (preferred,
-        # exists for GED-like systems) or `detector` (fallback for SPMs/PMTs).
-        # The chosen list also drives the event mask: events where the
-        # detector did not trigger / is not in the array are dropped.
-        if hasproperty(psd, :trig_e_det)
-            tl = getproperty(psd, :trig_e_det)[:]
-            keep = [findfirst(isequal(det), t) for t in tl]
-            mask = .!isnothing.(keep)
-            trig_idxs = Int.(keep[mask])
-            trig_inner_lens = length.(tl[mask])
-        end
-        if hasproperty(psd, :detector)
-            dl = getproperty(psd, :detector)[:]
-            keep = [findfirst(isequal(det), t) for t in dl]
-            mask === nothing && (mask = .!isnothing.(keep))
-            det_idxs = Int.(keep[mask])
-            det_inner_lens = length.(dl[mask])
-        end
-        mask === nothing &&
-            error("read_ldata(:$tier, ..., $det): /$persubdet_path has neither :detector nor :trig_e_det")
+    if hasproperty(psd, :trig_e_det)
+        tl = getproperty(psd, :trig_e_det)[:]
+        keep = [findfirst(isequal(det), t) for t in tl]
+        mask = .!isnothing.(keep)
+        trig_idxs = Int.(keep[mask])
+        trig_inner_lens = length.(tl[mask])
     end
+    if hasproperty(psd, :detector)
+        dl = getproperty(psd, :detector)[:]
+        keep = [findfirst(isequal(det), t) for t in dl]
+        mask === nothing && (mask = .!isnothing.(keep))
+        det_idxs = Int.(keep[mask])
+        det_inner_lens = length.(dl[mask])
+    end
+    mask === nothing &&
+        error("read_ldata(:$tier, ..., $det): /$persubdet_path has neither :detector nor :trig_e_det")
 
     function load_col(name::Symbol)
         haskey(nmap, name) ||
             error("column $name not found in /$tier (available: $(sort(collect(keys(nmap)))))")
         (path, col) = nmap[name]
-        raw = getproperty(h[path], col)[:]
-        mask === nothing && return raw
-        masked = raw[mask]
+        masked = getproperty(h[path], col)[:][mask]
         path == persubdet_path ? _index_col(masked, det_idxs, trig_idxs, det_inner_lens, trig_inner_lens) : masked
     end
 
@@ -333,6 +326,10 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
 
     _lh5_data_open(data, tier, filekey, det_arg) do h
         if tier in _evt_tiers
+            # No detector: return the native nested LH5 structure (e.g.
+            # `evt_data.aux.forcedtrigger.aux_trig`). Per-detector reads use
+            # the flat-prefixed table from `_read_evt_table` instead.
+            has_det || return _apply_read(h["$tier"], f, filterby, n_evts)
             _read_evt_table(h, data, filekey, tier, det_arg, f, filterby, n_evts)
         else
             has_det || throw(ArgumentError("DetectorId required for tier $tier"))
