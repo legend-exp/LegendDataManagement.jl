@@ -119,8 +119,22 @@ function __init__()
     (@isdefined DataPartition) && extend_datatype_dict(DataPartition, "datapartition")
 end
 
-const _evt_tiers = DataTier.([:jlevt, :jlskm])
+const _evt_tiers = DataTier.([:jlevt, :jlskm, :jlpmt])
 const _perdet_tiers = DataTier.([:jlpeaks, :jlhit, :jlpls])
+
+# For an event-tier, return the inner LH5 path that contains per-detector
+# columns (with a `detector` VoV) for the detector's system. `nothing` means
+# this (tier, system) combination has no per-detector slicing — the caller
+# must fall back to event-level reads.
+function _evt_persubdet_path(tier::DataTier, sys::Symbol)
+    if tier == DataTier(:jlevt) || tier == DataTier(:jlskm)
+        sys == :geds && return "$tier/geds"
+        sys == :spms && return "$tier/spms"
+    elseif tier == DataTier(:jlpmt)
+        sys == :pmts && return "$tier"
+    end
+    return nothing
+end
 
 # Open the LH5 file for a given tier/filekey (+det for per-detector tiers).
 function _lh5_data_open(f::Function, data::LegendData, tier::DataTierLike, filekey::FileKey, det::Union{DetectorIdLike, Nothing}=nothing, mode::AbstractString="r")
@@ -147,7 +161,10 @@ _load_all_keys(arr::AbstractArray, n_evts::Int=-1) = arr[:][if (n_evts < 1 || n_
 _load_all_keys(t::Table, n_evts::Int=-1) = t[:][if (n_evts < 1 || n_evts > length(t)) 1:length(t) else rand(1:length(t), n_evts) end]
 _load_all_keys(x, n_evts::Int=-1) = x
 
-# Apply PropSelFunction / filter / function to a loaded HDF5 node, return a Table or array
+# Apply PropSelFunction / filter / function to a loaded HDF5 node, return a
+# Table or array. The filter is missing-tolerant: rows where the filter
+# returns `missing` are dropped (same semantics as `false`), so callers can
+# write predicates over `Union{T,Missing}` columns without a manual coalesce.
 function _apply_read(h_node, f::Base.Callable, filterby::Base.Callable, n_evts::Int)
     if f isa PropSelFunction && filterby == Returns(true)
         src_cols = _propfunc_src_columnnames(f)
@@ -159,120 +176,145 @@ function _apply_read(h_node, f::Base.Callable, filterby::Base.Callable, n_evts::
         end)
     else
         lh5_data = _load_all_keys(h_node, n_evts)
-        filterby != Returns(true) && (lh5_data = lh5_data |> PropertyFunctions.filterby(filterby))
+        if filterby != Returns(true)
+            lh5_data = lh5_data[coalesce.(filterby.(lh5_data), false)]
+        end
         f != identity && (lh5_data = f.(lh5_data))
         TypedTables.Tables.istable(lh5_data) ? Table(lh5_data) : lh5_data
     end
 end
 
-# Per-detector read from an event-tier file. Routes by det system: geds via
-# `trig_e_det`, spms via `detector`. For each event, picks the index where
-# `det` appears, masks events without it, unwraps VoV columns at that index.
-# Event-scalar sibling subgroups (ged_spm, ft_spm, ged_pmt) and aux/<sub>/<col>
-# (flattened as `<sub>_<col>`) are exposed as flat scalar columns so a single
-# `filterby` can combine per-det and event-global flags. Fast path: when called
-# with a PropSelFunction and a PropertyFunction filterby, only the columns
-# referenced by their src tuples are materialized.
-# jlevt/geds uses two VoV indexing schemes per event:
-#   - per-trigger    (length == #triggers, e.g. trig_e_*)            → use trig_idxs
-#   - per-det-list   (length == #all_dets_in_array, e.g. e_cusp_*)   → use det_idxs
-# Decision is per-row by inner-vector length so SPMs (only per-trigger) and
-# GEDs (mixed) both work without a hardcoded column list.
-_unwrap_perdet(col::AbstractVector, _, _, _) = col
-function _unwrap_perdet(col::AbstractVector{<:AbstractVector}, trig_idxs::Vector{Int}, det_idxs::Vector{Int}, n_trig::Vector{Int})
-    [length(col[k]) == n_trig[k] ? col[k][trig_idxs[k]] : col[k][det_idxs[k]] for k in eachindex(col)]
+# Walk an event-tier HDF5 group and build a flat name-map
+# `prefix_name => (h5_path, leaf_col_symbol)`. Top-level scalar/VoV columns
+# get the bare leaf name; sub-table columns get `<sub>_<col>`; nested
+# sub-tables (e.g. `/jlevt/aux/pulser/aux_trig`) get `<sub_a>_<sub_b>_<col>`.
+# Identifies VoV groups via the `cumulative_length` / `encoded_data` markers.
+function _build_evt_namemap(h::LegendHDF5IO.LHDataStore, tier::DataTier)
+    nmap = Dict{Symbol, Tuple{String, Symbol}}()
+    h5_grp = h.data_store["$tier"]
+    try
+        _walk_evt_h5!(nmap, h5_grp, "$tier", "")
+    finally
+        close(h5_grp)
+    end
+    nmap
 end
 
-const _evt_scalar_subgroups = ("ged_spm", "ft_spm", "ged_pmt")
-
-# Load one named column from the right subgroup. Per-det subgroup cols are
-# VoV-unwrapped using trig_idxs OR det_idxs (chosen per-row by length, see
-# `_unwrap_perdet`); event-scalar and aux cols are masked only.
-function _load_perdet_col(h, tier::DataTier, persubdet, col::Symbol, mask::AbstractVector{Bool}, trig_idxs::Vector{Int}, det_idxs::Vector{Int}, n_trig::Vector{Int})
-    if col in propertynames(persubdet)
-        return _unwrap_perdet(getproperty(persubdet, col)[mask], trig_idxs, det_idxs, n_trig)
-    end
-    for g in _evt_scalar_subgroups
-        haskey(h, "$tier/$g") || continue
-        sub = h["$tier/$g"]
-        col in propertynames(sub) && return getproperty(sub, col)[:][mask]
-    end
-    if haskey(h, "$tier/aux")
-        aux_grp = h["$tier/aux"]
-        col_str = string(col)
-        for sub in propertynames(aux_grp)
-            pref = string(sub, "_")
-            if startswith(col_str, pref)
-                rest = Symbol(col_str[length(pref)+1:end])
-                subtbl = getproperty(aux_grp, sub)
-                rest in propertynames(subtbl) && return getproperty(subtbl, rest)[:][mask]
+function _walk_evt_h5!(out::Dict, group, base_path::String, prefix::String)
+    for k in keys(group)
+        full_name = isempty(prefix) ? Symbol(k) : Symbol(prefix, "_", k)
+        child = group[k]
+        try
+            if child isa LegendHDF5IO.HDF5.Dataset
+                out[full_name] = (base_path, Symbol(k))
+            elseif child isa LegendHDF5IO.HDF5.Group
+                ck = keys(child)
+                if "cumulative_length" in ck || "encoded_data" in ck
+                    out[full_name] = (base_path, Symbol(k))
+                else
+                    new_prefix = isempty(prefix) ? string(k) : "$(prefix)_$(k)"
+                    _walk_evt_h5!(out, child, "$base_path/$k", new_prefix)
+                end
             end
+        finally
+            close(child)
         end
     end
-    error("column $col not found in $tier subgroups")
 end
 
-function _read_evt_perdet(h, data::LegendData, filekey::FileKey, tier::DataTier, det::DetectorId, f::Base.Callable, filterby::Base.Callable, n_evts::Int)
-    system = channelinfo(data, filekey, det).system
-    subgrp, mask_col = if system == :geds
-        "geds", :trig_e_det
-    elseif system == :spms
-        "spms", :detector
+# Index a materialized column by per-event indices. Scalar columns and VoVs
+# whose inner length matches neither the per-det-list nor the per-trigger
+# reference (e.g. unrelated nested shapes) are returned as-is.
+function _index_col(col, det_idxs, trig_idxs, det_inner_lens, trig_inner_lens)
+    eltype(col) <: AbstractVector || return col
+    inner_lens = length.(col)
+    if det_inner_lens !== nothing && inner_lens == det_inner_lens
+        return [col[k][det_idxs[k]] for k in eachindex(col)]
+    elseif trig_inner_lens !== nothing && inner_lens == trig_inner_lens
+        return [col[k][trig_idxs[k]] for k in eachindex(col)]
     else
-        error("read_ldata(:$tier, ..., $det): no per-det data in $tier for system :$system")
+        return col
     end
-    persubdet = h["$tier/$subgrp"]
-    trig_list = getproperty(persubdet, mask_col)[:]
-    keep = [findfirst(isequal(det), t) for t in trig_list]
-    mask = .!isnothing.(keep)
-    trig_idxs = Int.(keep[mask])
-    n_trig    = length.(trig_list[mask])
-    # det-list position (e.g. for /jlevt/geds/e_cusp_ctc_cal which is indexed
-    # by the all-dets-in-array list, not by trigger position). Falls back to
-    # trig_idxs for systems / files without trig_e_det_idxs (SPMs etc.).
-    det_idxs = if hasproperty(persubdet, :trig_e_det_idxs)
-        di = getproperty(persubdet, :trig_e_det_idxs)[mask]
-        [Int(di[k][trig_idxs[k]]) for k in eachindex(trig_idxs)]
-    else
-        trig_idxs
+end
+
+# Read an event-tier table. With `det = nothing`, every column is materialized
+# in its native shape (event-scalar or VoV) under the prefix-flattened name.
+# With `det` given, only events where the detector is present are kept:
+# the mask comes from `trig_e_det` when available (for systems with a
+# per-trigger view, e.g. GEDs in jlevt) or `detector` otherwise (SPMs in
+# jlevt, PMTs in jlpmt). For surviving events, per-det-list and per-trigger
+# VoV columns are unwrapped at the detector's respective index. Other
+# subgroup columns (`ged_spm_*`, `aux_pulser_*`, …) remain event-scalar and
+# are masked alongside.
+function _read_evt_table(h::LegendHDF5IO.LHDataStore, data::LegendData, filekey::FileKey,
+        tier::DataTier, det::Union{DetectorId,Nothing}, f::Base.Callable,
+        filterby::Base.Callable, n_evts::Int)
+
+    nmap = _build_evt_namemap(h, tier)
+
+    persubdet_path = nothing
+    mask = nothing
+    det_idxs = trig_idxs = nothing
+    det_inner_lens = trig_inner_lens = nothing
+    if det !== nothing
+        sys = channelinfo(data, filekey, det).system
+        persubdet_path = _evt_persubdet_path(tier, sys)
+        persubdet_path === nothing &&
+            error("read_ldata(:$tier, ..., $det): no per-det data in $tier for system :$sys")
+        haskey(h, persubdet_path) ||
+            error("read_ldata(:$tier, ..., $det): /$persubdet_path missing in file")
+        psd = h[persubdet_path]
+
+        # Find the detector's per-event position in `trig_e_det` (preferred,
+        # exists for GED-like systems) or `detector` (fallback for SPMs/PMTs).
+        # The chosen list also drives the event mask: events where the
+        # detector did not trigger / is not in the array are dropped.
+        if hasproperty(psd, :trig_e_det)
+            tl = getproperty(psd, :trig_e_det)[:]
+            keep = [findfirst(isequal(det), t) for t in tl]
+            mask = .!isnothing.(keep)
+            trig_idxs = Int.(keep[mask])
+            trig_inner_lens = length.(tl[mask])
+        end
+        if hasproperty(psd, :detector)
+            dl = getproperty(psd, :detector)[:]
+            keep = [findfirst(isequal(det), t) for t in dl]
+            mask === nothing && (mask = .!isnothing.(keep))
+            det_idxs = Int.(keep[mask])
+            det_inner_lens = length.(dl[mask])
+        end
+        mask === nothing &&
+            error("read_ldata(:$tier, ..., $det): /$persubdet_path has neither :detector nor :trig_e_det")
     end
 
-    # Fast path: lazy load only the columns needed by PropSel + filterby
+    function load_col(name::Symbol)
+        haskey(nmap, name) ||
+            error("column $name not found in /$tier (available: $(sort(collect(keys(nmap)))))")
+        (path, col) = nmap[name]
+        raw = getproperty(h[path], col)[:]
+        mask === nothing && return raw
+        masked = raw[mask]
+        path == persubdet_path ? _index_col(masked, det_idxs, trig_idxs, det_inner_lens, trig_inner_lens) : masked
+    end
+
+    # Fast path: only materialize columns referenced by PropSel + filterby.
     if f isa PropSelFunction && (filterby isa PropertyFunctions.PropertyFunction || filterby === Returns(true))
         src_cols = _propfunc_src_columnnames(f)
         trg_cols = _propfunc_trg_columnnames(f)
         filt_cols = _propfunc_src_columnnames(filterby)
         needed = Tuple(unique((src_cols..., filt_cols...)))
-        cols = map(c -> _load_perdet_col(h, tier, persubdet, c, mask, trig_idxs, det_idxs, n_trig), needed)
+        cols = map(load_col, needed)
         tbl = Table(NamedTuple{needed}(cols))
-        filt_tbl = filterby === Returns(true) ? tbl : (tbl |> PropertyFunctions.filterby(filterby))
+        filt_tbl = filterby === Returns(true) ? tbl : tbl[coalesce.(filterby.(tbl), false)]
         n_evts > 0 && (filt_tbl = filt_tbl[1:min(n_evts, length(filt_tbl))])
         out_cols = Tuple(getproperty(filt_tbl, c) for c in src_cols)
         return Table(NamedTuple{trg_cols}(out_cols))
     end
 
-    # Eager fallback: build full merged table
-    col_names = propertynames(persubdet)
-    cols = map(c -> _unwrap_perdet(getproperty(persubdet, c)[mask], trig_idxs, det_idxs, n_trig), col_names)
-    nt = NamedTuple{col_names}(cols)
-    for g in _evt_scalar_subgroups
-        haskey(h, "$tier/$g") || continue
-        sub = h["$tier/$g"]
-        sub_names = propertynames(sub)
-        sub_cols = map(c -> getproperty(sub, c)[:][mask], sub_names)
-        nt = merge(nt, NamedTuple{sub_names}(sub_cols))
-    end
-    if haskey(h, "$tier/aux")
-        aux_grp = h["$tier/aux"]
-        for sub in propertynames(aux_grp)
-            subtbl = getproperty(aux_grp, sub)
-            sub_names = propertynames(subtbl)
-            prefixed = Tuple(Symbol(sub, :_, n) for n in sub_names)
-            sub_cols = map(c -> getproperty(subtbl, c)[:][mask], sub_names)
-            nt = merge(nt, NamedTuple{prefixed}(sub_cols))
-        end
-    end
-    _apply_read(Table(nt), f, filterby, n_evts)
+    # Eager fallback: load every column, then apply f / filterby / n_evts.
+    all_names = Tuple(sort(collect(keys(nmap))))
+    cols = map(load_col, all_names)
+    _apply_read(Table(NamedTuple{all_names}(cols)), f, filterby, n_evts)
 end
 
 # Resolve the inner HDF5 path for (tier, det). Primary: "tier/det". Legacy
@@ -291,8 +333,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
 
     _lh5_data_open(data, tier, filekey, det_arg) do h
         if tier in _evt_tiers
-            has_det || return _apply_read(h["$tier"], f, filterby, n_evts)
-            _read_evt_perdet(h, data, filekey, tier, det_arg, f, filterby, n_evts)
+            _read_evt_table(h, data, filekey, tier, det_arg, f, filterby, n_evts)
         else
             has_det || throw(ArgumentError("DetectorId required for tier $tier"))
             path = _resolve_perdet_path(h, tier, det_arg)
