@@ -163,7 +163,7 @@ read_ldata((:e_cusp,), l200, (:jldsp, fk, det); filterby = @pf $is_valid_muon ==
 
 A per-detector raw/jldsp read can be filtered by a predicate evaluated on a different tier. Two modes, both keyed by the same detector:
 
-- **event tier → raw / jldsp** — slices via the per-det `*_dataidx` column (1-based, same for raw and jldsp). For `geds`: `geds_dataidx`; for `spms`: `spms_dataidx`; for `pmts`: `dataidx`.
+- **event tier → raw / jldsp** — slices via the per-det `*_detevtno` column (1-based, same for raw and jldsp). For `geds`: `geds_detevtno`; for `spms`: `spms_detevtno`; for `pmts`: `detevtno`.
 - **raw ↔ jldsp** — uses the 1:1 row alignment between raw and jldsp for a given detector and applies a `Bool` row-mask. Works for `phy` *and* `cal` (the latter has no jlevt — so `:jldsp` is the only useful filtertier there).
 
 ```julia

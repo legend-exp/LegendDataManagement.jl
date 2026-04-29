@@ -125,12 +125,14 @@ end
 const _evt_tiers = DataTier.([:jlevt, :jlskm, :jlpmt])
 const _perdet_tiers = DataTier.([:jlpeaks, :jlhit, :jlpls])
 
-# For cross-tier filtering: name of the per-det column in an event tier that
-# indexes into raw/jldsp rows for a given system.
+# For cross-tier filtering: per-det event-tier column that gives the 1-based
+# per-(fk, det) row index in raw / jldsp. `detevtno` (per-detector event
+# number) is the right column here. `dataidx` looks similar in some
+# datasets but in others it is a run-wide cumulative offset.
 const _evt_idx_col = Dict{Symbol,Symbol}(
-    :geds => :geds_dataidx,
-    :spms => :spms_dataidx,
-    :pmts => :dataidx,
+    :geds => :geds_detevtno,
+    :spms => :spms_detevtno,
+    :pmts => :detevtno,
 )
 
 # Inner LH5 path that holds per-detector data (a `detector` or `trig_e_det`
