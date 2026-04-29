@@ -334,19 +334,30 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     has_det = !isempty(string(rsel[3]))
     det_arg = has_det ? DetectorId(rsel[3]) : nothing
 
-    # Cross-tier filter: get per-det row indices from filtertier (an evt tier),
-    # then load the target tier and slice. dataidx is 1-based for both raw and
-    # jldsp, so it indexes directly without offset.
+    # Cross-tier filter. Two cases by filtertier kind:
+    #  • event tier → uses *_dataidx (1-based) to index into the target tier
+    #  • per-trigger tier (raw/jldsp) → relies on 1:1 row alignment with the
+    #    target raw/jldsp file for the same det, applies a Bool row-mask
     if filtertier !== nothing && DataTier(filtertier) != tier
         has_det || throw(ArgumentError("filtertier requires a DetectorId"))
         ftier = DataTier(filtertier)
-        ftier in _evt_tiers || throw(ArgumentError("filtertier must be an event tier (got :$ftier)"))
-        sys = channelinfo(data, filekey, det_arg).system
-        idx_col = get(_evt_idx_col, sys, nothing)
-        idx_col === nothing && throw(ArgumentError("No index column known for system :$sys"))
-        idxs = getproperty(LegendDataManagement.read_ldata((idx_col,), data, (ftier, filekey, det_arg); filterby), idx_col)
-        tbl = LegendDataManagement.read_ldata(f, data, (tier, filekey, det_arg); ignore_missing, subgroup, kwargs...)
-        sliced = tbl[idxs]
+        sliced = if ftier in _evt_tiers
+            sys = channelinfo(data, filekey, det_arg).system
+            idx_col = get(_evt_idx_col, sys, nothing)
+            idx_col === nothing && throw(ArgumentError("No index column known for system :$sys"))
+            idxs = getproperty(LegendDataManagement.read_ldata((idx_col,), data, (ftier, filekey, det_arg); filterby), idx_col)
+            tbl = LegendDataManagement.read_ldata(f, data, (tier, filekey, det_arg); ignore_missing, subgroup, kwargs...)
+            tbl[idxs]
+        elseif !(tier in _evt_tiers)
+            filt_cols = _propfunc_src_columnnames(filterby)
+            isempty(filt_cols) && throw(ArgumentError("filterby must be a @pf PropertyFunction with named source columns"))
+            ft_data = LegendDataManagement.read_ldata(filt_cols, data, (ftier, filekey, det_arg))
+            mask = coalesce.(filterby.(ft_data), false)
+            tbl = LegendDataManagement.read_ldata(f, data, (tier, filekey, det_arg); ignore_missing, subgroup, kwargs...)
+            tbl[mask]
+        else
+            throw(ArgumentError("Cannot use non-event filtertier :$ftier when reading event tier :$tier"))
+        end
         return n_evts > 0 ? sliced[1:min(n_evts, length(sliced))] : sliced
     end
 
