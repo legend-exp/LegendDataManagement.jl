@@ -2,7 +2,6 @@ module LegendDataManagementLegendHDF5IOExt
 
 using LegendDataManagement
 LegendDataManagement._lh5_ext_loaded(::Val{true}) = true
-using LegendDataManagement.LDMUtils: detector2channel, channel2detector
 using LegendDataManagement: RunCategorySelLike
 using LegendHDF5IO
 using LegendDataTypes: fast_flatten, flatten_by_key
@@ -10,38 +9,8 @@ using StructArrays
 using TypedTables, PropertyFunctions
 using Distributed, ProgressMeter
 
-const ChannelOrDetectorIdLike = Union{ChannelIdLike, DetectorIdLike}
-const AbstractDataSelectorLike = Union{AbstractString, Symbol, DataTierLike, DataCategoryLike, DataPeriodLike, DataRunLike, DataPartitionLike, ChannelOrDetectorIdLike}
-const PossibleDataSelectors = [DataTier, DataCategory, DataPeriod, DataRun, DataPartition, ChannelId, DetectorId]
-
-function _is_valid_id_or_tier(data::LegendData, rsel::Union{AnyValiditySelection, RunCategorySelLike}, id::ChannelOrDetectorIdLike)
-    if LegendDataManagement._can_convert_to(ChannelId, id) ||  LegendDataManagement._can_convert_to(DetectorId, id) ||  LegendDataManagement._can_convert_to(DataTier, id)
-        true  
-    else  
-        @warn "Skipped $id since it is neither a valid `ChannelId`, `DetectorId` nor a `DataTier`"  
-        false  
-    end  
-end
-
-function _get_channelid(data::LegendData, rsel::Union{AnyValiditySelection, RunCategorySelLike}, det::ChannelOrDetectorIdLike)
-    if LegendDataManagement._can_convert_to(ChannelId, det)
-        ChannelId(det)
-    elseif LegendDataManagement._can_convert_to(DetectorId, det)
-        detector2channel(data, rsel, det)
-    else
-        throw(ArgumentError("$det is neither a ChannelId nor a DetectorId"))
-    end
-end
-
-function _get_detectorid(data::LegendData, rsel::Union{AnyValiditySelection, RunCategorySelLike}, det::ChannelOrDetectorIdLike)
-    if LegendDataManagement._can_convert_to(DetectorId, det)
-        DetectorId(det)
-    elseif LegendDataManagement._can_convert_to(ChannelId, det)
-        channel2detector(data, rsel, det)
-    else
-        throw(ArgumentError("$det is neither a ChannelId nor a DetectorId"))
-    end
-end
+const AbstractDataSelectorLike = Union{AbstractString, Symbol, DataTierLike, DataCategoryLike, DataPeriodLike, DataRunLike, DataPartitionLike, DetectorIdLike}
+const PossibleDataSelectors = [DataTier, DataCategory, DataPeriod, DataRun, DataPartition, DetectorId]
 
 
 const dataselector_bytypes = Dict{Type, String}()
@@ -146,7 +115,6 @@ function __init__()
     (@isdefined DataCategory) && extend_datatype_dict(DataCategory, "datacategory")
     (@isdefined Timestamp) && extend_datatype_dict(Timestamp, "timestamp")
     (@isdefined FileKey) && extend_datatype_dict(FileKey, "filekey")
-    (@isdefined ChannelId) && extend_datatype_dict(ChannelId, "channelid")
     (@isdefined DetectorId) && extend_datatype_dict(DetectorId, "detectorid")
     (@isdefined DataPartition) && extend_datatype_dict(DataPartition, "datapartition")
 end
@@ -179,16 +147,12 @@ _load_all_keys(x, n_evts::Int=-1) = x
 
 const _evt_tiers = DataTier.([:jlevt, :jlskm])
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, ChannelOrDetectorIdLike}; filterby::Base.Callable=Returns(true), filtertier::DataTierLike=first(rsel), n_evts::Int=-1, ignore_missing::Bool=false, parallel::Bool=false, wpool::WorkerPool=default_worker_pool())
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, DetectorIdLike}; filterby::Base.Callable=Returns(true), filtertier::DataTierLike=first(rsel), n_evts::Int=-1, ignore_missing::Bool=false, parallel::Bool=false, wpool::WorkerPool=default_worker_pool())
     tier, filekey = DataTier(rsel[1]), rsel[2]
 
-    det = if !isempty(string((rsel[3])))
-            _get_detectorid(data, rsel[2], rsel[3])
-        else
-            rsel[3]
-    end
+    det = !isempty(string(rsel[3])) ? DetectorId(rsel[3]) : rsel[3]
     det_tier = tier in _evt_tiers ? "/$tier" : "$det/$tier"
-    
+
     data_tier = _lh5_data_open(data, tier, filekey, det) do h
         if !isempty(string(det)) && !(tier in _evt_tiers) && !haskey(h, "$det")
             if ignore_missing
@@ -198,7 +162,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
                 throw(ArgumentError("Detector $det not found in $(basename(string(h.data_store)))"))
             end
         end
-        
+
         # load detector data
         if f isa PropSelFunction && filterby == Returns(true)
             # if no filter given optimize performance for property selection functions by only loading required columns
@@ -222,9 +186,9 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
             end
         end
     end
+    # jlevt+det: keep events where the detector triggered (per-event entry in trig_e_det).
     if tier in _evt_tiers && !isempty(string(det))
-        ch = _get_channelid(data, filekey, det)
-        data_tier[any.(map.(isequal(Int(ch)), data_tier.geds.trig_e_ch))]
+        data_tier[any.(map.(isequal(det), data_tier.geds.trig_e_det))]
     else
         data_tier
     end
@@ -234,22 +198,23 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     ids = _lh5_data_open(data, rsel[1], rsel[2], "") do h
         keys(h)
     end
-    ids = filter(x -> _is_valid_id_or_tier(data, rsel[2], x), ids)
+    # Top-level keys are either the tier itself (event-tier files) or detector ids.
+    valid(x) = LegendDataManagement._can_convert_to(DetectorId, x) ||
+               LegendDataManagement._can_convert_to(DataTier, x)
+    ids = filter(valid, ids)
     @debug "Found keys: $ids"
     if length(ids) == 1
         if string(only(ids)) == string(rsel[1])
             LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], ""); kwargs...)
-        elseif LegendDataManagement._can_convert_to(ChannelId, only(ids)) || LegendDataManagement._can_convert_to(DetectorId, only(ids))
-            LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], string(only(ids))); kwargs...)
         else
-            throw(ArgumentError("No tier channel or detector found in $(basename(string(h.data_store)))"))
+            LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], string(only(ids))); kwargs...)
         end
     else
-        NamedTuple{Tuple(Symbol.(ids))}([LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], ch); kwargs...) for ch in ids])
+        NamedTuple{Tuple(Symbol.(ids))}([LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], d); kwargs...) for d in ids])
     end
 end
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, AbstractVector{FileKey}, ChannelOrDetectorIdLike}; parallel::Bool=false, wpool::WorkerPool=default_worker_pool(), kwargs...)
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, AbstractVector{FileKey}, DetectorIdLike}; parallel::Bool=false, wpool::WorkerPool=default_worker_pool(), kwargs...)
     first_fk = first(rsel[2])
     p = Progress(length(rsel[2]), desc="Reading from $(first_fk.setup)-$(first_fk.period)-$(first_fk.run)-$(first_fk.category)", showspeed=true)
     lflatten(if parallel
@@ -294,32 +259,22 @@ LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{
     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], rsel[3], rsel[4], ""); kwargs...)
 
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPartition, ChannelOrDetectorIdLike}; kwargs...)
-    first_run = first(LegendDataManagement._get_partitions(data, :default, rsel[2])[rsel[3]])
-    ch = _get_channelid(data, (first_run.period, first_run.run, rsel[2]), rsel[4])
-    pinfo = partitioninfo(data, ch, rsel[3])
-    @assert ch == _get_channelid(data, (first(pinfo).period, first(pinfo).run, rsel[2]), rsel[4]) "Channel mismatch in partitioninfo"
-    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], pinfo, ch); kwargs...)
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPartition, DetectorIdLike}; kwargs...)
+    pinfo = partitioninfo(data, DetectorId(rsel[4]), rsel[3])
+    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], pinfo, rsel[4]); kwargs...)
 end
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPeriod, ChannelOrDetectorIdLike}; kwargs...)
-    rinfo = runinfo(data, rsel[3])
-    first_run = first(rinfo)
-    ch = if !isempty(string(rsel[4]))
-        _get_channelid(data, (first_run.period, first_run.run, rsel[2]), rsel[4])
-    else
-        string(rsel[4])
-    end
-    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], rinfo, ch); kwargs...)
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPeriod, DetectorIdLike}; kwargs...)
+    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], runinfo(data, rsel[3]), rsel[4]); kwargs...)
 end
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPeriod, DataRun, ChannelOrDetectorIdLike}; kwargs...)
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPeriod, DataRun, DetectorIdLike}; kwargs...)
     fks = search_disk(FileKey, data.tier[rsel[1], rsel[2], rsel[3], rsel[4]])
-    ch = rsel[5]
-    if isempty(fks) && isfile(data.tier[rsel[1:4]..., ch])
-        LegendDataManagement.read_ldata(f, data, (rsel[1], start_filekey(data, (rsel[3], rsel[4], rsel[2])), ch); kwargs...)
+    det = rsel[5]
+    if isempty(fks) && isfile(data.tier[rsel[1:4]..., det])
+        LegendDataManagement.read_ldata(f, data, (rsel[1], start_filekey(data, (rsel[3], rsel[4], rsel[2])), det); kwargs...)
     elseif !isempty(fks)
-        LegendDataManagement.read_ldata(f, data, (rsel[1], fks, ch); kwargs...)
+        LegendDataManagement.read_ldata(f, data, (rsel[1], fks, det); kwargs...)
     else
         throw(ArgumentError("No filekeys found for $(rsel[2]) $(rsel[3]) $(rsel[4])"))
     end
@@ -329,7 +284,7 @@ end
 ### DataPartition
 const _partinfo_required_cols = NamedTuple{(:period, :run), Tuple{DataPeriod, DataRun}}
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, DataCategoryLike, Table{_partinfo_required_cols}, ChannelOrDetectorIdLike}; parallel::Bool=false, wpool::WorkerPool=default_worker_pool(), kwargs...)
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, DataCategoryLike, Table{_partinfo_required_cols}, DetectorIdLike}; parallel::Bool=false, wpool::WorkerPool=default_worker_pool(), kwargs...)
     p = Progress(length(rsel[3]), desc="Reading from $(length(rsel[3])) runs", showspeed=true)
     lflatten(if parallel
                 # TODO: Check if wpool is connected via :master_worker if myid() != 1
@@ -348,7 +303,7 @@ end
 LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, DataCategoryLike, Table{_partinfo_required_cols}}; kwargs...) =
     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], rsel[3], ""); kwargs...)
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, DataCategoryLike, Table, ChannelOrDetectorIdLike}; kwargs...)
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, DataCategoryLike, Table, DetectorIdLike}; kwargs...)
     @assert (hasproperty(rsel[3], :period) && hasproperty(rsel[3], :run)) "Runtable doesn't provide periods and runs"
     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], Table(period = rsel[3].period, run = rsel[3].run), rsel[4]); kwargs...)
 end
