@@ -125,6 +125,14 @@ end
 const _evt_tiers = DataTier.([:jlevt, :jlskm, :jlpmt])
 const _perdet_tiers = DataTier.([:jlpeaks, :jlhit, :jlpls])
 
+# For cross-tier filtering: name of the per-det column in an event tier that
+# indexes into raw/jldsp rows for a given system.
+const _evt_idx_col = Dict{Symbol,Symbol}(
+    :geds => :geds_dataidx,
+    :spms => :spms_dataidx,
+    :pmts => :dataidx,
+)
+
 # Inner LH5 path that holds per-detector data (a `detector` or `trig_e_det`
 # VoV) for a given (evt-tier, system) combination. `nothing` ⇒ this combo has
 # no per-det slicing and the caller must reject.
@@ -321,10 +329,26 @@ function _resolve_perdet_path(h, tier::DataTier, det::DetectorId)
     nothing
 end
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, DetectorIdLike}; filterby::Base.Callable=Returns(true), n_evts::Int=-1, ignore_missing::Bool=false, subgroup::Union{Symbol,Nothing}=nothing, kwargs...)
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, DetectorIdLike}; filterby::Base.Callable=Returns(true), filtertier::Union{DataTierLike,Nothing}=nothing, n_evts::Int=-1, ignore_missing::Bool=false, subgroup::Union{Symbol,Nothing}=nothing, kwargs...)
     tier, filekey = DataTier(rsel[1]), rsel[2]
     has_det = !isempty(string(rsel[3]))
     det_arg = has_det ? DetectorId(rsel[3]) : nothing
+
+    # Cross-tier filter: get per-det row indices from filtertier (an evt tier),
+    # then load the target tier and slice. dataidx is 1-based for both raw and
+    # jldsp, so it indexes directly without offset.
+    if filtertier !== nothing && DataTier(filtertier) != tier
+        has_det || throw(ArgumentError("filtertier requires a DetectorId"))
+        ftier = DataTier(filtertier)
+        ftier in _evt_tiers || throw(ArgumentError("filtertier must be an event tier (got :$ftier)"))
+        sys = channelinfo(data, filekey, det_arg).system
+        idx_col = get(_evt_idx_col, sys, nothing)
+        idx_col === nothing && throw(ArgumentError("No index column known for system :$sys"))
+        idxs = getproperty(LegendDataManagement.read_ldata((idx_col,), data, (ftier, filekey, det_arg); filterby), idx_col)
+        tbl = LegendDataManagement.read_ldata(f, data, (tier, filekey, det_arg); ignore_missing, subgroup, kwargs...)
+        sliced = tbl[idxs]
+        return n_evts > 0 ? sliced[1:min(n_evts, length(sliced))] : sliced
+    end
 
     _lh5_data_open(data, tier, filekey, det_arg) do h
         if tier in _evt_tiers
