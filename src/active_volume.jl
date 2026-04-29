@@ -34,7 +34,7 @@ function get_extra_volume(geometry::PropDict, ::Val{:topgroove}, fccd::AbstractF
     # Find a picture of the definition of topgroove here:
     # https://github.com/legend-exp/legend-metadata/blob/archived/hardware/detectors/detector-metadata_4.pdf
     rb = geometry.borehole.radius_in_mm
-    db = geometry.borehole.radius_in_mm
+    db = geometry.borehole.depth_in_mm
     rg = geometry.extra.topgroove.radius_in_mm
     dg = geometry.extra.topgroove.depth_in_mm
     db <= dg && @warn "The depth of the borehole ($(db)mm) should be bigger than the depth of the topgroove ($(dg)mm)."

@@ -260,19 +260,25 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
     li_thickness =  dl_thickness_in_mm
     pp_thickness = DEFAULT_P_THICKNESS_IN_MM
 
-    crystal_radius = diode_meta.geometry.radius_in_mm
-    crystal_height = diode_meta.geometry.height_in_mm
+    geo = diode_meta.geometry
+    crystal_radius = geo.radius_in_mm
+    crystal_height = geo.height_in_mm
 
-    pp_radius = diode_meta.geometry.pp_contact.radius_in_mm
-    pp_depth = diode_meta.geometry.pp_contact.depth_in_mm
+    pp_radius = geo.pp_contact.radius_in_mm
+    pp_depth = geo.pp_contact.depth_in_mm
     
     is_coax = diode_meta.type == "coax"
-    has_extras = haskey(diode_meta.geometry, :extra)
-    has_bottom_cylinder = has_extras && haskey(diode_meta.geometry.extra, :bottom_cylinder)
-    has_top_groove = has_extras && haskey(diode_meta.geometry.extra, :topgroove)
-    has_top_cylinder = has_extras && haskey(diode_meta.geometry.extra, :top_cylinder)
-    has_crack = has_extras && haskey(diode_meta.geometry.extra, :crack)
+    has_extras = haskey(geo, :extra)
+    has_bottom_cylinder = has_extras && haskey(geo.extra, :bottom_cylinder) && geo.extra.bottom_cylinder.radius_in_mm != crystal_radius
+    has_top_groove = has_extras && haskey(geo.extra, :topgroove)
+    has_top_cylinder = has_extras && haskey(geo.extra, :top_cylinder) && geo.extra.top_cylinder.radius_in_mm != crystal_radius
+    has_crack = has_extras && haskey(geo.extra, :crack)
     @assert !(has_top_cylinder && has_bottom_cylinder) "Having both a top and bottom cylinder is not supported."
+
+    bottom_cyl_radius = has_bottom_cylinder ? geo.extra.bottom_cylinder.radius_in_mm : crystal_radius 
+    top_cyl_radius =  has_top_cylinder ? geo.extra.top_cylinder.radius_in_mm : crystal_radius 
+
+    world_radius = 1.2 * maximum([crystal_radius, top_cyl_radius, bottom_cyl_radius])
 
     config_dict = dicttype(
         "name" => diode_meta.name,
@@ -286,7 +292,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
             "coordinates" => "cylindrical",
             "axes" => dicttype(
                 "r" => dicttype(
-                    "to" => crystal_radius * 1.2,
+                    "to" => world_radius,
                     "boundaries" => "inf"
                 ),
                 "phi" => dicttype(
@@ -318,13 +324,11 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
         ))
     
     # main crystal
-    bottom_cyl_radius = has_bottom_cylinder ? diode_meta.geometry.extra.bottom_cylinder.radius_in_mm : crystal_radius 
-    top_cyl_radius =  has_top_cylinder ? diode_meta.geometry.extra.top_cylinder.radius_in_mm : crystal_radius 
     bottom_cyl_height = if has_bottom_cylinder 
-        diode_meta.geometry.extra.bottom_cylinder.height_in_mm 
+        geo.extra.bottom_cylinder.height_in_mm 
     else 
         if has_top_cylinder
-            crystal_height - diode_meta.geometry.extra.top_cylinder.height_in_mm - get(diode_meta.geometry.extra.top_cylinder, :transition_in_mm, 0)
+            crystal_height - geo.extra.top_cylinder.height_in_mm - get(geo.extra.top_cylinder, :transition_in_mm, 0)
         else
              crystal_height
         end
@@ -335,8 +339,8 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
         "origin" => [0, 0, bottom_cyl_height / 2]
     ))
     if has_top_cylinder ⊻ has_bottom_cylinder
-        transiton_cyl_height = get(has_top_cylinder ? diode_meta.geometry.extra.top_cylinder : diode_meta.geometry.extra.bottom_cylinder, :transition_in_mm, 0)
-        top_cyl_height = has_top_cylinder ? diode_meta.geometry.extra.top_cylinder.height_in_mm : crystal_height - bottom_cyl_height - transiton_cyl_height
+        transiton_cyl_height = get(has_top_cylinder ? geo.extra.top_cylinder : geo.extra.bottom_cylinder, :transition_in_mm, 0)
+        top_cyl_height = has_top_cylinder ? geo.extra.top_cylinder.height_in_mm : crystal_height - bottom_cyl_height - transiton_cyl_height
         semiconductor_geometry_additions = [
                     dicttype("cone" => dicttype(
                 "r" => top_cyl_radius,
@@ -361,14 +365,14 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
     semiconductor_geometry_subtractions = []
     begin
         # borehole
-        has_borehole = hasproperty(diode_meta.geometry, :borehole)
+        has_borehole = hasproperty(geo, :borehole)
         borehole_radius = 0
         if is_coax && !has_borehole
             error("Coax detectors should have boreholes")
         end
         if has_borehole
-            borehole_depth = diode_meta.geometry.borehole.depth_in_mm
-            borehole_radius = diode_meta.geometry.borehole.radius_in_mm
+            borehole_depth = geo.borehole.depth_in_mm
+            borehole_radius = geo.borehole.radius_in_mm
             push!(semiconductor_geometry_subtractions, dicttype("cone" => dicttype(
                 "r" => borehole_radius,
                 "h" => borehole_depth + 2*gap,
@@ -386,16 +390,16 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
         end
         
         # borehole taper
-        has_borehole_taper = hasproperty(diode_meta.geometry.taper, :borehole)
+        has_borehole_taper = hasproperty(geo.taper, :borehole)
         borehole_taper_height = 0
         borehole_taper_angle = 0
         if has_borehole_taper
-            borehole_taper_height = diode_meta.geometry.taper.borehole.height_in_mm
-            if hasproperty(diode_meta.geometry.taper.borehole, :radius_in_mm)
-                borehole_taper_radius = diode_meta.geometry.taper.borehole.radius_in_mm
+            borehole_taper_height = geo.taper.borehole.height_in_mm
+            if hasproperty(geo.taper.borehole, :radius_in_mm)
+                borehole_taper_radius = geo.taper.borehole.radius_in_mm
                 borehole_taper_angle = atand(borehole_taper_radius, borehole_taper_height)
-            elseif hasproperty(diode_meta.geometry.taper.borehole, :angle_in_deg)
-                borehole_taper_angle = diode_meta.geometry.taper.borehole.angle_in_deg
+            elseif hasproperty(geo.taper.borehole, :angle_in_deg)
+                borehole_taper_angle = geo.taper.borehole.angle_in_deg
                 borehole_taper_radius = borehole_taper_height * tand(borehole_taper_angle)
             else
                 error("The borehole taper needs either radius_in_mm or angle_in_deg")
@@ -425,16 +429,16 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
         end
 
         # top taper
-        has_top_taper = hasproperty(diode_meta.geometry.taper, :top)
+        has_top_taper = hasproperty(geo.taper, :top)
         top_taper_height = 0
         top_taper_angle = 0
         if has_top_taper
-            top_taper_height = diode_meta.geometry.taper.top.height_in_mm
-            if hasproperty(diode_meta.geometry.taper.top, :radius_in_mm)
-                top_taper_radius = diode_meta.geometry.taper.top.radius_in_mm
+            top_taper_height = geo.taper.top.height_in_mm
+            if hasproperty(geo.taper.top, :radius_in_mm)
+                top_taper_radius = geo.taper.top.radius_in_mm
                 top_taper_angle = atand(top_taper_radius, top_taper_height)
-            elseif hasproperty(diode_meta.geometry.taper.top, :angle_in_deg)
-                top_taper_angle = diode_meta.geometry.taper.top.angle_in_deg
+            elseif hasproperty(geo.taper.top, :angle_in_deg)
+                top_taper_angle = geo.taper.top.angle_in_deg
                 top_taper_radius = top_taper_height * tand(top_taper_angle)
             else
                 error("The top taper needs either radius_in_mm or angle_in_deg")
@@ -466,16 +470,16 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
         end
 
         # bot outer taper
-        has_bot_taper = hasproperty(diode_meta.geometry.taper, :bottom)
+        has_bot_taper = hasproperty(geo.taper, :bottom)
         bot_taper_height = 0
         bot_taper_angle = 0
         if has_bot_taper
-            bot_taper_height = diode_meta.geometry.taper.bottom.height_in_mm
-            if hasproperty(diode_meta.geometry.taper.bottom, :radius_in_mm)
-                bot_taper_radius = diode_meta.geometry.taper.bottom.radius_in_mm
+            bot_taper_height = geo.taper.bottom.height_in_mm
+            if hasproperty(geo.taper.bottom, :radius_in_mm)
+                bot_taper_radius = geo.taper.bottom.radius_in_mm
                 bot_taper_angle = atand(bot_taper_radius, bot_taper_height)
-            elseif hasproperty(diode_meta.geometry.taper.bottom, :angle_in_deg)
-                bot_taper_angle = diode_meta.geometry.taper.bottom.angle_in_deg
+            elseif hasproperty(geo.taper.bottom, :angle_in_deg)
+                bot_taper_angle = geo.taper.bottom.angle_in_deg
                 bot_taper_radius = bot_taper_height * tand(bot_taper_angle)
             else
                 error("The bottom outer tape needs either radius_in_mm or angle_in_deg")
@@ -505,11 +509,11 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
             end
         end
         # groove
-        has_groove = hasproperty(diode_meta.geometry, :groove)
+        has_groove = hasproperty(geo, :groove)
         if has_groove
-            groove_inner_radius = diode_meta.geometry.groove.radius_in_mm.inner
-            groove_outer_radius = diode_meta.geometry.groove.radius_in_mm.outer
-            groove_depth = diode_meta.geometry.groove.depth_in_mm
+            groove_inner_radius = geo.groove.radius_in_mm.inner
+            groove_outer_radius = geo.groove.radius_in_mm.outer
+            groove_depth = geo.groove.depth_in_mm
             has_groove = groove_outer_radius > 0 && groove_depth > 0 && groove_inner_radius > 0
             if has_groove
                 hZ = groove_depth / 2 + gap
@@ -526,8 +530,8 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
             end
         end
         if has_top_groove
-            top_groove_radius = diode_meta.geometry.extra.topgroove.radius_in_mm
-            top_groove_height = diode_meta.geometry.extra.topgroove.depth_in_mm
+            top_groove_radius = geo.extra.topgroove.radius_in_mm
+            top_groove_height = geo.extra.topgroove.depth_in_mm
             push!(semiconductor_geometry_subtractions, dicttype(
                     "tube" => dicttype(
                         "r" => top_groove_radius,
@@ -550,7 +554,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
     end
     
     # bulletization
-    # is_bulletized = !all(values(diode_meta.geometry.bulletization) .== 0)
+    # is_bulletized = !all(values(geo.bulletization) .== 0)
     # is_bulletized && @warn "Bulletization is not implemented yet, ignore for now."
 
     ### P+ CONTACT ###
@@ -774,12 +778,12 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
         mantle_contact_parts
     end
 
-    if haskey(diode_meta.geometry, :extra) 
-        if haskey(diode_meta.geometry.extra, :crack)
+    if haskey(geo, :extra) 
+        if haskey(geo.extra, :crack)
             
             # cut the crack volume from the semiconductor
-            radius_crack = diode_meta.geometry.extra.crack.radius_in_mm
-            α = diode_meta.geometry.extra.crack.angle_in_deg
+            radius_crack = geo.extra.crack.radius_in_mm
+            α = geo.extra.crack.angle_in_deg
             
 
             crack_cutout = dicttype(
@@ -833,7 +837,6 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
                     )
                 ]
             )
-
             # make sure that the simulation is performed in 3D
             config_dict["grid"]["axes"]["phi"]["to"] = 360
         end
