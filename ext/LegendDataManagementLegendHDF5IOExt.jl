@@ -122,8 +122,21 @@ end
 # Tier classes drive dispatch: per-det tiers live in per-detector files; evt
 # tiers in shared files. raw and jldsp aren't listed — they're shared files
 # but reach detectors via inner paths (handled by _resolve_perdet_path).
-const _evt_tiers = DataTier.([:jlevt, :jlskm])
+const _evt_tiers = DataTier.([:jlevt, :jlskm, :jlpmt])
 const _perdet_tiers = DataTier.([:jlpeaks, :jlhit, :jlpls])
+
+# Inner LH5 path that holds per-detector data (a `detector` or `trig_e_det`
+# VoV) for a given (evt-tier, system) combination. `nothing` ⇒ this combo has
+# no per-det slicing and the caller must reject.
+function _evt_persubdet_path(tier::DataTier, sys::Symbol)
+    if tier == DataTier(:jlevt) || tier == DataTier(:jlskm)
+        sys == :geds && return "$tier/geds"
+        sys == :spms && return "$tier/spms"
+    elseif tier == DataTier(:jlpmt)
+        sys == :pmts && return "$tier"
+    end
+    return nothing
+end
 
 # Open the LH5 file for (tier, filekey). Per-det tiers also need a det.
 function _lh5_data_open(f::Function, data::LegendData, tier::DataTierLike, filekey::FileKey, det::Union{DetectorIdLike, Nothing}=nothing, mode::AbstractString="r")
@@ -174,6 +187,130 @@ function _apply_read(h_node, f::Base.Callable, filterby::Base.Callable, n_evts::
     end
 end
 
+# Walk an event-tier HDF5 group into a flat name-map
+# `prefix_name => (h5_path, leaf_col_symbol)`. Top-level scalars/VoVs keep
+# their bare name; sub-table columns are namespaced as `<sub>_<col>` (e.g.
+# `aux/pulser/aux_trig` → `aux_pulser_aux_trig`). VoV groups are detected
+# via the `cumulative_length` / `encoded_data` markers and treated as leaves.
+function _build_evt_namemap(h::LegendHDF5IO.LHDataStore, tier::DataTier)
+    nmap = Dict{Symbol, Tuple{String, Symbol}}()
+    h5_grp = h.data_store["$tier"]
+    try
+        _walk_evt_h5!(nmap, h5_grp, "$tier", "")
+    finally
+        close(h5_grp)
+    end
+    nmap
+end
+
+function _walk_evt_h5!(out::Dict, group, base_path::String, prefix::String)
+    for k in keys(group)
+        full_name = isempty(prefix) ? Symbol(k) : Symbol(prefix, "_", k)
+        child = group[k]
+        try
+            if child isa LegendHDF5IO.HDF5.Dataset
+                out[full_name] = (base_path, Symbol(k))
+            elseif child isa LegendHDF5IO.HDF5.Group
+                ck = keys(child)
+                if "cumulative_length" in ck || "encoded_data" in ck
+                    out[full_name] = (base_path, Symbol(k))
+                else
+                    new_prefix = isempty(prefix) ? string(k) : "$(prefix)_$(k)"
+                    _walk_evt_h5!(out, child, "$base_path/$k", new_prefix)
+                end
+            end
+        finally
+            close(child)
+        end
+    end
+end
+
+# Index a per-event column at the detector's per-event slot. Per-trigger and
+# per-det-list VoVs are distinguished by matching the materialized inner
+# lengths against the two reference length vectors; columns whose shape
+# matches neither (or are scalar) are returned as-is.
+function _index_col(col, det_idxs, trig_idxs, det_inner_lens, trig_inner_lens)
+    eltype(col) <: AbstractVector || return col
+    inner_lens = length.(col)
+    if det_inner_lens !== nothing && inner_lens == det_inner_lens
+        return [col[k][det_idxs[k]] for k in eachindex(col)]
+    elseif trig_inner_lens !== nothing && inner_lens == trig_inner_lens
+        return [col[k][trig_idxs[k]] for k in eachindex(col)]
+    else
+        return col
+    end
+end
+
+# Read a flat-prefixed event-tier table for one detector. Mask = events where
+# the detector is present; preferred via `trig_e_det` (per-trigger view, GEDs)
+# and falling back to `detector` (SPMs/PMTs). For surviving events, per-det-
+# list and per-trigger VoV columns are unwrapped at the detector's index;
+# event-scalar columns from any sub-group ride through unchanged.
+function _read_evt_table(h::LegendHDF5IO.LHDataStore, data::LegendData, filekey::FileKey,
+        tier::DataTier, det::DetectorId, f::Base.Callable,
+        filterby::Base.Callable, n_evts::Int)
+
+    nmap = _build_evt_namemap(h, tier)
+
+    sys = channelinfo(data, filekey, det).system
+    persubdet_path = _evt_persubdet_path(tier, sys)
+    persubdet_path === nothing &&
+        error("read_ldata(:$tier, ..., $det): no per-det data in $tier for system :$sys")
+    haskey(h, persubdet_path) ||
+        error("read_ldata(:$tier, ..., $det): /$persubdet_path missing in file")
+    psd = h[persubdet_path]
+
+    # Per-event slot of `det`: from `trig_e_det` if present (drops events
+    # where the detector did not trigger), else from `detector`. Either way
+    # the chosen list also defines the event mask.
+    mask = nothing
+    det_idxs = trig_idxs = nothing
+    det_inner_lens = trig_inner_lens = nothing
+    if hasproperty(psd, :trig_e_det)
+        tl = getproperty(psd, :trig_e_det)[:]
+        keep = [findfirst(isequal(det), t) for t in tl]
+        mask = .!isnothing.(keep)
+        trig_idxs = Int.(keep[mask])
+        trig_inner_lens = length.(tl[mask])
+    end
+    if hasproperty(psd, :detector)
+        dl = getproperty(psd, :detector)[:]
+        keep = [findfirst(isequal(det), t) for t in dl]
+        mask === nothing && (mask = .!isnothing.(keep))
+        det_idxs = Int.(keep[mask])
+        det_inner_lens = length.(dl[mask])
+    end
+    mask === nothing &&
+        error("read_ldata(:$tier, ..., $det): /$persubdet_path has neither :detector nor :trig_e_det")
+
+    function load_col(name::Symbol)
+        haskey(nmap, name) ||
+            error("column $name not found in /$tier (available: $(sort(collect(keys(nmap)))))")
+        (path, col) = nmap[name]
+        masked = getproperty(h[path], col)[:][mask]
+        path == persubdet_path ? _index_col(masked, det_idxs, trig_idxs, det_inner_lens, trig_inner_lens) : masked
+    end
+
+    # Fast path: load only columns referenced by PropSel + filterby.
+    if f isa PropSelFunction && (filterby isa PropertyFunctions.PropertyFunction || filterby === Returns(true))
+        src_cols = _propfunc_src_columnnames(f)
+        trg_cols = _propfunc_trg_columnnames(f)
+        filt_cols = _propfunc_src_columnnames(filterby)
+        needed = Tuple(unique((src_cols..., filt_cols...)))
+        cols = map(load_col, needed)
+        tbl = Table(NamedTuple{needed}(cols))
+        filt_tbl = filterby === Returns(true) ? tbl : tbl[coalesce.(filterby.(tbl), false)]
+        n_evts > 0 && (filt_tbl = filt_tbl[1:min(n_evts, length(filt_tbl))])
+        out_cols = Tuple(getproperty(filt_tbl, c) for c in src_cols)
+        return Table(NamedTuple{trg_cols}(out_cols))
+    end
+
+    # Eager fallback: materialize every column, then apply f / filterby.
+    all_names = Tuple(sort(collect(keys(nmap))))
+    cols = map(load_col, all_names)
+    _apply_read(Table(NamedTuple{all_names}(cols)), f, filterby, n_evts)
+end
+
 # Resolve the inner HDF5 path for (tier, det). Primary: "tier/det" (current
 # layout). Fallback: "det/tier" (legacy). "tier" alone covers struct-view files
 # like raw/jldsp where the per-det entry is itself the tier root.
@@ -189,11 +326,12 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     has_det = !isempty(string(rsel[3]))
     det_arg = has_det ? DetectorId(rsel[3]) : nothing
 
-    data_tier = _lh5_data_open(data, tier, filekey, det_arg) do h
+    _lh5_data_open(data, tier, filekey, det_arg) do h
         if tier in _evt_tiers
-            # Evt-tier no-det reads return the whole tier table; per-det reads
-            # are post-filtered below to events where the detector triggered.
-            _apply_read(h["$tier"], f, filterby, n_evts)
+            # No-det → return the native nested LH5 (e.g. evt.aux.pulser.aux_trig).
+            # With-det → flat-prefixed table from _read_evt_table.
+            has_det || return _apply_read(h["$tier"], f, filterby, n_evts)
+            _read_evt_table(h, data, filekey, tier, det_arg, f, filterby, n_evts)
         else
             has_det || throw(ArgumentError("DetectorId required for tier $tier"))
             path = _resolve_perdet_path(h, tier, det_arg)
@@ -206,11 +344,6 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
             haskey(h, full) || throw(ArgumentError("Subgroup $subgroup not found at $path in $(basename(string(h.data_store)))"))
             _apply_read(h[full], f, filterby, n_evts)
         end
-    end
-    if tier in _evt_tiers && has_det
-        data_tier[any.(map.(isequal(det_arg), data_tier.geds.trig_e_det))]
-    else
-        data_tier
     end
 end
 
