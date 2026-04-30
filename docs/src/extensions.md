@@ -62,58 +62,167 @@ The following additional keywords arguments can be set (the `plot_waveform` kwar
 
 ## `LegendHDF5IO` extension
 
-LegendDataManagment provides an extension for [LegendHDF5IO](https://github.com/legend-exp/LegendHDF5IO.jl).
-This makes it possible to directly load LEGEND data from HDF5 files via the `read_ldata` function. The extension is automatically loaded when both packages are loaded. 
-Example (requires a `$LEGEND_DATA_CONFIG` environment variable pointing to a legend data-config file):
-    
+LegendDataManagement provides an extension for [LegendHDF5IO](https://github.com/legend-exp/LegendHDF5IO.jl) that exposes `read_ldata` for loading LEGEND data from HDF5 files. The extension auto-loads when both packages are loaded. All examples assume `$LEGEND_DATA_CONFIG` is set.
+
 ```julia
-using LegendDataManagement, LegendHDF5IO
+using LegendDataManagement, LegendHDF5IO, PropertyFunctions
+using Unitful: @u_str
+
 l200 = LegendData(:l200)
-filekeys = search_disk(FileKey, l200.tier[:jldsp, :cal, :p03, :r000])
-
-chinfo = channelinfo(l200, (:p03, :r000, :cal); system=:geds, only_processable=true)
-
-ch = chinfo[1].channel
-
-dsp = read_ldata(l200, :jldsp, first(filekeys), ch)
-dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, ch)
-dsp = read_ldata((:e_cusp, :e_trap, :blmean, :blslope), l200, :jldsp, :cal, :p03, :r000, ch)
+fk   = first(search_disk(FileKey, l200.tier[:jldsp, :cal, :p03, :r000]))
+det  = first(filter(c -> c.system == :geds && c.processable, channelinfo(l200, fk))).detector
 ```
-`read_ldata` automitcally loads LEGEND data for a specific `DataTier` and data selection like e.g. a `FileKey` or a run-selection based for a given `ChannelId`. The `search_disk` function allows the user to search for available `DataTier` and `FileKey` on disk. The first argument can be either a selection of keys in form of a `NTuple` of `Symbol` or a [PropertyFunction](https://github.com/oschulz/PropertyFunctions.jl/tree/main) which will be applied during loading. 
-It is also possible to load whole a `DataPartition` or `DataPeriod` for a given `ChannelId` ch:
+
+### Selecting columns
+
+Three equivalent forms (all return a `Table`):
+
 ```julia
-dsp = read_ldata(l200, :jldsp, :cal, DataPartition(1), ch)
-dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), ch)
+read_ldata(l200, :jldsp, fk, det)                                       # all columns
+read_ldata((:e_cusp, :timestamp), l200, (:jldsp, fk, det))              # tuple of names
+read_ldata(@pf((; $e_cusp, $timestamp)), l200, (:jldsp, fk, det))       # PropSel via @pf
 ```
-In additon, it is possible to load a random selection of `n_evts` events randomly selected from each loaded file:
-```julia
-dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, ch; n_evts=1000)
-```
-For simplicity, the ch can also be given as a `DetectorID` which will be converted internally to a `ChannelId`:
-```julia
-det = chinfo[1].detector
-dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, det)
-```
-In case, a `ChannelId` is missing in a file, the function will throw an `ArgumentError`. To avoid this and return `nothing` instead, you can use the `ignore_missing` keyword argument.
 
-The data can be filtered by a `filterby` keyword argument which is a [PropertyFunction](https://github.com/oschulz/PropertyFunctions.jl/tree/main) applied to each chunk of loaded data:
-```julia
-dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, ch; filterby=@pf($e_trap > 0.0))
-```
-This will only load data where the `e_trap` property is greater than 0.
+The PropSel form enables a fast path that only loads the requested leaf columns from disk; the tuple form is sugar for the same. A bare `Symbol` (`read_ldata(:e_cusp, l200, …)`) is sugar for `(:e_cusp,)`.
 
-It is possible to read in multiple files in parallel using the `Distributed` functionalities from within a session. You can activate parallel read with the `parallel` kwarg.
-``` julia
-dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), ch)
-dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), ch; parallel=true)
+### Per-detector slicing across tiers
+
+`read_ldata(_, l200, (tier, fk, det))` works for `:raw`, `:jldsp`, `:jlhit`, `:jlpls`, `:jlpeaks`, and the event tiers `:jlevt`, `:jlskm`, `:jlpmt`. The detector system (`:geds`, `:spms`, `:pmts`) is auto-detected from `channelinfo` — no need to pass it.
+
+| Tier              | With detector                                        | Without detector                       |
+|-------------------|------------------------------------------------------|----------------------------------------|
+| `raw`, `jldsp`    | per-detector Table                                   | NamedTuple of per-detector Tables      |
+| `jlhit`, `jlpls`  | per-detector Table (use `subgroup=` to descend)      | NamedTuple of per-detector Tables      |
+| `jlevt`, `jlskm`  | flat-prefixed Table for that detector                | nested LH5 view (multi-detector)       |
+| `jlpmt`           | per-PMT Table                                        | flat top-level Table (no `geds`/`spms`)|
+
+#### Per-detector event-tier read (flat-prefixed)
+
+```julia
+read_ldata((:geds_e_cusp_ctc_cal, :geds_trig_e_cusp_ctc_cal),
+           l200, (:jlevt, fk_phy, det))
 ```
-However, it is necessary that a worker allocation was already performed and the `LegendDataManagement` as well as `LegendHDF5IO` package is loaded on all workers, e.g. with
-``` julia
+
+Columns are flat-prefixed by sub-group: `geds_e_cusp_ctc_cal`, `geds_trig_e_cusp_ctc_cal`, `spms_trig_max_cal`, `aux_pulser_aux_trig`, `ged_spm_is_valid_lar`, … The name-map is built dynamically by walking the HDF5 group, so new sub-groups need no code change. Per-trigger and per-det-list VoVs are unwrapped at the detector's per-event slot, and only events where the detector triggered are kept.
+
+#### No-detector event-tier read (nested LH5)
+
+```julia
+evt = read_ldata(l200, :jlevt, fk_phy)
+evt.aux.pulser.aux_trig          # Vector{Bool}
+evt.geds.is_valid_qc             # Vector{Bool}
+evt.geds.detector                # VoV{DetectorId} — per event, list of triggered dets
+evt.geds.e_cusp_ctc_cal          # VoV{Float} — per event, list of energies
+```
+
+The native nested layout is preserved here; this matches the layout `process_evt_phy` etc. expect.
+
+#### Sub-group descent (`subgroup=`)
+
+For tiers that nest data inside per-detector groups (e.g. `jlhit/<det>/dataQC`):
+
+```julia
+read_ldata(@pf((; $e_cusp, $timestamp)), l200, (:jlhit, fk_cal, det); subgroup=:dataQC)
+read_ldata((:is_physical,),               l200, (:jlhit, fk_cal, det); subgroup=:qc)
+read_ldata((:daqenergy, :timestamp),      l200, (:jlpls, fk_cal, "PULS01"); subgroup=:tags)
+```
+
+#### Multi-detector discovery
+
+Calling `read_ldata(l200, tier, fk)` without a detector on a per-detector tier returns a `NamedTuple` keyed by detector id:
+
+```julia
+all = read_ldata(l200, :jldsp, fk_cal)      # NamedTuple — all dets in this filekey
+all.B00000C.e_cusp                          # access by detector name
+```
+
+### Filtering during the read
+
+`filterby` is a `PropertyFunction` applied row-wise to the loaded table; `missing` predicate values are dropped (same as `false`):
+
+```julia
+# Trigger-energy cut on top of the per-det mask
+read_ldata((:geds_e_cusp_ctc_cal,), l200, (:jlevt, fk_phy, det);
+           filterby = @pf $geds_is_valid_qc && $geds_trig_e_cusp_ctc_cal > 1500u"keV")
+
+# Cross-subgroup QC: geds + ged_spm + !aux_muonveto + !aux_pulser
+read_ldata((:geds_e_cusp_ctc_cal,), l200, (:jlevt, fk_phy, det);
+           filterby = @pf $geds_is_valid_qc && $ged_spm_is_valid_lar &&
+                          !$aux_muonveto_aux_trig && !$aux_pulser_aux_trig)
+
+# Bare-bool column: write `== true` (PropertyFunctions doesn't accept `@pf $x` alone)
+read_ldata((:e_cusp,), l200, (:jldsp, fk, det); filterby = @pf $is_valid_muon == true)
+```
+
+#### `@pf` flat names vs dot syntax
+
+- `@pf $geds_is_valid_qc` — single source column → `PropertyFunction` with one named source. The reader can match against on-disk columns and the **fast path** loads only what's needed. Use this with the per-detector flat-prefix Table.
+- `@pf $geds.is_valid_qc == true` — generic `getproperty` chain. Evaluated row-wise on the *whole* loaded object, so the fast path is bypassed. Use this on the no-detector nested LH5 view.
+
+### Cross-tier filter (`filtertier` kwarg)
+
+A per-detector raw/jldsp read can be filtered by a predicate evaluated on a different tier. Two modes, both keyed by the same detector:
+
+- **event tier → raw / jldsp** — slices via the per-det `*_detevtno` column (1-based, same for raw and jldsp). For `geds`: `geds_detevtno`; for `spms`: `spms_detevtno`; for `pmts`: `detevtno`.
+- **raw ↔ jldsp** — uses the 1:1 row alignment between raw and jldsp for a given detector and applies a `Bool` row-mask. Works for `phy` *and* `cal` (the latter has no jlevt — so `:jldsp` is the only useful filtertier there).
+
+```julia
+# Raw waveforms of phy events that pass an event-tier QC + energy cut
+read_ldata(@pf((; $waveform_presummed, $timestamp)),
+           l200, (:raw, fk_phy, det);
+           filterby   = @pf $geds_is_valid_qc && $geds_trig_e_cusp_ctc_cal > 1500u"keV",
+           filtertier = :jlevt)
+
+# jldsp filtered by an event-tier predicate
+read_ldata((:e_cusp, :t50), l200, (:jldsp, fk_phy, det);
+           filterby   = @pf $ged_spm_is_valid_lar == true,
+           filtertier = :jlevt)
+
+# Cal raw waveforms with a dsp-energy cut (cal has no jlevt)
+read_ldata((:waveform_presummed,), l200, (:raw, fk_cal, det);
+           filterby   = @pf $e_cusp > 1000,
+           filtertier = :jldsp)
+
+# Symmetric direction (jldsp filtered by raw column, e.g. daqenergy)
+read_ldata((:e_cusp,), l200, (:jldsp, fk_phy, det);
+           filterby   = (@pf $daqenergy > 100),
+           filtertier = :raw)
+```
+
+`filtertier` defaults to the current tier (no cross-tier slicing). It requires a detector and rejects non-event tiers as filtertier when the *target* is an event tier.
+
+### Run / period / partition selection
+
+```julia
+read_ldata(l200, :jldsp, fk, det)                            # one filekey
+read_ldata(l200, :jldsp, [fk1, fk2, fk3], det)               # multiple filekeys
+read_ldata(l200, :jldsp, :cal, :p03, :r000, det)             # one run (all filekeys)
+read_ldata(l200, :jldsp, :cal, DataPeriod(3),    det)        # one period
+read_ldata(l200, :jldsp, :cal, DataPartition(1), det)        # one partition
+```
+
+`PropSel`, `filterby` and `filtertier` work the same with all of these.
+
+#### Distributed reads
+
+Multi-filekey selectors accept `parallel=true` and a custom `wpool::WorkerPool`:
+
+```julia
 using Distributed
 addprocs(4)
 @everywhere using LegendDataManagement, LegendHDF5IO
+
+read_ldata((:e_cusp,), l200, (:jldsp, fks_phy, det);
+           filterby = @pf $e_cusp > 0, parallel=true)
 ```
-In addition, the `wpool`kwarg allows to parse a custome `WorkerPool` for more sophisticated load patterns.
+
+Workers must have both packages loaded. Without `parallel=true`, a sequential progress bar is shown; with it, `progress_pmap` distributes the per-filekey reads across the worker pool.
+
+### Other kwargs
+
+- `subgroup=:dataQC` — descend into a per-det sub-group (e.g. `jlhit/<det>/dataQC`).
+- `n_evts=1000` — random sample of `n_evts` rows per file (applied after `filterby`).
+- `ignore_missing=true` — return `nothing` instead of throwing when a detector is missing in a file.
 
 ## `SolidStateDetectors` extension
 
