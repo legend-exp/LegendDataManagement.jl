@@ -298,7 +298,7 @@ function _read_evt_table(h::LegendHDF5IO.LHDataStore, data::LegendData, filekey:
             error("column $name not found in /$tier (available: $(sort(collect(keys(nmap)))))")
         (path, col) = nmap[name]
         masked = getproperty(h[path], col)[:][mask]
-        path == persubdet_path ? _index_col(masked, det_idxs, trig_idxs, det_inner_lens, trig_inner_lens) : masked
+        _index_col(masked, det_idxs, trig_idxs, det_inner_lens, trig_inner_lens)
     end
 
     # Fast path: load only columns referenced by PropSel + filterby.
