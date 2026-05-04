@@ -23,9 +23,6 @@ geometry:
     top_cylinder:
       radius_in_mm: 20
       height_in_mm: 20
-    bottom_cylinder:
-      radius_in_mm: 20
-      height_in_mm: 20
 characterization:
   manufacturer:
     recommended_voltage_in_V: 4000.0
