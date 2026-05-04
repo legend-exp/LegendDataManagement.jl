@@ -126,20 +126,20 @@ function get_active_volume(pd::PropDict, ::Val{:icpc}, fccd::T = .0) where {T <:
     groove_volume = π * g.groove.depth_in_mm * (g.groove.radius_in_mm.outer^2 - g.groove.radius_in_mm.inner^2)
 
     # Top taper
-    α = g.taper.top.angle_in_deg / 360 * 2π
-    h = g.taper.top.height_in_mm + fccd * (1 - sin(α) - cos(α))/sin(α)
+    α = get(g.taper.top, :angle_in_deg, 0)/ 360 * 2π
+    h = get(g.taper.top, :height_in_mm, 0) + fccd * (1 - sin(α) - cos(α))/sin(α)
     x = h * tan(α)
     taper_top_volume = iszero(x) || !isfinite(x) ? zero(T) : get_outer_taper_volume(R, R - x, h)
     
     # Bottom taper
-    α = g.taper.bottom.angle_in_deg / 360 * 2π
-    h = g.taper.bottom.height_in_mm + fccd * (1 - sin(α) - cos(α))/sin(α)
+    α = get(g.taper.bottom, :angle_in_deg, 0)/ 360 * 2π
+    h = get(g.taper.bottom, :height_in_mm, 0) + fccd * (1 - sin(α) - cos(α))/sin(α)
     x = h * tan(α)
     taper_bottom_volume = iszero(x) || !isfinite(x) ? zero(T) : get_outer_taper_volume(R, R - x, h)
     
     # Borehole taper
-    α = g.taper.bottom.angle_in_deg / 360 * 2π
-    h = g.taper.bottom.height_in_mm + fccd * (1 - sin(α) - cos(α))/sin(α)
+    α = get(g.taper.borehole, :angle_in_deg, 0)/ 360 * 2π
+    h = get(g.taper.borehole, :height_in_mm, 0) + fccd * (1 - sin(α) - cos(α))/sin(α)
     x = h * tan(α)
     taper_borehole_volume = iszero(x) || !isfinite(x) ? zero(T) : get_inner_taper_volume(R, R - x, h)
 

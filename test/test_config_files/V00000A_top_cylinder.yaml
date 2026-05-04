@@ -19,18 +19,11 @@ geometry:
   pp_contact:
     radius_in_mm: 9
     depth_in_mm: 0
-  taper:
-    top:
-      angle_in_deg: 0
-      height_in_mm: 0
-    bottom:
-      angle_in_deg: 0
-      height_in_mm: 0
-    borehole:
-      angle_in_deg: 0
-      height_in_mm: 0
   extra:
     top_cylinder:
+      radius_in_mm: 20
+      height_in_mm: 20
+    bottom_cylinder:
       radius_in_mm: 20
       height_in_mm: 20
 characterization:

@@ -273,12 +273,14 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
     has_top_groove = has_extras && haskey(geo.extra, :topgroove)
     has_top_cylinder = has_extras && haskey(geo.extra, :top_cylinder) && geo.extra.top_cylinder.radius_in_mm != crystal_radius
     has_crack = has_extras && haskey(geo.extra, :crack)
-    @assert !(has_top_cylinder && has_bottom_cylinder) "Having both a top and bottom cylinder is not supported."
+    if has_top_cylinder && has_bottom_cylinder
+        throw(ArgumentError("Having both a top and bottom cylinder is not supported."))
+    end
 
     bottom_cyl_radius = has_bottom_cylinder ? geo.extra.bottom_cylinder.radius_in_mm : crystal_radius 
     top_cyl_radius =  has_top_cylinder ? geo.extra.top_cylinder.radius_in_mm : crystal_radius 
 
-    world_radius = 1.2 * maximum([crystal_radius, top_cyl_radius, bottom_cyl_radius])
+    world_radius = 1.2 * max(crystal_radius, top_cyl_radius, bottom_cyl_radius)
 
     config_dict = dicttype(
         "name" => diode_meta.name,
@@ -368,7 +370,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
         has_borehole = hasproperty(geo, :borehole)
         borehole_radius = 0
         if is_coax && !has_borehole
-            error("Coax detectors should have boreholes")
+            throw(ArgumentError("Coax detectors should have boreholes"))
         end
         if has_borehole
             borehole_depth = geo.borehole.depth_in_mm
@@ -402,15 +404,17 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
                 borehole_taper_angle = geo.taper.borehole.angle_in_deg
                 borehole_taper_radius = borehole_taper_height * tand(borehole_taper_angle)
             else
-                error("The borehole taper needs either radius_in_mm or angle_in_deg")
+                throw(ArgumentError("The borehole taper needs either radius_in_mm or angle_in_deg"))
             end
             has_borehole_taper = borehole_taper_height > 0 && borehole_taper_angle > 0
-            @assert !(has_borehole_taper && has_top_groove) "Having both a borehole taper and a top groove is not supported."
+            if has_borehole_taper && has_top_groove
+                throw(ArgumentError("Having both a borehole taper and a top groove is not supported."))
+            end
             if has_borehole_taper && !has_borehole 
-                error("A detector without a borehole cannot have a borehole taper.")
+                throw(ArgumentError("A detector without a borehole cannot have a borehole taper."))
             end
             if has_borehole_taper && is_coax
-                error("Coax detectors should not have borehole tapers")
+                throw(ArgumentError("Coax detectors should not have borehole tapers"))
             end
             if has_borehole_taper
                 hZ = borehole_taper_height + 2*gap
@@ -441,11 +445,11 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
                 top_taper_angle = geo.taper.top.angle_in_deg
                 top_taper_radius = top_taper_height * tand(top_taper_angle)
             else
-                error("The top taper needs either radius_in_mm or angle_in_deg")
+                throw(ArgumentError("The top taper needs either radius_in_mm or angle_in_deg"))
             end
             has_top_taper = top_taper_height > 0 && top_taper_angle > 0
             if has_top_taper
-                r_center = r_center = (has_top_cylinder ? top_cyl_radius : crystal_radius) - top_taper_radius / 2
+                r_center = (has_top_cylinder ? top_cyl_radius : crystal_radius) - top_taper_radius / 2
                 hZ = top_taper_height/2 + 1gap
                 h = 2 * hZ
                 Δr = hZ * tand(top_taper_angle)         
@@ -482,7 +486,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
                 bot_taper_angle = geo.taper.bottom.angle_in_deg
                 bot_taper_radius = bot_taper_height * tand(bot_taper_angle)
             else
-                error("The bottom outer tape needs either radius_in_mm or angle_in_deg")
+                throw(ArgumentError("The bottom outer taper needs either `radius_in_mm` or `angle_in_deg`"))
             end
             has_bot_taper = bot_taper_height > 0 && bot_taper_angle > 0
             if has_bot_taper
@@ -642,7 +646,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
             top_borehole_radius = is_coax ? 0 : borehole_radius
             r_in = has_top_groove ? top_groove_radius : top_borehole_radius
             r_out = top_cyl_radius
-            if has_borehole_taper r_in += borehole_taper_radius end # but no top groove, see assert above
+            if has_borehole_taper r_in += borehole_taper_radius end # but no top groove, see throw(ArgumentError(...)) above
             if has_top_taper r_out -= top_taper_radius end
             push!(mantle_contact_parts, dicttype(
                     "tube" => dicttype(
@@ -673,7 +677,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
                             "from" => borehole_radius,
                             "to" => top_groove_radius + li_thickness 
                         ),
-                        "h" =>li_thickness,
+                        "h" => li_thickness,
                         "origin" => [0, 0, crystal_height - top_groove_height - li_thickness / 2]
                     )
                 )
