@@ -161,6 +161,86 @@ function get_unicode_rep(::Val{:coax})
     "╰───╯ ╰───╯"
 end
 
+function get_taper_mantle_parts(dicttype, α, h, r_bot, r_top, z, li_thickness)
+    parts = []
+    Δr_li_thickness = li_thickness / cosd(α)
+    Δh_li_thickness = li_thickness / abs(sind(α))
+    h_patch = Δh_li_thickness - li_thickness / abs(tand(α))
+    h_main = h - h_patch
+    z_main = z + h_patch + h_main / 2
+
+    dir_patch = 1
+    h1, h2 = ("bottom", "top")
+    if α < 0 
+        r_bot, r_top = (r_top, r_bot) 
+        h1, h2 = ("top", "bottom")
+        z_main -= h_patch
+        dir_patch = -1
+    end
+
+    if h_main > 0
+        push!(parts, dicttype("cone" => dicttype(
+            "r" => dicttype(
+                h1 => dicttype(
+                    "from" => r_bot - li_thickness,
+                    "to" => r_bot - li_thickness + Δr_li_thickness
+                ),
+                h2 => dicttype(
+                    "from" => r_top - Δr_li_thickness,
+                    "to" => r_top
+                )
+            ),
+            "h" => h_main,
+            "origin" => [0, 0, z_main]
+        )))
+    elseif h_main != 0
+        h_main = abs(h_main)
+        h_patch = h
+        push!(parts, dicttype(
+            "tube" => dicttype(
+                "r" => dicttype(
+                    "from" => r_bot - li_thickness,
+                    "to" => r_top 
+                ),
+                "h" => h_main,
+                "origin" => [0, 0, z_main]
+            )
+        )
+    )
+    end
+    if h_patch != 0 
+        push!(parts, dicttype("cone" => dicttype(
+            "r" => dicttype(
+                h1 => dicttype(
+                    "from" => max(r_bot - li_thickness, r_top - Δr_li_thickness),
+                    "to" => r_top
+                ),
+                h2 => dicttype(
+                    "from" => r_top - li_thickness,
+                    "to" => r_top
+                )
+            ),
+            "h" => h_patch,
+            "origin" => [0, 0, z_main + dir_patch * (h_main + h_patch) / 2]
+        )))
+        push!(parts, dicttype("cone" => dicttype(
+            "r" => dicttype(
+                h1 => dicttype(
+                    "from" => r_bot - li_thickness,
+                    "to" => r_bot
+                ),
+                h2 => dicttype(
+                    "from" => r_bot - li_thickness,
+                    "to" => min(r_top, r_bot - li_thickness + Δr_li_thickness)
+                )
+            ),
+            "h" => h_patch,
+            "origin" => [0, 0, z_main - dir_patch * (h_main + h_patch) / 2]
+        )))
+    end
+    parts
+end
+
 function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_meta::X, env::HPGeEnvironment = HPGeEnvironment(); 
     dicttype = OrderedDict{String,Any}, verbose::Bool = true, operational_voltage::Number = NaN, n_thickness::Number = NaN, use_impurity_corrections::Bool = true, ssd_config_filename::Union{Missing, AbstractString} = missing) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
 
@@ -180,13 +260,27 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
     li_thickness =  dl_thickness_in_mm
     pp_thickness = DEFAULT_P_THICKNESS_IN_MM
 
-    crystal_radius = diode_meta.geometry.radius_in_mm
-    crystal_height = diode_meta.geometry.height_in_mm
+    geo = diode_meta.geometry
+    crystal_radius = geo.radius_in_mm
+    crystal_height = geo.height_in_mm
 
-    pp_radius = diode_meta.geometry.pp_contact.radius_in_mm
-    pp_depth = diode_meta.geometry.pp_contact.depth_in_mm
+    pp_radius = geo.pp_contact.radius_in_mm
+    pp_depth = geo.pp_contact.depth_in_mm
     
     is_coax = diode_meta.type == "coax"
+    has_extras = haskey(geo, :extra)
+    has_bottom_cylinder = has_extras && haskey(geo.extra, :bottom_cylinder) && geo.extra.bottom_cylinder.radius_in_mm != crystal_radius
+    has_top_groove = has_extras && haskey(geo.extra, :topgroove)
+    has_top_cylinder = has_extras && haskey(geo.extra, :top_cylinder) && geo.extra.top_cylinder.radius_in_mm != crystal_radius
+    has_crack = has_extras && haskey(geo.extra, :crack)
+    if has_top_cylinder && has_bottom_cylinder
+        throw(ArgumentError("Having both a top and bottom cylinder is not supported."))
+    end
+
+    bottom_cyl_radius = has_bottom_cylinder ? geo.extra.bottom_cylinder.radius_in_mm : crystal_radius 
+    top_cyl_radius =  has_top_cylinder ? geo.extra.top_cylinder.radius_in_mm : crystal_radius 
+
+    world_radius = 1.2 * max(crystal_radius, top_cyl_radius, bottom_cyl_radius)
 
     config_dict = dicttype(
         "name" => diode_meta.name,
@@ -200,13 +294,13 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
             "coordinates" => "cylindrical",
             "axes" => dicttype(
                 "r" => dicttype(
-                    "to" => crystal_radius * 1.2,
+                    "to" => world_radius,
                     "boundaries" => "inf"
                 ),
                 "phi" => dicttype(
                     "from" => 0,
                     "to" => 0,
-                    "boundaries" => "reflecting"
+                    "boundaries" => "periodic"
                 ),
                 "z" => dicttype(
                     "from" => -0.2 * crystal_height,
@@ -232,21 +326,55 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
         ))
     
     # main crystal
+    bottom_cyl_height = if has_bottom_cylinder 
+        geo.extra.bottom_cylinder.height_in_mm 
+    else 
+        if has_top_cylinder
+            crystal_height - geo.extra.top_cylinder.height_in_mm - get(geo.extra.top_cylinder, :transition_in_mm, 0)
+        else
+             crystal_height
+        end
+    end
     semiconductor_geometry_basis = dicttype("cone" => dicttype(
-        "r" => crystal_radius,
-        "h" => crystal_height,
-        "origin" => [0, 0, crystal_height / 2]
+        "r" => bottom_cyl_radius,
+        "h" => bottom_cyl_height,
+        "origin" => [0, 0, bottom_cyl_height / 2]
     ))
+    if has_top_cylinder ⊻ has_bottom_cylinder
+        transiton_cyl_height = get(has_top_cylinder ? geo.extra.top_cylinder : geo.extra.bottom_cylinder, :transition_in_mm, 0)
+        top_cyl_height = has_top_cylinder ? geo.extra.top_cylinder.height_in_mm : crystal_height - bottom_cyl_height - transiton_cyl_height
+        semiconductor_geometry_additions = [
+                    dicttype("cone" => dicttype(
+                "r" => top_cyl_radius,
+                "h" => top_cyl_height,
+                "origin" => [0, 0, bottom_cyl_height + transiton_cyl_height + top_cyl_height / 2]
+            ))
+        ]
+        if transiton_cyl_height > 0
+            push!(semiconductor_geometry_additions, dicttype("cone" => dicttype(
+                "r" => dicttype(
+                    "bottom" => bottom_cyl_radius,
+                    "top" => top_cyl_radius
+                ),
+                "h" => transiton_cyl_height,
+                "origin" => [0, 0, bottom_cyl_height + transiton_cyl_height / 2]
+            )))
+        end
+        semiconductor_geometry_basis = dicttype(
+                "union" => [semiconductor_geometry_basis, semiconductor_geometry_additions...]
+            )
+    end
     semiconductor_geometry_subtractions = []
     begin
         # borehole
-        has_borehole = hasproperty(diode_meta.geometry, :borehole)
+        has_borehole = hasproperty(geo, :borehole)
+        borehole_radius = 0
         if is_coax && !has_borehole
-            error("Coax detectors should have boreholes")
+            throw(ArgumentError("Coax detectors should have boreholes"))
         end
         if has_borehole
-            borehole_depth = diode_meta.geometry.borehole.depth_in_mm
-            borehole_radius = diode_meta.geometry.borehole.radius_in_mm
+            borehole_depth = geo.borehole.depth_in_mm
+            borehole_radius = geo.borehole.radius_in_mm
             push!(semiconductor_geometry_subtractions, dicttype("cone" => dicttype(
                 "r" => borehole_radius,
                 "h" => borehole_depth + 2*gap,
@@ -264,24 +392,29 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
         end
         
         # borehole taper
-        has_borehole_taper = hasproperty(diode_meta.geometry.taper, :borehole)
+        has_borehole_taper = hasproperty(geo.taper, :borehole)
+        borehole_taper_height = 0
+        borehole_taper_angle = 0
         if has_borehole_taper
-            borehole_taper_height = diode_meta.geometry.taper.borehole.height_in_mm
-            if hasproperty(diode_meta.geometry.taper.borehole, :radius_in_mm)
-                borehole_taper_radius = diode_meta.geometry.taper.borehole.radius_in_mm
+            borehole_taper_height = geo.taper.borehole.height_in_mm
+            if hasproperty(geo.taper.borehole, :radius_in_mm)
+                borehole_taper_radius = geo.taper.borehole.radius_in_mm
                 borehole_taper_angle = atand(borehole_taper_radius, borehole_taper_height)
-            elseif hasproperty(diode_meta.geometry.taper.borehole, :angle_in_deg)
-                borehole_taper_angle = diode_meta.geometry.taper.borehole.angle_in_deg
+            elseif hasproperty(geo.taper.borehole, :angle_in_deg)
+                borehole_taper_angle = geo.taper.borehole.angle_in_deg
                 borehole_taper_radius = borehole_taper_height * tand(borehole_taper_angle)
             else
-                error("The borehole taper needs either radius_in_mm or angle_in_deg")
+                throw(ArgumentError("The borehole taper needs either radius_in_mm or angle_in_deg"))
             end
             has_borehole_taper = borehole_taper_height > 0 && borehole_taper_angle > 0
+            if has_borehole_taper && has_top_groove
+                throw(ArgumentError("Having both a borehole taper and a top groove is not supported."))
+            end
             if has_borehole_taper && !has_borehole 
-                error("A detector without a borehole cannot have a borehole taper.")
+                throw(ArgumentError("A detector without a borehole cannot have a borehole taper."))
             end
             if has_borehole_taper && is_coax
-                error("Coax detectors should not have borehole tapers")
+                throw(ArgumentError("Coax detectors should not have borehole tapers"))
             end
             if has_borehole_taper
                 hZ = borehole_taper_height + 2*gap
@@ -300,20 +433,23 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
         end
 
         # top taper
-        if hasproperty(diode_meta.geometry.taper, :top)
-            top_taper_height = diode_meta.geometry.taper.top.height_in_mm
-            if hasproperty(diode_meta.geometry.taper.top, :radius_in_mm)
-                top_taper_radius = diode_meta.geometry.taper.top.radius_in_mm
+        has_top_taper = hasproperty(geo.taper, :top)
+        top_taper_height = 0
+        top_taper_angle = 0
+        if has_top_taper
+            top_taper_height = geo.taper.top.height_in_mm
+            if hasproperty(geo.taper.top, :radius_in_mm)
+                top_taper_radius = geo.taper.top.radius_in_mm
                 top_taper_angle = atand(top_taper_radius, top_taper_height)
-            elseif hasproperty(diode_meta.geometry.taper.top, :angle_in_deg)
-                top_taper_angle = diode_meta.geometry.taper.top.angle_in_deg
+            elseif hasproperty(geo.taper.top, :angle_in_deg)
+                top_taper_angle = geo.taper.top.angle_in_deg
                 top_taper_radius = top_taper_height * tand(top_taper_angle)
             else
-                error("The top taper needs either radius_in_mm or angle_in_deg")
+                throw(ArgumentError("The top taper needs either radius_in_mm or angle_in_deg"))
             end
             has_top_taper = top_taper_height > 0 && top_taper_angle > 0
             if has_top_taper
-                r_center = crystal_radius - top_taper_radius / 2
+                r_center = (has_top_cylinder ? top_cyl_radius : crystal_radius) - top_taper_radius / 2
                 hZ = top_taper_height/2 + 1gap
                 h = 2 * hZ
                 Δr = hZ * tand(top_taper_angle)         
@@ -338,46 +474,50 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
         end
 
         # bot outer taper
-        bot_taper_height = diode_meta.geometry.taper.bottom.height_in_mm
-        if hasproperty(diode_meta.geometry.taper.bottom, :radius_in_mm)
-            bot_taper_radius = diode_meta.geometry.taper.bottom.radius_in_mm
-            bot_taper_angle = atand(bot_taper_radius, bot_taper_height)
-        elseif hasproperty(diode_meta.geometry.taper.bottom, :angle_in_deg)
-            bot_taper_angle = diode_meta.geometry.taper.bottom.angle_in_deg
-            bot_taper_radius = bot_taper_height * tand(bot_taper_angle)
-        else
-            error("The bottom outer tape needs either radius_in_mm or angle_in_deg")
-        end
-        has_bot_taper = bot_taper_height > 0 && bot_taper_angle > 0
+        has_bot_taper = hasproperty(geo.taper, :bottom)
+        bot_taper_height = 0
+        bot_taper_angle = 0
         if has_bot_taper
-            r_center = crystal_radius - bot_taper_radius / 2
-            hZ = bot_taper_height/2 + 1gap
-            Δr = hZ * tand(bot_taper_angle)         
-            r_in_bot = r_center - Δr
-            r_in_top = r_center + Δr
-            r_out = max(r_in_top, r_in_bot) + gap # ensure that r_out is always bigger as r_in
-            push!(semiconductor_geometry_subtractions, dicttype("cone" => dicttype(
-                "r" => dicttype(
-                        "bottom" => dicttype(
-                            "from" => r_in_bot,
-                            "to" => r_out
+            bot_taper_height = geo.taper.bottom.height_in_mm
+            if hasproperty(geo.taper.bottom, :radius_in_mm)
+                bot_taper_radius = geo.taper.bottom.radius_in_mm
+                bot_taper_angle = atand(bot_taper_radius, bot_taper_height)
+            elseif hasproperty(geo.taper.bottom, :angle_in_deg)
+                bot_taper_angle = geo.taper.bottom.angle_in_deg
+                bot_taper_radius = bot_taper_height * tand(bot_taper_angle)
+            else
+                throw(ArgumentError("The bottom outer taper needs either `radius_in_mm` or `angle_in_deg`"))
+            end
+            has_bot_taper = bot_taper_height > 0 && bot_taper_angle > 0
+            if has_bot_taper
+                r_center = bottom_cyl_radius - bot_taper_radius / 2 #bottom cyl always defined, if has_bottom_cylinder = false, bottom_cyl_radius = crystal_radius
+                hZ = bot_taper_height/2 + 1gap
+                Δr = hZ * tand(bot_taper_angle)         
+                r_in_bot = r_center - Δr
+                r_in_top = r_center + Δr
+                r_out = max(r_in_top, r_in_bot) + gap # ensure that r_out is always bigger as r_in
+                push!(semiconductor_geometry_subtractions, dicttype("cone" => dicttype(
+                    "r" => dicttype(
+                            "bottom" => dicttype(
+                                "from" => r_in_bot,
+                                "to" => r_out
+                            ),
+                            "top" => dicttype(
+                                "from" => r_in_top,
+                                "to" => r_out
+                            )
                         ),
-                        "top" => dicttype(
-                            "from" => r_in_top,
-                            "to" => r_out
-                        )
-                    ),
-                "h" => 2 * hZ,
-                "origin" => [0, 0, bot_taper_height / 2]
-            )))
+                    "h" => 2 * hZ,
+                    "origin" => [0, 0, bot_taper_height / 2]
+                )))
+            end
         end
-
         # groove
-        has_groove = hasproperty(diode_meta.geometry, :groove)
+        has_groove = hasproperty(geo, :groove)
         if has_groove
-            groove_inner_radius = diode_meta.geometry.groove.radius_in_mm.inner
-            groove_outer_radius = diode_meta.geometry.groove.radius_in_mm.outer
-            groove_depth = diode_meta.geometry.groove.depth_in_mm
+            groove_inner_radius = geo.groove.radius_in_mm.inner
+            groove_outer_radius = geo.groove.radius_in_mm.outer
+            groove_depth = geo.groove.depth_in_mm
             has_groove = groove_outer_radius > 0 && groove_depth > 0 && groove_inner_radius > 0
             if has_groove
                 hZ = groove_depth / 2 + gap
@@ -393,6 +533,20 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
                 )))
             end
         end
+        if has_top_groove
+            top_groove_radius = geo.extra.topgroove.radius_in_mm
+            top_groove_height = geo.extra.topgroove.depth_in_mm
+            push!(semiconductor_geometry_subtractions, dicttype(
+                    "tube" => dicttype(
+                        "r" => top_groove_radius,
+                        "h" => top_groove_height + gap,
+                        "origin" => dicttype(
+                            "z" => crystal_height - top_groove_height/2 + gap/2
+                        )
+                    )
+                )
+            )
+        end
     end
 
     if isempty(semiconductor_geometry_subtractions)
@@ -402,15 +556,10 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
             "difference" => [semiconductor_geometry_basis, semiconductor_geometry_subtractions...]
         )
     end
-
-    
     
     # bulletization
-    # is_bulletized = !all(values(diode_meta.geometry.bulletization) .== 0)
+    # is_bulletized = !all(values(geo.bulletization) .== 0)
     # is_bulletized && @warn "Bulletization is not implemented yet, ignore for now."
-
-    # extras
-    hasproperty(diode_meta.geometry, :extra) && @warn "Extras are not implemented yet, ignore for now."
 
     ### P+ CONTACT ###
 
@@ -491,179 +640,210 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
     ))
     config_dict["detectors"][1]["contacts"][2]["geometry"]["union"] = begin
         mantle_contact_parts = []
-        top_plate = begin
-            r = if !has_borehole || is_coax
-                !has_top_taper ? crystal_radius : crystal_radius - top_taper_radius
-            else has_borehole && !is_coax
-                r_in = borehole_radius
-                r_out = crystal_radius
-                if has_borehole_taper r_in += borehole_taper_radius end
-                if has_top_taper r_out -= top_taper_radius end
-                dicttype("from" => r_in, "to" => r_out)
-            end
-            dicttype("cone" => dicttype(
-                "r" => r,
-                "h" => li_thickness,
-                "origin" => [0, 0, crystal_height - li_thickness / 2]
-            ))
-        end
-        push!(mantle_contact_parts, top_plate)
 
-        if has_top_taper
-            Δr_li_thickness = li_thickness / cosd(top_taper_angle)
-            h = top_taper_height
-            r_bot = crystal_radius 
-            r_top = crystal_radius - top_taper_radius
-            push!(mantle_contact_parts, dicttype("cone" => dicttype(
-                "r" => dicttype(
-                    "bottom" => dicttype(
-                        "from" => r_bot - Δr_li_thickness,
-                        "to" => r_bot
-                    ),
-                    "top" => dicttype(
-                        "from" => r_top - Δr_li_thickness,
-                        "to" => r_top
+        #top lid
+        begin
+            top_borehole_radius = is_coax ? 0 : borehole_radius
+            r_in = has_top_groove ? top_groove_radius : top_borehole_radius
+            r_out = top_cyl_radius
+            if has_borehole_taper r_in += borehole_taper_radius end # but no top groove, see throw(ArgumentError(...)) above
+            if has_top_taper r_out -= top_taper_radius end
+            push!(mantle_contact_parts, dicttype(
+                    "tube" => dicttype(
+                        "r" => dicttype("from" => r_in, "to" => r_out),
+                        "h" => li_thickness,
+                        "origin" => [0, 0, crystal_height - li_thickness / 2]
                     )
-                ),
-                "h" => h,
-                "origin" => [0, 0, crystal_height - top_taper_height / 2]
-            )))
-            h =  Δr_li_thickness / tand(top_taper_angle)
-            push!(mantle_contact_parts, dicttype("cone" => dicttype(
-                "r" => dicttype(
-                    "top" => dicttype(
-                        "from" => r_bot - Δr_li_thickness,
-                        "to" => r_bot
-                    ),
-                    "bottom" => dicttype(
-                        "from" => r_bot,
-                        "to" => r_bot
-                    )
-                ),
-                "h" => h,
-                "origin" => [0, 0, crystal_height - top_taper_height - h / 2]
-            )))
+                )
+            )
         end
 
+        #top groove mantle
+        if has_top_groove
+            push!(mantle_contact_parts, dicttype(
+                    "tube" => dicttype(
+                        "r" => dicttype(
+                            "from" => top_groove_radius,
+                            "to" => top_groove_radius + li_thickness
+                        ),
+                        "h" => top_groove_height,
+                        "origin" => [0, 0, crystal_height - top_groove_height/2]
+                    )
+                )
+            )
+            push!(mantle_contact_parts, dicttype(
+                    "tube" => dicttype(
+                        "r" => dicttype(
+                            "from" => borehole_radius,
+                            "to" => top_groove_radius + li_thickness 
+                        ),
+                        "h" => li_thickness,
+                        "origin" => [0, 0, crystal_height - top_groove_height - li_thickness / 2]
+                    )
+                )
+            )
+        end
+
+        #borehole taper mantle
         if has_borehole_taper
-            Δr_li_thickness = li_thickness / cosd(borehole_taper_angle)
-            h = borehole_taper_height    
-            r_bot = borehole_radius
-            r_top = borehole_radius + borehole_taper_radius
-            push!(mantle_contact_parts, dicttype("cone" => dicttype(
-                "r" => dicttype(
-                    "bottom" => dicttype(
-                        "from" => r_bot,
-                        "to" => r_bot + Δr_li_thickness
-                    ),
-                    "top" => dicttype(
-                        "from" => r_top,
-                        "to" => r_top + Δr_li_thickness
-                    )
-                ),
-                "h" => h,
-                "origin" => [0, 0, crystal_height - borehole_taper_height / 2]
-            )))
-
-            h = (borehole_depth - borehole_taper_height)
-            push!(mantle_contact_parts, dicttype("cone" => dicttype(
-                "r" => dicttype(
-                    "from" => borehole_radius,
-                    "to" => borehole_radius + Δr_li_thickness
-                ),
-                "h" => h,
-                "origin" => [0, 0, crystal_height - borehole_taper_height - h / 2]
-            )))
-        elseif has_borehole && !is_coax # but no borehole taper
-            h = borehole_depth
+            Δh_li_thickness = li_thickness / sind(borehole_taper_angle)
+            h_patch = Δh_li_thickness - li_thickness / abs(tand(borehole_taper_angle))
+            push!(mantle_contact_parts, get_taper_mantle_parts(dicttype, borehole_taper_angle, borehole_taper_height, borehole_radius + li_thickness, borehole_radius + borehole_taper_radius + li_thickness, crystal_height - borehole_taper_height - h_patch, li_thickness)...)
+        end
+        if has_borehole && !is_coax
+            h = borehole_depth - borehole_taper_height
+            z_origin = crystal_height - borehole_taper_height - h/2
+            if has_top_groove 
+                h -= top_groove_height 
+                z_origin -= top_groove_height/2
+            end
+            #borehole straight mantle
             push!(mantle_contact_parts, dicttype("cone" => dicttype(
                 "r" => dicttype(
                     "from" => borehole_radius,
                     "to" => borehole_radius + li_thickness
                 ),
                 "h" => h,
-                "origin" => [0, 0, crystal_height - h / 2]
+                "origin" => [0, 0, z_origin]
             )))
-        end
-
-        if has_borehole && !is_coax
-            r = borehole_radius + li_thickness
+            #borehole bottom lid
             push!(mantle_contact_parts, dicttype("cone" => dicttype(
-                "r" => r,
+                "r" => borehole_radius + li_thickness,
                 "h" => li_thickness,
                 "origin" => [0, 0, crystal_height - borehole_depth - li_thickness / 2]
             )))
         end
 
+        #top tapper mantle
+        if has_top_taper
+            push!(mantle_contact_parts, get_taper_mantle_parts(dicttype, -top_taper_angle, top_taper_height, top_cyl_radius, top_cyl_radius - top_taper_radius, crystal_height - top_taper_height, li_thickness)...)
+        end
+
+
+        #main crystal mantle
         begin
-            h = crystal_height
-            if has_top_taper h -= top_taper_height end
-            z_origin = h/2
+            #bottom crystal mantle
+            h_bot_cyl = bottom_cyl_height
+            if has_top_taper && !(has_bottom_cylinder || has_top_cylinder) 
+                h_bot_cyl -= top_taper_height 
+            end
+            z_bot_cyl = h_bot_cyl/2
             if has_bot_taper 
-                h -= bot_taper_height 
-                z_origin += bot_taper_height/2
+                h_bot_cyl -= bot_taper_height 
+                z_bot_cyl += bot_taper_height/2
             end
             push!(mantle_contact_parts, dicttype("cone" => dicttype(
                 "r" => dicttype(
-                    "from" => crystal_radius - li_thickness,
-                    "to" => crystal_radius
+                    "from" => bottom_cyl_radius - li_thickness,
+                    "to" => bottom_cyl_radius
                 ),
-                "h" => h,
-                "origin" => [0, 0, z_origin]
+                "h" => h_bot_cyl,
+                "origin" => [0, 0, z_bot_cyl]
             )))
+            if has_top_cylinder ⊻ has_bottom_cylinder
+                #top cylinder mantle
+                h_top_cyl = top_cyl_height
+                if has_top_taper h_top_cyl -= top_taper_height end
+                z_top_cyl = bottom_cyl_height + transiton_cyl_height + h_top_cyl / 2
+                push!(mantle_contact_parts, dicttype("cone" => dicttype(
+                    "r" => dicttype(
+                        "from" => top_cyl_radius - li_thickness,
+                        "to" => top_cyl_radius
+                    ),
+                    "h" => h_top_cyl,
+                    "origin" => [0, 0, z_top_cyl]
+                )))
+
+                #transition mantle
+                transiton_angle = atand(top_cyl_radius - bottom_cyl_radius, transiton_cyl_height)
+                push!(mantle_contact_parts, get_taper_mantle_parts(dicttype, transiton_angle, transiton_cyl_height, bottom_cyl_radius, top_cyl_radius, bottom_cyl_height, li_thickness)...)
+            end
         end
 
+        #bottom tapper mantle
         if has_bot_taper
-            Δr_li_thickness = li_thickness / cosd(bot_taper_angle)
-            h = bot_taper_height
-            r_bot = crystal_radius - bot_taper_radius
-            r_top = crystal_radius
-            push!(mantle_contact_parts, dicttype("cone" => dicttype(
-                "r" => dicttype(
-                    "bottom" => dicttype(
-                        "from" => r_bot - Δr_li_thickness,
-                        "to" => r_bot
-                    ),
-                    "top" => dicttype(
-                        "from" => r_top - Δr_li_thickness,
-                        "to" => r_top
-                    )
-                ),
-                "h" => h,
-                "origin" => [0, 0, h / 2]
-            )))
-            h =  Δr_li_thickness / tand(bot_taper_angle)
-            push!(mantle_contact_parts, dicttype("cone" => dicttype(
-                "r" => dicttype(
-                    "bottom" => dicttype(
-                        "from" => r_top - Δr_li_thickness,
-                        "to" => r_top
-                    ),
-                    "top" => dicttype(
-                        "from" => r_top,
-                        "to" => r_top
-                    )
-                ),
-                "h" => h,
-                "origin" => [0, 0, bot_taper_height + h / 2]
-            )))
+            push!(mantle_contact_parts, get_taper_mantle_parts(dicttype, bot_taper_angle, bot_taper_height, bottom_cyl_radius - bot_taper_radius, bottom_cyl_radius, 0, li_thickness)...)
         end
 
-        if has_groove && groove_outer_radius > 0
+        #bottom lid
+        if has_groove && groove_outer_radius > 0 # only ppc has no groove and thus no bottom lid required
             r_in = groove_outer_radius 
-            r_out = crystal_radius
+            r_out = bottom_cyl_radius
             if has_bot_taper r_out -= bot_taper_radius end
-            push!(mantle_contact_parts, dicttype("cone" => dicttype(
-                "r" => dicttype(
-                    "from" => r_in,
-                    "to" => r_out
-                ),
-                "h" => li_thickness,
-                "origin" => [0, 0, li_thickness / 2]
-            )))
+            push!(mantle_contact_parts, dicttype(
+                    "tube" => dicttype(
+                        "r" => dicttype("from" => r_in, "to" => r_out),
+                        "h" => li_thickness,
+                        "origin" => [0, 0, li_thickness / 2]
+                    )
+                )
+            )
         end
-        
         mantle_contact_parts
+    end
+
+    if haskey(geo, :extra) 
+        if haskey(geo.extra, :crack)
+            
+            # cut the crack volume from the semiconductor
+            radius_crack = geo.extra.crack.radius_in_mm
+            α = geo.extra.crack.angle_in_deg
+            
+
+            crack_cutout = dicttype(
+                "translate" => dicttype(
+                    "box" => dicttype(
+                        "widths" => [100,200,200],
+                        "rotation" => dicttype("Y" => α),
+                    ),
+                    "x" => crystal_radius - radius_crack + 50*cosd(α),
+                    "z" => -50*sind(α)
+                )
+            )
+            semiconductor_geometry = config_dict["detectors"][1]["semiconductor"]["geometry"]
+            if haskey(semiconductor_geometry, "difference")
+                #Existing difference: append the crack substraction to the list of subtractions
+                push!(semiconductor_geometry["difference"], crack_cutout)
+            else
+                #No difference: wrap the existing geometry as the basis and add the crack cutout as the first subtraction
+                config_dict["detectors"][1]["semiconductor"]["geometry"] = dicttype(
+                    "difference" => [semiconductor_geometry, crack_cutout],
+                )
+            end
+
+            # cut the crack from the mantle contact 
+            semiconductor_volume = config_dict["detectors"][1]["semiconductor"]["geometry"]
+
+            config_dict["detectors"][1]["contacts"][2]["geometry"] = dicttype(
+                "union" => [
+                    dicttype(
+                        "difference" => vcat(
+                            config_dict["detectors"][1]["contacts"][2]["geometry"],
+                            # cut out from the contact
+                            crack_cutout
+                        )
+                    ),
+                    #addition to the contact 
+                    dicttype(
+                        "intersection" => [
+                            dicttype(
+                                "translate" => dicttype(
+                                    "box" => dicttype(
+                                        "widths" => [li_thickness / cosd(α), 200,200],
+                                        "rotation" => dicttype("Y" => α),
+                                    ),
+                                    #"rotation" => dicttype("Y" => α),
+                                    "x" => crystal_radius - radius_crack,
+                                )
+                            ),
+                            semiconductor_volume                              
+                        ]
+                    )
+                ]
+            )
+            # make sure that the simulation is performed in 3D
+            config_dict["grid"]["axes"]["phi"]["to"] = 360
+        end
     end
     
     slice = Symbol(diode_meta.production.slice)

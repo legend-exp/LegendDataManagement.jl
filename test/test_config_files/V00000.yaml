@@ -1,0 +1,11 @@
+name: "V00000"
+order: "00"
+impurity_curve:
+  model: linear_boule
+  parameters:
+    a: 8
+    b: 0.05
+slices:
+  A:
+    detector_offset_in_mm: 80
+  

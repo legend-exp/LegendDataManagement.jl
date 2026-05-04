@@ -1,0 +1,30 @@
+name: V00000A_crack
+type: icpc
+production:
+  manufacturer: Dummy Manufacturer
+  order: "00"
+  crystal: "000"
+  slice: A
+geometry:
+  height_in_mm: 80
+  radius_in_mm: 35
+  borehole:
+    radius_in_mm: 5
+    depth_in_mm: 55
+  groove:
+    depth_in_mm: 1
+    radius_in_mm:
+      outer: 15
+      inner: 9
+  pp_contact:
+    radius_in_mm: 9
+    depth_in_mm: 0
+  extra:
+    crack:
+      radius_in_mm: 10
+      angle_in_deg: 45
+      width_in_mm: 45
+characterization:
+  manufacturer:
+    recommended_voltage_in_V: 4000.0
+    dl_thickness_in_mm: 3
