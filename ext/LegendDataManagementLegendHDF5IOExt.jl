@@ -307,7 +307,7 @@ function _read_evt_no_det_table(h::LegendHDF5IO.LHDataStore, tier::DataTier,
     _propsel_filter_apply(name -> getproperty(h[nmap[name][1]], nmap[name][2])[:], f, filterby, n_evts)
 end
 
-_is_valid_detid(s::AbstractString) = try DetectorId(s); true catch; false end
+_is_valid_detid(s) = try DetectorId(s); true catch; false end
 
 # Try "tier/det" (current), then "det/tier" (legacy), then bare "tier" (raw/jldsp struct-view).
 function _resolve_perdet_path(h, tier::DataTier, det::DetectorId)
