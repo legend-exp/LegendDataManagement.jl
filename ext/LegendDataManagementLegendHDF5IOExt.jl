@@ -370,7 +370,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
         if haskey(h, "$tier")
             collect(keys(h["$tier"]))
         else
-            [k for k in keys(h) if haskey(h, "$k/$tier")]
+            [k for k in keys(h) if h.data_store[k] isa LegendHDF5IO.HDF5.Group && haskey(h, "$k/$tier")]
         end
     end
     isempty(dets) && throw(ArgumentError("No detectors found under /$tier in $(basename(data.tier[tier, rsel[2]]))"))
