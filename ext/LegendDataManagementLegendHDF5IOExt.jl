@@ -307,6 +307,8 @@ function _read_evt_no_det_table(h::LegendHDF5IO.LHDataStore, tier::DataTier,
     _propsel_filter_apply(name -> getproperty(h[nmap[name][1]], nmap[name][2])[:], f, filterby, n_evts)
 end
 
+_is_valid_detid(s::AbstractString) = try DetectorId(s); true catch; false end
+
 # Try "tier/det" (current), then "det/tier" (legacy), then bare "tier" (raw/jldsp struct-view).
 function _resolve_perdet_path(h, tier::DataTier, det::DetectorId)
     haskey(h, "$tier/$det") && return "$tier/$det"
@@ -368,9 +370,9 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     # List detectors via "tier/<det>" (current) or fall back to "<det>/tier" (legacy).
     dets = _lh5_data_open(data, tier, rsel[2]) do h
         if haskey(h, "$tier")
-            collect(keys(h["$tier"]))
+            filter(_is_valid_detid, collect(keys(h["$tier"])))
         else
-            [k for k in keys(h) if h.data_store[k] isa LegendHDF5IO.HDF5.Group && haskey(h, "$k/$tier")]
+            [k for k in keys(h) if h.data_store[k] isa LegendHDF5IO.HDF5.Group && _is_valid_detid(k) && haskey(h, "$k/$tier")]
         end
     end
     isempty(dets) && throw(ArgumentError("No detectors found under /$tier in $(basename(data.tier[tier, rsel[2]]))"))
