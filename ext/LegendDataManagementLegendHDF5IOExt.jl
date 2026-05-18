@@ -119,25 +119,16 @@ function __init__()
     (@isdefined DataPartition) && extend_datatype_dict(DataPartition, "datapartition")
 end
 
-# Tier classes drive dispatch: per-det tiers live in per-detector files; evt
-# tiers in shared files. raw and jldsp aren't listed — they're shared files
-# but reach detectors via inner paths (handled by _resolve_perdet_path).
 const _evt_tiers = DataTier.([:jlevt, :jlskm, :jlpmt])
 const _perdet_tiers = DataTier.([:jlpeaks, :jlhit, :jlpls])
 
-# For cross-tier filtering: per-det event-tier column that gives the 1-based
-# per-(fk, det) row index in raw / jldsp. `detevtno` (per-detector event
-# number) is the right column here. `dataidx` looks similar in some
-# datasets but in others it is a run-wide cumulative offset.
+# Per-(fk, det) row index into raw/jldsp; *_dataidx can be run-wide so we use *_detevtno.
 const _evt_idx_col = Dict{Symbol,Symbol}(
     :geds => :geds_detevtno,
     :spms => :spms_detevtno,
     :pmts => :detevtno,
 )
 
-# Inner LH5 path that holds per-detector data (a `detector` or `trig_e_det`
-# VoV) for a given (evt-tier, system) combination. `nothing` ⇒ this combo has
-# no per-det slicing and the caller must reject.
 function _evt_persubdet_path(tier::DataTier, sys::Symbol)
     if tier == DataTier(:jlevt) || tier == DataTier(:jlskm)
         sys == :geds && return "$tier/geds"
@@ -148,7 +139,6 @@ function _evt_persubdet_path(tier::DataTier, sys::Symbol)
     return nothing
 end
 
-# Open the LH5 file for (tier, filekey). Per-det tiers also need a det.
 function _lh5_data_open(f::Function, data::LegendData, tier::DataTierLike, filekey::FileKey, det::Union{DetectorIdLike, Nothing}=nothing, mode::AbstractString="r")
     t = DataTier(tier)
     if t in _perdet_tiers
@@ -164,22 +154,32 @@ _skipnothingmissing(xv::AbstractVector) = [x for x in skipmissing(xv) if !isnoth
 lflatten(x) = fast_flatten(collect(_skipnothingmissing(x)))
 lflatten(nt::AbstractVector{<:NamedTuple}) = flatten_by_key(collect(_skipnothingmissing(nt)))
 
-# Source-column names for any PropertyFunction (incl. filterby); target-column
-# names only for PropSelFunction (the only kind that renames on read).
 _propfunc_src_columnnames(::PropertyFunctions.PropertyFunction{names}) where names = names
 _propfunc_src_columnnames(::Any) = ()
 _propfunc_trg_columnnames(::PropSelFunction{src, trg}) where {src, trg} = trg
 
-_load_all_keys(nt::NamedTuple, n_evts::Int=-1) = if length(nt) == 1 _load_all_keys(nt[first(keys(nt))], n_evts) else NamedTuple{keys(nt)}(map(x -> _load_all_keys(nt[x], n_evts), keys(nt))) end
-_load_all_keys(arr::AbstractArray, n_evts::Int=-1) = arr[:][if (n_evts < 1 || n_evts > length(arr)) 1:length(arr) else rand(1:length(arr), n_evts) end]
-_load_all_keys(t::Table, n_evts::Int=-1) = t[:][if (n_evts < 1 || n_evts > length(t)) 1:length(t) else rand(1:length(t), n_evts) end]
+_sample_idx(n::Int, n_evts::Int) = (n_evts < 1 || n_evts > n) ? (1:n) : rand(1:n, n_evts)
+
+function _load_all_keys(nt::NamedTuple, n_evts::Int=-1)
+    length(nt) == 1 && return _load_all_keys(nt[first(keys(nt))], n_evts)
+    NamedTuple{keys(nt)}(map(k -> _load_all_keys(nt[k], n_evts), keys(nt)))
+end
+_load_all_keys(arr::AbstractArray, n_evts::Int=-1) = arr[:][_sample_idx(length(arr), n_evts)]
+_load_all_keys(t::Table, n_evts::Int=-1) = t[:][_sample_idx(length(t), n_evts)]
 _load_all_keys(x, n_evts::Int=-1) = x
 
-# Apply PropSel / filterby / identity to a loaded HDF5 node. Filter is
-# missing-tolerant: rows where filterby returns missing are dropped.
+function _propsel_filter_apply(load_col, f::PropSelFunction, filterby::Base.Callable, n_evts::Int)
+    src    = _propfunc_src_columnnames(f)
+    trg    = _propfunc_trg_columnnames(f)
+    needed = Tuple(unique((src..., _propfunc_src_columnnames(filterby)...)))
+    tbl    = Table(NamedTuple{needed}(map(load_col, needed)))
+    filterby !== Returns(true) && (tbl = tbl[coalesce.(filterby.(tbl), false)])
+    n_evts > 0 && (tbl = tbl[1:min(n_evts, length(tbl))])
+    Table(NamedTuple{trg}(Tuple(getproperty(tbl, c) for c in src)))
+end
+
 function _apply_read(h_node, f::Base.Callable, filterby::Base.Callable, n_evts::Int)
     if f isa PropSelFunction && filterby == Returns(true)
-        # PropSel-only fast path: load just the requested leaf columns.
         src_cols = _propfunc_src_columnnames(f)
         trg_cols = _propfunc_trg_columnnames(f)
         Table(if length(src_cols) == 1
@@ -188,18 +188,7 @@ function _apply_read(h_node, f::Base.Callable, filterby::Base.Callable, n_evts::
             NamedTuple{trg_cols}(Tuple(values(columns(_load_all_keys(getproperties(src_cols)(h_node), n_evts)))))
         end)
     elseif f isa PropSelFunction && filterby isa PropertyFunctions.PropertyFunction
-        # PropSel + filterby fast path: load only the union of source columns
-        # referenced by the projection and the filter, then mask + project.
-        src_cols  = _propfunc_src_columnnames(f)
-        trg_cols  = _propfunc_trg_columnnames(f)
-        filt_cols = _propfunc_src_columnnames(filterby)
-        needed    = Tuple(unique((src_cols..., filt_cols...)))
-        loaded   = _load_all_keys(getproperties(needed)(h_node), -1)
-        tbl      = Table(loaded)
-        filt_tbl = tbl[coalesce.(filterby.(tbl), false)]
-        n_evts > 0 && (filt_tbl = filt_tbl[1:min(n_evts, length(filt_tbl))])
-        out_cols = Tuple(getproperty(filt_tbl, c) for c in src_cols)
-        return Table(NamedTuple{trg_cols}(out_cols))
+        return _propsel_filter_apply(name -> getproperty(h_node, name)[:], f, filterby, n_evts)
     else
         lh5_data = _load_all_keys(h_node, n_evts)
         if filterby != Returns(true)
@@ -210,11 +199,7 @@ function _apply_read(h_node, f::Base.Callable, filterby::Base.Callable, n_evts::
     end
 end
 
-# Walk an event-tier HDF5 group into a flat name-map
-# `prefix_name => (h5_path, leaf_col_symbol)`. Top-level scalars/VoVs keep
-# their bare name; sub-table columns are namespaced as `<sub>_<col>` (e.g.
-# `aux/pulser/aux_trig` → `aux_pulser_aux_trig`). VoV groups are detected
-# via the `cumulative_length` / `encoded_data` markers and treated as leaves.
+# Flatten LH5 group into `prefix_name => (h5_path, leaf)`; VoV groups (cumulative_length / encoded_data) are leaves.
 function _build_evt_namemap(h::LegendHDF5IO.LHDataStore, tier::DataTier)
     nmap = Dict{Symbol, Tuple{String, Symbol}}()
     h5_grp = h.data_store["$tier"]
@@ -248,10 +233,7 @@ function _walk_evt_h5!(out::Dict, group, base_path::String, prefix::String)
     end
 end
 
-# Index a per-event column at the detector's per-event slot. Per-trigger and
-# per-det-list VoVs are distinguished by matching the materialized inner
-# lengths against the two reference length vectors; columns whose shape
-# matches neither (or are scalar) are returned as-is.
+# Dispatch per-trigger vs per-det-list VoV by inner-length signature; scalar/other cols pass through.
 function _index_col(col, det_idxs, trig_idxs, det_inner_lens, trig_inner_lens)
     eltype(col) <: AbstractVector || return col
     inner_lens = length.(col)
@@ -264,11 +246,7 @@ function _index_col(col, det_idxs, trig_idxs, det_inner_lens, trig_inner_lens)
     end
 end
 
-# Read a flat-prefixed event-tier table for one detector. Mask = events where
-# the detector is present; preferred via `trig_e_det` (per-trigger view, GEDs)
-# and falling back to `detector` (SPMs/PMTs). For surviving events, per-det-
-# list and per-trigger VoV columns are unwrapped at the detector's index;
-# event-scalar columns from any sub-group ride through unchanged.
+# Per-det flat-prefixed evt-tier read. Mask via `trig_e_det` (preferred, GEDs) or `detector` (SPMs/PMTs).
 function _read_evt_table(h::LegendHDF5IO.LHDataStore, data::LegendData, filekey::FileKey,
         tier::DataTier, det::DetectorId, f::Base.Callable,
         filterby::Base.Callable, n_evts::Int)
@@ -283,9 +261,6 @@ function _read_evt_table(h::LegendHDF5IO.LHDataStore, data::LegendData, filekey:
         error("read_ldata(:$tier, ..., $det): /$persubdet_path missing in file")
     psd = h[persubdet_path]
 
-    # Per-event slot of `det`: from `trig_e_det` if present (drops events
-    # where the detector did not trigger), else from `detector`. Either way
-    # the chosen list also defines the event mask.
     mask = nothing
     det_idxs = trig_idxs = nothing
     det_inner_lens = trig_inner_lens = nothing
@@ -314,65 +289,25 @@ function _read_evt_table(h::LegendHDF5IO.LHDataStore, data::LegendData, filekey:
         _index_col(masked, det_idxs, trig_idxs, det_inner_lens, trig_inner_lens)
     end
 
-    # Fast path: load only columns referenced by PropSel + filterby.
-    if f isa PropSelFunction && (filterby isa PropertyFunctions.PropertyFunction || filterby === Returns(true))
-        src_cols = _propfunc_src_columnnames(f)
-        trg_cols = _propfunc_trg_columnnames(f)
-        filt_cols = _propfunc_src_columnnames(filterby)
-        needed = Tuple(unique((src_cols..., filt_cols...)))
-        cols = map(load_col, needed)
-        tbl = Table(NamedTuple{needed}(cols))
-        filt_tbl = filterby === Returns(true) ? tbl : tbl[coalesce.(filterby.(tbl), false)]
-        n_evts > 0 && (filt_tbl = filt_tbl[1:min(n_evts, length(filt_tbl))])
-        out_cols = Tuple(getproperty(filt_tbl, c) for c in src_cols)
-        return Table(NamedTuple{trg_cols}(out_cols))
-    end
+    f isa PropSelFunction && (filterby isa PropertyFunctions.PropertyFunction || filterby === Returns(true)) &&
+        return _propsel_filter_apply(load_col, f, filterby, n_evts)
 
-    # Eager fallback: materialize every column, then apply f / filterby.
     all_names = Tuple(sort(collect(keys(nmap))))
     cols = map(load_col, all_names)
     _apply_read(Table(NamedTuple{all_names}(cols)), f, filterby, n_evts)
 end
 
-# No-detector counterpart to `_read_evt_table`. Builds the same flat-prefixed
-# `nmap` (e.g. `geds_multiplicity`, `aux_pulser_aux_trig`) so PropSel can
-# request individual leaf columns instead of whole top-level sub-groups.
-# No detector mask / per-det-slot unwrap — every event is returned and per-det
-# VoV columns ride through as VoV.
+# No-detector evt-tier read: per-leaf PropSel via flat nmap; falls back to nested LH5 for back-compat.
 function _read_evt_no_det_table(h::LegendHDF5IO.LHDataStore, tier::DataTier,
         f::Base.Callable, filterby::Base.Callable, n_evts::Int)
-
-    # Without PropSel, keep the legacy nested-NamedTuple behaviour so callers
-    # that rely on `evt.aux.pulser.aux_trig` (or load all of jlevt) are unaffected.
     f isa PropSelFunction || return _apply_read(h["$tier"], f, filterby, n_evts)
-
     nmap = _build_evt_namemap(h, tier)
-    src_cols  = _propfunc_src_columnnames(f)
-    filt_cols = _propfunc_src_columnnames(filterby)
-    needed    = Tuple(unique((src_cols..., filt_cols...)))
-
-    # Fall back to top-level PropSel if any requested column is not a leaf in
-    # nmap (e.g. caller asked for `:geds` to grab the whole sub-group).
-    all(c -> haskey(nmap, c), needed) ||
-        return _apply_read(h["$tier"], f, filterby, n_evts)
-
-    function load_col(name::Symbol)
-        path, col = nmap[name]
-        return getproperty(h[path], col)[:]
-    end
-
-    trg_cols  = _propfunc_trg_columnnames(f)
-    cols      = map(load_col, needed)
-    tbl       = Table(NamedTuple{needed}(cols))
-    filt_tbl  = filterby === Returns(true) ? tbl : tbl[coalesce.(filterby.(tbl), false)]
-    n_evts > 0 && (filt_tbl = filt_tbl[1:min(n_evts, length(filt_tbl))])
-    out_cols  = Tuple(getproperty(filt_tbl, c) for c in src_cols)
-    return Table(NamedTuple{trg_cols}(out_cols))
+    needed = Tuple(unique((_propfunc_src_columnnames(f)..., _propfunc_src_columnnames(filterby)...)))
+    all(c -> haskey(nmap, c), needed) || return _apply_read(h["$tier"], f, filterby, n_evts)
+    _propsel_filter_apply(name -> getproperty(h[nmap[name][1]], nmap[name][2])[:], f, filterby, n_evts)
 end
 
-# Resolve the inner HDF5 path for (tier, det). Primary: "tier/det" (current
-# layout). Fallback: "det/tier" (legacy). "tier" alone covers struct-view files
-# like raw/jldsp where the per-det entry is itself the tier root.
+# Try "tier/det" (current), then "det/tier" (legacy), then bare "tier" (raw/jldsp struct-view).
 function _resolve_perdet_path(h, tier::DataTier, det::DetectorId)
     haskey(h, "$tier/$det") && return "$tier/$det"
     haskey(h, "$det/$tier") && return "$det/$tier"
@@ -385,10 +320,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     has_det = !isempty(string(rsel[3]))
     det_arg = has_det ? DetectorId(rsel[3]) : nothing
 
-    # Cross-tier filter. Two cases by filtertier kind:
-    #  • event tier → uses *_dataidx (1-based) to index into the target tier
-    #  • per-trigger tier (raw/jldsp) → relies on 1:1 row alignment with the
-    #    target raw/jldsp file for the same det, applies a Bool row-mask
+    # Cross-tier filter: event-tier filtertier slices via *_detevtno; per-trigger filtertier (raw/jldsp) uses a row-aligned Bool mask.
     if filtertier !== nothing && DataTier(filtertier) != tier
         has_det || throw(ArgumentError("filtertier requires a DetectorId"))
         ftier = DataTier(filtertier)
@@ -414,10 +346,6 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
 
     _lh5_data_open(data, tier, filekey, det_arg) do h
         if tier in _evt_tiers
-            # No-det → flat-prefixed table from _read_evt_no_det_table when
-            # PropSel is given (column-level granularity); else the native
-            # nested LH5 (back-compat: e.g. evt.aux.pulser.aux_trig).
-            # With-det → flat-prefixed table from _read_evt_table.
             has_det || return _read_evt_no_det_table(h, tier, f, filterby, n_evts)
             _read_evt_table(h, data, filekey, tier, det_arg, f, filterby, n_evts)
         else
@@ -427,7 +355,6 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
                 ignore_missing && (@warn "Detector $det_arg not found in $(basename(string(h.data_store)))"; return nothing)
                 throw(ArgumentError("Detector $det_arg not found in $(basename(string(h.data_store)))"))
             end
-            # Optional descent into a sub-group (e.g. jlhit/<det>/dataQC).
             full = subgroup === nothing ? path : "$path/$subgroup"
             haskey(h, full) || throw(ArgumentError("Subgroup $subgroup not found at $path in $(basename(string(h.data_store)))"))
             _apply_read(h[full], f, filterby, n_evts)
@@ -438,8 +365,7 @@ end
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey}; kwargs...)
     tier = DataTier(rsel[1])
     tier in _evt_tiers && return LegendDataManagement.read_ldata(f, data, (tier, rsel[2], ""); kwargs...)
-    # Per-det tiers and shared raw/jldsp: list detectors. Primary "tier/<det>"
-    # listing falls back to the legacy "<det>/tier" layout (top-level keys).
+    # List detectors via "tier/<det>" (current) or fall back to "<det>/tier" (legacy).
     dets = _lh5_data_open(data, tier, rsel[2]) do h
         if haskey(h, "$tier")
             collect(keys(h["$tier"]))
@@ -469,10 +395,8 @@ end
 LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, AbstractVector{FileKey}}; kwargs...) = 
     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], ""); kwargs...)
 
-### Argument distinction for different DataSelector Types
 function _convert_rsel2dsel(rsel::NTuple{<:Any, AbstractDataSelectorLike})
     selector_types = [PossibleDataSelectors[LegendDataManagement._can_convert_to.(PossibleDataSelectors, Ref(s))] for s in rsel]
-    # Disambiguate: a tier symbol like :raw also parses as a generic Symbol.
     if length(selector_types[1]) > 1 && DataTier in selector_types[1]
         selector_types[1] = [DataTier]
     end
@@ -510,8 +434,7 @@ end
 
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPeriod, DataRun, DetectorIdLike}; kwargs...)
     tier = DataTier(rsel[1])
-    # Per-det tiers: one file per (run, det) → resolve via start_filekey rather
-    # than search_disk (whose tier-dir scan would miss the per-det layout).
+    # Per-det tiers use start_filekey since search_disk's tier-dir scan misses the per-det layout.
     tier in _perdet_tiers && return LegendDataManagement.read_ldata(f, data, (tier, start_filekey(data, (rsel[3], rsel[4], rsel[2])), rsel[5]); kwargs...)
     fks = search_disk(FileKey, data.tier[tier, rsel[2], rsel[3], rsel[4]])
     isempty(fks) && throw(ArgumentError("No filekeys found for $(rsel[2]) $(rsel[3]) $(rsel[4])"))
@@ -525,7 +448,6 @@ const _partinfo_required_cols = NamedTuple{(:period, :run), Tuple{DataPeriod, Da
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, DataCategoryLike, Table{_partinfo_required_cols}, DetectorIdLike}; parallel::Bool=false, wpool::WorkerPool=default_worker_pool(), kwargs...)
     p = Progress(length(rsel[3]), desc="Reading from $(length(rsel[3])) runs", showspeed=true)
     lflatten(if parallel
-                # TODO: Check if wpool is connected via :master_worker if myid() != 1
                 @debug "Parallel read with $(length(workers())) workers from $(length(rsel[3])) runs"
                 progress_pmap(wpool, rsel[3]; progress=p) do r
                     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], r.period, r.run, rsel[4]); parallel, wpool, kwargs...)
