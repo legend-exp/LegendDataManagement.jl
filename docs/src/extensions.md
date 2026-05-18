@@ -91,14 +91,15 @@ det     = first(filter(c -> c.system == :geds && c.processable, channelinfo(l200
 The third positional argument is an `rsel` tuple; you can also spread its elements positionally (`read_ldata(data, tier, args...)`). All forms accept the kwargs from the sections below. Multi-filekey, multi-run, and partition forms additionally accept `parallel=true` and `wpool::WorkerPool`.
 
 ```julia
-# By filekey
-read_ldata(l200, :jldsp, fk_cal)                              # (tier, fk)              no det → NamedTuple per det
+# By filekey (use any tier — :raw, :jldsp, :jlhit, :jlevt, …)
+read_ldata(l200, :raw,   fk_phy)                              # (tier, fk)              no det → NamedTuple per det
 read_ldata(l200, :jldsp, fk_cal, det)                         # (tier, fk, det)
-read_ldata(l200, :jldsp, fks_phy, det)                        # (tier, [fks], det)      multi-fk
+read_ldata(l200, :raw,   fks_phy, det)                        # (tier, [fks], det)      multi-fk
 
-# By period / run (det required for per-det tiers)
+# By period / run / partition
+read_ldata(l200, :jldsp, :cal, :p03, :r000)                   # (tier, cat, period, run)        no det
+read_ldata(l200, :raw,   :phy, :p03, :r000, det)              # (tier, cat, period, run, det)
 read_ldata(l200, :jldsp, :cal, :p03, det)                     # (tier, cat, period, det)
-read_ldata(l200, :jldsp, :cal, :p03, :r000, det)              # (tier, cat, period, run, det)
 read_ldata(l200, :jldsp, :cal, DataPartition(1), det)         # (tier, cat, partition, det)
 
 # Custom run set (Table with :period and :run columns)
@@ -107,6 +108,8 @@ read_ldata(l200, :jldsp, :cal, runs, det)                     # (tier, cat, Tabl
 ```
 
 Strings and symbols (`":cal"`, `":p03"`, `:r000`) are interchangeable with typed selectors (`DataCategory(:cal)`, `DataPeriod(3)`, `DataRun(0)`).
+
+All shapes work for `:raw`, `:jldsp` and the event tiers in both with-det and no-det form (no-det returns a `NamedTuple` keyed by detector). The per-det tiers (`:jlhit`, `:jlpls`, `:jlpeaks`) require a detector in every shape — no-det forms throw because the file resolver needs the det to find the file.
 
 ### Column selection (`PropSel`)
 
