@@ -187,6 +187,19 @@ function _apply_read(h_node, f::Base.Callable, filterby::Base.Callable, n_evts::
         else
             NamedTuple{trg_cols}(Tuple(values(columns(_load_all_keys(getproperties(src_cols)(h_node), n_evts)))))
         end)
+    elseif f isa PropSelFunction && filterby isa PropertyFunctions.PropertyFunction
+        # PropSel + filterby fast path: load only the union of source columns
+        # referenced by the projection and the filter, then mask + project.
+        src_cols  = _propfunc_src_columnnames(f)
+        trg_cols  = _propfunc_trg_columnnames(f)
+        filt_cols = _propfunc_src_columnnames(filterby)
+        needed    = Tuple(unique((src_cols..., filt_cols...)))
+        loaded   = _load_all_keys(getproperties(needed)(h_node), -1)
+        tbl      = Table(loaded)
+        filt_tbl = tbl[coalesce.(filterby.(tbl), false)]
+        n_evts > 0 && (filt_tbl = filt_tbl[1:min(n_evts, length(filt_tbl))])
+        out_cols = Tuple(getproperty(filt_tbl, c) for c in src_cols)
+        return Table(NamedTuple{trg_cols}(out_cols))
     else
         lh5_data = _load_all_keys(h_node, n_evts)
         if filterby != Returns(true)
@@ -321,6 +334,42 @@ function _read_evt_table(h::LegendHDF5IO.LHDataStore, data::LegendData, filekey:
     _apply_read(Table(NamedTuple{all_names}(cols)), f, filterby, n_evts)
 end
 
+# No-detector counterpart to `_read_evt_table`. Builds the same flat-prefixed
+# `nmap` (e.g. `geds_multiplicity`, `aux_pulser_aux_trig`) so PropSel can
+# request individual leaf columns instead of whole top-level sub-groups.
+# No detector mask / per-det-slot unwrap — every event is returned and per-det
+# VoV columns ride through as VoV.
+function _read_evt_no_det_table(h::LegendHDF5IO.LHDataStore, tier::DataTier,
+        f::Base.Callable, filterby::Base.Callable, n_evts::Int)
+
+    # Without PropSel, keep the legacy nested-NamedTuple behaviour so callers
+    # that rely on `evt.aux.pulser.aux_trig` (or load all of jlevt) are unaffected.
+    f isa PropSelFunction || return _apply_read(h["$tier"], f, filterby, n_evts)
+
+    nmap = _build_evt_namemap(h, tier)
+    src_cols  = _propfunc_src_columnnames(f)
+    filt_cols = _propfunc_src_columnnames(filterby)
+    needed    = Tuple(unique((src_cols..., filt_cols...)))
+
+    # Fall back to top-level PropSel if any requested column is not a leaf in
+    # nmap (e.g. caller asked for `:geds` to grab the whole sub-group).
+    all(c -> haskey(nmap, c), needed) ||
+        return _apply_read(h["$tier"], f, filterby, n_evts)
+
+    function load_col(name::Symbol)
+        path, col = nmap[name]
+        return getproperty(h[path], col)[:]
+    end
+
+    trg_cols  = _propfunc_trg_columnnames(f)
+    cols      = map(load_col, needed)
+    tbl       = Table(NamedTuple{needed}(cols))
+    filt_tbl  = filterby === Returns(true) ? tbl : tbl[coalesce.(filterby.(tbl), false)]
+    n_evts > 0 && (filt_tbl = filt_tbl[1:min(n_evts, length(filt_tbl))])
+    out_cols  = Tuple(getproperty(filt_tbl, c) for c in src_cols)
+    return Table(NamedTuple{trg_cols}(out_cols))
+end
+
 # Resolve the inner HDF5 path for (tier, det). Primary: "tier/det" (current
 # layout). Fallback: "det/tier" (legacy). "tier" alone covers struct-view files
 # like raw/jldsp where the per-det entry is itself the tier root.
@@ -365,9 +414,11 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
 
     _lh5_data_open(data, tier, filekey, det_arg) do h
         if tier in _evt_tiers
-            # No-det → return the native nested LH5 (e.g. evt.aux.pulser.aux_trig).
+            # No-det → flat-prefixed table from _read_evt_no_det_table when
+            # PropSel is given (column-level granularity); else the native
+            # nested LH5 (back-compat: e.g. evt.aux.pulser.aux_trig).
             # With-det → flat-prefixed table from _read_evt_table.
-            has_det || return _apply_read(h["$tier"], f, filterby, n_evts)
+            has_det || return _read_evt_no_det_table(h, tier, f, filterby, n_evts)
             _read_evt_table(h, data, filekey, tier, det_arg, f, filterby, n_evts)
         else
             has_det || throw(ArgumentError("DetectorId required for tier $tier"))
