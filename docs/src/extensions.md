@@ -65,6 +65,8 @@ The following additional keywords arguments can be set (the `plot_waveform` kwar
 LegendDataManagement provides an extension for [LegendHDF5IO](https://github.com/legend-exp/LegendHDF5IO.jl) that exposes `read_ldata` for loading LEGEND data from HDF5 files. The extension auto-loads when both packages are loaded. All examples assume `$LEGEND_DATA_CONFIG` is set.
 
 ```julia
+ENV["LEGEND_DATA_CONFIG"] = "."
+
 using LegendDataManagement, LegendHDF5IO, PropertyFunctions
 using Unitful: @u_str
 
