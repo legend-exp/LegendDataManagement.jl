@@ -368,9 +368,10 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     # List detectors via "tier/<det>" (current) or fall back to "<det>/tier" (legacy).
     dets = _lh5_data_open(data, tier, rsel[2]) do h
         if haskey(h, "$tier")
-            collect(keys(h["$tier"]))
+            filter(k -> LegendDataManagement._can_convert_to(DetectorId, k), collect(keys(h["$tier"])))
         else
-            [k for k in keys(h) if h.data_store[k] isa LegendHDF5IO.HDF5.Group && haskey(h, "$k/$tier")]
+            [k for k in keys(h) if h.data_store[k] isa LegendHDF5IO.HDF5.Group &&
+                LegendDataManagement._can_convert_to(DetectorId, k) && haskey(h, "$k/$tier")]
         end
     end
     isempty(dets) && throw(ArgumentError("No detectors found under /$tier in $(basename(data.tier[tier, rsel[2]]))"))
