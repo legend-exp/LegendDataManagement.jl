@@ -47,6 +47,40 @@ include("testing_utils.jl")
         end
     end
 
+    @testset "Test Extra features" begin
+        n = 1.0
+        T = Float32
+        extras = ["top_cylinder", "bottom_cylinder", "topgroove", "crack"]
+        det = "V00000A"
+        for i in eachindex(extras)
+            @testset "Test $(extras[i])" begin
+                diode_meta = LegendDataManagement.readlprops("test_config_files/$det.yaml")
+                diode_meta_extra = LegendDataManagement.readlprops("test_config_files/$(det)_$(extras[i]).yaml")
+                xtal_meta = LegendDataManagement.readlprops("test_config_files/V00000.yaml")
+                sim = Simulation{T}(LegendData, diode_meta, xtal_meta, n_thickness = n)
+                sim_extra = Simulation{T}(LegendData, diode_meta_extra, xtal_meta, n_thickness = n)
+
+                x, z = if extras[i] == "top_cylinder"
+                    (diode_meta_extra.geometry.extra[Symbol(extras[i])].radius_in_mm + 2n, diode_meta.geometry.height_in_mm - 2n) ./ 1000
+                elseif extras[i] == "bottom_cylinder"
+                    t = get(diode_meta_extra.geometry.extra[Symbol(extras[i])], :transition_in_mm, 0)
+                    (diode_meta_extra.geometry.extra[Symbol(extras[i])].radius_in_mm + 2n, 2n) ./ 1000
+                elseif extras[i] == "topgroove"
+                    (diode_meta_extra.geometry.extra[Symbol(extras[i])].radius_in_mm - 2n, diode_meta.geometry.height_in_mm - 2n) ./ 1000
+                else extras[i] == "crack"
+                    (diode_meta.geometry.radius_in_mm - 2n, 2n) ./ 1000
+                end
+    
+                point = CartesianPoint{T}(x,0,z)
+
+                @test sim_extra isa Simulation
+                @test point in sim.detector.semiconductor
+                @test !(point in sim_extra.detector.semiconductor)
+                @test LegendDataManagement.get_active_volume(diode_meta, Val(Symbol(diode_meta.type)), n) > LegendDataManagement.get_active_volume(diode_meta_extra, Val(Symbol(diode_meta_extra.type)), n)
+            end
+        end
+    end
+
     @testset "Test HPGeEnvironment" begin
         detname = :V99000A
         env = LegendDataManagement.HPGeEnvironment("LAr", 87u"K")
