@@ -81,6 +81,27 @@ include("testing_utils.jl")
         end
     end
 
+    @testset "Test allow_cylindrical_asymmetry" begin
+        n = 1.0
+        T = Float32
+        diode_meta_crack = LegendDataManagement.readlprops("test_config_files/V00000A_crack.yaml")
+        xtal_meta = LegendDataManagement.readlprops("test_config_files/V00000.yaml")
+
+        # With a crack and asymmetry allowed (default), the simulation is switched to full 3D
+        sim_asym = Simulation{T}(LegendData, diode_meta_crack, xtal_meta, n_thickness = n)
+        @test sim_asym.config_dict["grid"]["axes"]["phi"]["to"] == 360
+
+        # With asymmetry disallowed, the crack is ignored and the grid stays azimuthally symmetric
+        sim_sym = Simulation{T}(LegendData, diode_meta_crack, xtal_meta, n_thickness = n, allow_cylindrical_asymmetry = false)
+        @test sim_sym.config_dict["grid"]["axes"]["phi"]["to"] == 0
+
+        # Disabling the crack restores the full (uncracked) semiconductor volume
+        x, z = (diode_meta_crack.geometry.radius_in_mm - 2n, 2n) ./ 1000
+        point = CartesianPoint{T}(x, 0, z)
+        @test !(point in sim_asym.detector.semiconductor)
+        @test point in sim_sym.detector.semiconductor
+    end
+
     @testset "Test HPGeEnvironment" begin
         detname = :V99000A
         env = LegendDataManagement.HPGeEnvironment("LAr", 87u"K")
