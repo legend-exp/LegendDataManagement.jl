@@ -157,24 +157,23 @@ const _jlexpr_namespace = UUID("cdf3a628-300d-4c5f-ac08-f586248318e9")
 
 _expr_hash(expr) = uuid5(_jlexpr_namespace, string(expr))
 
-const _argexpr_dict = IdDict{UUID, @NamedTuple{args::Vector{Symbol}, body}}()
+const _argexpr_dict = IdDict{UUID, @NamedTuple{arg::Symbol, body}}()
 
 
 struct _ExprFunction{hash} <:Function end
 
-@generated function (f::_ExprFunction{fhash})(__exprf_args__...) where fhash
-    argnames, body = _argexpr_dict[fhash]
-    argtuple = Expr(:tuple, argnames...)
-    quote      
-        $argtuple = __exprf_args__
+@generated function (f::_ExprFunction{fhash})(__exprf_arg__) where fhash
+    argname, body = _argexpr_dict[fhash]
+    quote
+        $argname = __exprf_arg__
         $body
     end
 end
 
 function _propfrom_from_expr(pf_body)
-    props, args, args_body = props2varsyms(pf_body)
+    props, argsym, args_body = subst_prop_refs(pf_body)
     args_body_hash = _expr_hash(args_body)
-    get!(_argexpr_dict, args_body_hash, (args = args, body = args_body))
+    get!(_argexpr_dict, args_body_hash, (arg = argsym, body = args_body))
 
     sel_prop_func = _ExprFunction{args_body_hash}()
     PropertyFunction{(props...,)}(sel_prop_func)

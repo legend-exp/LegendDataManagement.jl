@@ -18,7 +18,7 @@ import Distributed
 
 using OrderedCollections
 using ParallelProcessingTools 
-using PropertyFunctions: PropertyFunction, @pf, filterby, props2varsyms
+using PropertyFunctions: PropertyFunction, @pf, filterby
 using Tables
 using Tables: columns
 using StructArrays
