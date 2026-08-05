@@ -48,6 +48,10 @@ include("testing_utils.jl")
         @test !any(iszero.(uncertainty.(extended.fccd)))
         @test !any(iszero.(uncertainty.(extended.active_volume)))
 
+        # Check error handling for invalid input
+        @test_throws MethodError channelinfo(l200, filekey.period, filekey.run)
+        @test_throws MethodError channelinfo(l200, filekey.period)
+
         # ToDo: Make type-stable:
         # @test #=@inferred=#(channel_info(l200, filekey)) isa StructArray
         # chinfo = channel_info(l200, filekey)
