@@ -443,7 +443,10 @@ export channelinfo
 function channelinfo(data::LegendData, sel::RunCategorySelLike; kwargs...)
     channelinfo(data, start_filekey(data, sel); kwargs...)
 end
-channelinfo(data::LegendData, sel...; kwargs...) = channelinfo(data, sel; kwargs...)
+function channelinfo(data::LegendData, sel::Vararg{Any,N}; kwargs...) where {N}
+    N == 1 && throw(MethodError(channelinfo, (data, sel[1])))
+    channelinfo(data, sel; kwargs...)
+end
 function channelinfo(data::LegendData, sel::Tuple{<:DataPeriodLike, <:DataRunLike, <:DataCategoryLike, Union{ChannelIdLike, DetectorIdLike}}; kwargs...)
     channelinfo(data, ((sel[1:3]), sel[4]); kwargs...)
 end
