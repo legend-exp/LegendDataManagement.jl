@@ -88,6 +88,11 @@ det     = first(filter(c -> c.system == :geds && c.processable, channelinfo(l200
 
 `PropSel`, `filterby`, `filtertier`, and `n_evts` work across all tiers. The detector system (`:geds`, `:spms`, `:pmts`) is auto-detected from `channelinfo` — no need to pass it.
 
+Tiers not in the built-in lists are classified from content: the per-detector file is
+probed on disk when the per-filekey file is missing, and a tier group carrying
+`geds`/`spms` subtables or `detector`/`trig_e_det` columns is treated as an event tier.
+A future tier therefore works without touching the reader.
+
 ### Call forms
 
 The third positional argument is an `rsel` tuple; you can also spread its elements positionally (`read_ldata(data, tier, args...)`). All forms accept the kwargs from the sections below. Multi-filekey, multi-run, and partition forms additionally accept `parallel=true` and `wpool::WorkerPool`.
@@ -151,7 +156,7 @@ read_ldata((:geds_e_cusp_ctc_cal,), l200, (:jlevt, fk_phy, det);
 
 | Filter source                        | Target                               | Mechanism |
 |--------------------------------------|--------------------------------------|-----------|
-| evt-tier (`jlevt`, `jlskm`, `jlpmt`) | any                                  | per-det `*_detevtno` slicing (`geds_detevtno`, `spms_detevtno`, `detevtno`) |
+| evt-tier (`jlevt`, `jlskm`, `jlpmt`) | any                                  | per-det `*_detevtno` slicing — the column name is derived from the file (`<sys>_detevtno` under `tier/<sys>`, bare `detevtno` for single-system tiers) |
 | `raw`, `jldsp`                       | non-evt (`raw`, `jldsp`, `jlhit`, …) | per-trigger 1:1 row-aligned `Bool` mask |
 
 | target ↓ \ source →         | `jlevt` | `jlskm` | `jlpmt` | `raw` | `jldsp` |
@@ -231,9 +236,14 @@ For tiers that nest data inside per-detector groups (e.g. `jlhit/<det>/dataQC`):
 read_ldata(@pf((; $e_cusp, $timestamp)), l200, (:jlhit, fk_cal, det); subgroup=:dataQC)
 read_ldata((:is_physical,),              l200, (:jlhit, fk_cal, det); subgroup=:qc)
 read_ldata((:daqenergy, :timestamp),     l200, (:jlpls, fk_cal, "PULS01"); subgroup=:tags)
+read_ldata((:waveform_presummed,),       l200, (:jlpeaks, fk_cal, det); subgroup=:Tl208SEP)
 ```
 
-The kwarg is ignored on evt-tier reads (which already use a flat-prefixed structure).
+`subgroup` accepts a `Symbol` or a `String` path (`"a/b"` descends further). Combined
+with a column-selection tuple this prunes both the subgroup *and* the columns — for
+`jlpeaks` this avoids loading every peak with all waveforms just to pick one column.
+On evt-tier reads (which already use a flat-prefixed structure) passing `subgroup`
+is an error.
 
 ### Multi-detector discovery
 
@@ -245,6 +255,16 @@ all.B00000C.e_cusp                          # access by detector name
 ```
 
 Per-det tiers (`:jlhit`, `:jlpls`, `:jlpeaks`) cannot be read this way — they require a det in every call.
+
+Passing a `Vector` of detectors reads them as a batch. On event tiers this opens the
+file once and physically reads every needed column once, sharing it across all
+requested detectors (the per-detector masks/slices still differ) — much faster than
+looping detectors yourself:
+
+```julia
+spms = channelinfo(l200, fk_phy; system=:spms).detector
+pe   = read_ldata((:trig_max_cal,), l200, (:jlevt, fk_phy, spms))   # NamedTuple per det
+```
 
 ### Distributed reads
 
@@ -263,7 +283,11 @@ Workers must have both packages loaded. Without `parallel=true`, the per-filekey
 
 ### Other kwargs
 
-- `n_evts=1000` — limit to `n_evts` rows per file. On `PropSel + filterby` paths, applied after the filter (first `n_evts` survivors); on the eager fallback, may random-sample at load.
+- `n_evts=1000` — limit to `n_evts` rows per file: a random subsample **without**
+  replacement, kept in on-disk order, drawn with one shared index so multi-column
+  selections stay row-aligned. On `PropSel + filterby` paths it is applied after the
+  filter. (Columns of unequal length — e.g. two peak subgroups selected at once — are
+  still sampled independently.)
 - `ignore_missing=true` — return `nothing` instead of throwing when a detector is missing from a per-det / shared tier file (does not apply to evt-tier reads).
 
 ## `SolidStateDetectors` extension
