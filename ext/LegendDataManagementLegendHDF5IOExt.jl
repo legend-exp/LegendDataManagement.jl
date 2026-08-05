@@ -169,8 +169,11 @@ _skipnothingmissing(xv::AbstractVector) = [x for x in skipmissing(xv) if !isnoth
 lflatten(x) = fast_flatten(collect(_skipnothingmissing(x)))
 lflatten(nt::AbstractVector{<:NamedTuple}) = flatten_by_key(collect(_skipnothingmissing(nt)))
 
-_propfunc_src_columnnames(f::PropSelFunction{src_cols, trg_cols}) where {src_cols, trg_cols} = src_cols
-_propfunc_trg_columnnames(f::PropSelFunction{src_cols, trg_cols}) where {src_cols, trg_cols} = trg_cols
+# The source paths are a Tuple type of PPath types (PropertyFunctions 0.3);
+# reading a nested path from disk requires its top-level column:
+_ppath_path(::Type{PropertyFunctions.PPath{path}}) where path = path
+_propfunc_src_columnnames(f::PropSelFunction{src_paths}) where src_paths = map(P -> first(_ppath_path(P)), (src_paths.parameters...,))
+_propfunc_trg_columnnames(f::PropSelFunction{src_paths, trg_cols}) where {src_paths, trg_cols} = trg_cols
 
 _load_all_keys(nt::NamedTuple, n_evts::Int=-1) = if length(nt) == 1 _load_all_keys(nt[first(keys(nt))], n_evts) else NamedTuple{keys(nt)}(map(x -> _load_all_keys(nt[x], n_evts), keys(nt))) end
 _load_all_keys(arr::AbstractArray, n_evts::Int=-1) = arr[:][if (n_evts < 1 || n_evts > length(arr)) 1:length(arr) else rand(1:length(arr), n_evts) end]

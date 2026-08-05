@@ -378,7 +378,10 @@ end
 
 function _get_larcal_dc_sel_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol; kwargs...)
     dataprod_lar_filter = _dataprod_lar_cal(data, sel, detector; kwargs...).energy_types[e_filter]
-    PropSelFunction{Symbol.((e_filter, dataprod_lar_filter.pos, dataprod_lar_filter.dc, dataprod_lar_filter.dc_pos)), (:max, :pos, :max_dc, :pos_dc)}()
+    PropSelFunction(
+        Symbol(e_filter) => :max, Symbol(dataprod_lar_filter.pos) => :pos,
+        Symbol(dataprod_lar_filter.dc) => :max_dc, Symbol(dataprod_lar_filter.dc_pos) => :pos_dc
+    )
 end
 
 

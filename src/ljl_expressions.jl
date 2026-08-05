@@ -171,12 +171,12 @@ struct _ExprFunction{hash} <:Function end
 end
 
 function _propfrom_from_expr(pf_body)
-    props, argsym, args_body = subst_prop_refs(pf_body)
+    paths, argsym, args_body = subst_prop_refs(pf_body)
     args_body_hash = _expr_hash(args_body)
     get!(_argexpr_dict, args_body_hash, (arg = argsym, body = args_body))
 
     sel_prop_func = _ExprFunction{args_body_hash}()
-    PropertyFunction{(props...,)}(sel_prop_func)
+    PropertyFunction{Tuple{(PPath{p} for p in paths)...}}(sel_prop_func)
 end
 
 
