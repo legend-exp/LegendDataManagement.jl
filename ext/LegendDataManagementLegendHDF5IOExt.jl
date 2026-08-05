@@ -131,13 +131,6 @@ _is_evt_group(h, tier::DataTier) = haskey(h, "$tier") &&
 # tier group (jlpmt-style single-system tiers) — content-based, no per-tier list.
 _evt_persubdet_path(h, tier::DataTier, sys::Symbol) = haskey(h, "$tier/$sys") ? "$tier/$sys" : "$tier"
 
-# Per-(fk, det) row index into raw/jldsp; *_dataidx can be run-wide so we use *_detevtno.
-const _evt_idx_col = Dict{Symbol,Symbol}(
-    :geds => :geds_detevtno,
-    :spms => :spms_detevtno,
-    :pmts => :detevtno,
-)
-
 function _lh5_data_open(f::Function, data::LegendData, tier::DataTierLike, filekey::FileKey, det::Union{DetectorIdLike, Nothing}=nothing, mode::AbstractString="r")
     t = DataTier(tier)
     if t in _perdet_tiers
@@ -387,12 +380,16 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     if filtertier !== nothing && DataTier(filtertier) != tier
         has_det || throw(ArgumentError("filtertier requires a DetectorId"))
         ftier = DataTier(filtertier)
-        sliced = if ftier in _evt_tiers
+        # Classify the filter tier and locate its detevtno column from the file itself:
+        # "<sys>_detevtno" when the system has its own subtable, bare "detevtno" otherwise.
+        ftier_evt, idx_col = _lh5_data_open(data, ftier, filekey, det_arg) do h
+            sys = channelinfo(data, filekey, det_arg).system
+            (ftier in _evt_tiers || _is_evt_group(h, ftier),
+             haskey(h, "$ftier/$sys") ? Symbol(sys, :_detevtno) : :detevtno)
+        end
+        sliced = if ftier_evt
             tier in _evt_tiers && throw(ArgumentError("filtertier :$ftier and target :$tier are both event tiers; " *
                 "cross-tier *_detevtno slicing maps an event tier onto a per-detector tier (raw/jldsp), not event->event."))
-            sys = channelinfo(data, filekey, det_arg).system
-            idx_col = get(_evt_idx_col, sys, nothing)
-            idx_col === nothing && throw(ArgumentError("No index column known for system :$sys"))
             idxs = getproperty(LegendDataManagement.read_ldata((idx_col,), data, (ftier, filekey, det_arg); filterby), idx_col)
             tbl = LegendDataManagement.read_ldata(f, data, (tier, filekey, det_arg); ignore_missing, subgroup, kwargs...)
             tbl === nothing && return nothing
