@@ -178,8 +178,12 @@ function _load_all_keys(nt::NamedTuple, n_evts::Int=-1)
     length(nt) == 1 && return _load_all_keys(nt[first(keys(nt))], n_evts)
     NamedTuple{keys(nt)}(map(k -> _load_all_keys(nt[k], n_evts), keys(nt)))
 end
-_load_all_keys(arr::AbstractArray, n_evts::Int=-1) = arr[:][_sample_idx(length(arr), n_evts)]
-_load_all_keys(t::Table, n_evts::Int=-1) = t[:][_sample_idx(length(t), n_evts)]
+# Skip the identity index on full reads: `x[:]` is already a private copy, and indexing
+# it with `_sample_idx`'s `1:n` would duplicate the whole payload a second time (2x, measured).
+_subsample(x, n_evts::Int) = (n_evts < 1 || n_evts >= length(x)) ? x : x[_sample_idx(length(x), n_evts)]
+
+_load_all_keys(arr::AbstractArray, n_evts::Int=-1) = _subsample(arr[:], n_evts)
+_load_all_keys(t::Table, n_evts::Int=-1) = _subsample(t[:], n_evts)
 _load_all_keys(x, n_evts::Int=-1) = x
 
 function _propsel_filter_apply(load_col, f::PropSelFunction, filterby::Base.Callable, n_evts::Int)
@@ -188,7 +192,7 @@ function _propsel_filter_apply(load_col, f::PropSelFunction, filterby::Base.Call
     needed = Tuple(unique((src..., _propfunc_src_columnnames(filterby)...)))
     tbl    = Table(NamedTuple{needed}(map(load_col, needed)))
     filterby !== Returns(true) && (tbl = tbl[coalesce.(filterby.(tbl), false)])
-    n_evts > 0 && (tbl = tbl[_sample_idx(length(tbl), n_evts)])
+    tbl    = _subsample(tbl, n_evts)
     Table(NamedTuple{trg}(Tuple(getproperty(tbl, c) for c in src)))
 end
 
@@ -205,10 +209,10 @@ function _apply_read(h_node, f::Base.Callable, filterby::Base.Callable, n_evts::
             # ONE shared subsample when the selected columns form an aligned table; independent
             # subsamples only when lengths differ (unrelated nodes, e.g. two peak subgroups).
             loaded = if allequal(length.(loaded))
-                idx = _sample_idx(length(first(loaded)), n_evts)
-                map(c -> c[idx], loaded)
+                n = length(first(loaded))
+                n_evts >= n ? loaded : (idx = _sample_idx(n, n_evts); map(c -> c[idx], loaded))
             else
-                map(c -> c[_sample_idx(length(c), n_evts)], loaded)
+                map(c -> _subsample(c, n_evts), loaded)
             end
         end
         Table(NamedTuple{trg_cols}(loaded))
