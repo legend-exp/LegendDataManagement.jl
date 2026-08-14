@@ -118,12 +118,24 @@ function __init__()
     (@isdefined DataPartition) && extend_datatype_dict(DataPartition, "datapartition")
 end
 
-const _evt_tiers = DataTier.([:jlevt, :jlskm, :jlpmt])
-const _perdet_tiers = DataTier.([:jlpeaks, :jlhit, :jlpls])
+# Tier classes are determined dynamically — from file layout (per-filekey vs
+# per-detector files) and content (_is_evt_group below) — so new tiers work without
+# any code change here. There is deliberately no static tier list.
 
-# Content-based fallback for tiers not in the static lists, so new tiers work without
-# touching them: an event-tier group carries per-system subtables (geds/spms) or
-# detector-mapping columns instead of per-detector groups.
+# True if the run directory holds per-detector files for this tier and filekey
+# (l200-p20-r000-cal-V00048A-tier_jlhit.lh5 style names).
+function _has_perdet_files(data::LegendData, t::DataTier, filekey::FileKey)
+    rundir = dirname(data.tier[t, filekey])
+    isdir(rundir) || return false
+    pre = "$(filekey.setup)-$(filekey.period)-$(filekey.run)-$(filekey.category)-"
+    suf = "-tier_$t.lh5"
+    any(fn -> startswith(fn, pre) && endswith(fn, suf) && length(fn) > length(pre) + length(suf) &&
+              LegendDataManagement._can_convert_to(DetectorId, fn[length(pre)+1:end-length(suf)]),
+        readdir(rundir))
+end
+
+# An event-tier group carries per-system subtables (geds/spms) or detector-mapping
+# columns instead of per-detector groups.
 _is_evt_group(h, tier::DataTier) = haskey(h, "$tier") &&
     (haskey(h, "$tier/geds") || haskey(h, "$tier/spms") || haskey(h, "$tier/detector") || haskey(h, "$tier/trig_e_det"))
 
@@ -133,15 +145,16 @@ _evt_persubdet_path(h, tier::DataTier, sys::Symbol) = haskey(h, "$tier/$sys") ? 
 
 function _lh5_data_open(f::Function, data::LegendData, tier::DataTierLike, filekey::FileKey, det::Union{DetectorIdLike, Nothing}=nothing, mode::AbstractString="r")
     t = DataTier(tier)
-    if t in _perdet_tiers
-        isnothing(det) && throw(ArgumentError("DetectorId required for per-detector tier $t"))
-        path = data.tier[t, filekey, DetectorId(det)]
-    else
-        path = data.tier[t, filekey]
-        # Unlisted per-detector-file tier: fall back to the per-detector file if only that exists.
-        if !isnothing(det) && !isfile(path)
+    path = data.tier[t, filekey]
+    if !isfile(path)
+        # No per-filekey file: this may be a per-detector-file tier (jlhit/jlpeaks/jlpls
+        # style). With a detector, use its file (also when it is itself missing, so the
+        # file-not-found error names the right path); without one, fail with intent.
+        if !isnothing(det)
             det_path = data.tier[t, filekey, DetectorId(det)]
-            isfile(det_path) && (path = det_path)
+            (isfile(det_path) || _has_perdet_files(data, t, filekey)) && (path = det_path)
+        elseif _has_perdet_files(data, t, filekey)
+            throw(ArgumentError("DetectorId required for per-detector tier $t"))
         end
     end
     LegendHDF5IO.lh5open(f, path, mode)
@@ -207,6 +220,7 @@ function _apply_read(h_node, f::Base.Callable, filterby::Base.Callable, n_evts::
         if n_evts > 0
             # ONE shared subsample when the selected columns form an aligned table; independent
             # subsamples only when lengths differ (unrelated nodes, e.g. two peak subgroups).
+            # Like _subsample, skip the identity index (it would copy the full payload).
             loaded = if allequal(length.(loaded))
                 n = length(first(loaded))
                 n_evts >= n ? loaded : (idx = _sample_idx(n, n_evts); map(c -> c[idx], loaded))
@@ -384,11 +398,13 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
         # "<sys>_detevtno" when the system has its own subtable, bare "detevtno" otherwise.
         ftier_evt, idx_col = _lh5_data_open(data, ftier, filekey, det_arg) do h
             sys = channelinfo(data, filekey, det_arg).system
-            (ftier in _evt_tiers || _is_evt_group(h, ftier),
+            (_is_evt_group(h, ftier),
              haskey(h, "$ftier/$sys") ? Symbol(sys, :_detevtno) : :detevtno)
         end
+        # Classify the target tier from its own file (metadata-only open).
+        tgt_evt = _lh5_data_open(h -> _is_evt_group(h, tier), data, tier, filekey, det_arg)
         sliced = if ftier_evt
-            tier in _evt_tiers && throw(ArgumentError("filtertier :$ftier and target :$tier are both event tiers; " *
+            tgt_evt && throw(ArgumentError("filtertier :$ftier and target :$tier are both event tiers; " *
                 "cross-tier *_detevtno slicing maps an event tier onto a per-detector tier (raw/jldsp), not event->event."))
             idxs = getproperty(LegendDataManagement.read_ldata((idx_col,), data, (ftier, filekey, det_arg); filterby), idx_col)
             tbl = LegendDataManagement.read_ldata(f, data, (tier, filekey, det_arg); ignore_missing, subgroup, kwargs...)
@@ -397,7 +413,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
                 throw(ArgumentError("filtertier :$ftier gave row indices outside 1:$(length(tbl)) for :$tier of $det_arg; " *
                     "likely a *_detevtno vs target-row-count mismatch (schema/period skew)."))
             tbl[idxs]
-        elseif !(tier in _evt_tiers)
+        elseif !tgt_evt
             filt_cols = _propfunc_src_columnnames(filterby)
             isempty(filt_cols) && throw(ArgumentError("filterby must be a @pf PropertyFunction with named source columns"))
             ft_data = LegendDataManagement.read_ldata(filt_cols, data, (ftier, filekey, det_arg))
@@ -415,7 +431,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     end
 
     _lh5_data_open(data, tier, filekey, det_arg) do h
-        if tier in _evt_tiers || (!(tier in _perdet_tiers) && _is_evt_group(h, tier))
+        if _is_evt_group(h, tier)
             subgroup === nothing || throw(ArgumentError("subgroup is not supported for event tier :$tier"))
             has_det || return _read_evt_no_det_table(h, tier, f, filterby, n_evts)
             _read_evt_table(h, data, filekey, tier, det_arg, f, filterby, n_evts)
@@ -439,7 +455,11 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     tier, filekey = DataTier(rsel[1]), rsel[2]
     dets = DetectorId.(rsel[3])
     allunique(dets) || throw(ArgumentError("duplicate detectors in batched read: $(rsel[3])"))
-    if !(tier in _evt_tiers)
+    # Only event tiers (classified from the shared per-filekey file) get the shared-read
+    # optimization; everything else loops the per-detector read.
+    tier_is_evt = isfile(data.tier[tier, filekey]) &&
+        _lh5_data_open(h -> _is_evt_group(h, tier), data, tier, filekey)
+    if !tier_is_evt
         return NamedTuple{Tuple(Symbol.(dets))}([LegendDataManagement.read_ldata(f, data, (tier, filekey, det); filterby, n_evts, subgroup, kwargs...) for det in dets])
     end
     subgroup === nothing || throw(ArgumentError("subgroup is not supported for event tier :$tier"))
@@ -454,8 +474,8 @@ end
 
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey}; kwargs...)
     tier = DataTier(rsel[1])
-    tier in _evt_tiers && return LegendDataManagement.read_ldata(f, data, (tier, rsel[2], ""); kwargs...)
-    # List detectors via "tier/<det>" (current) or fall back to "<det>/tier" (legacy).
+    # List detectors via "tier/<det>" (current) or fall back to "<det>/tier" (legacy);
+    # event tiers are detected from content and routed to the whole-table read.
     dets = _lh5_data_open(data, tier, rsel[2]) do h
         _is_evt_group(h, tier) && return nothing   # unlisted event tier -> whole-table read
         if haskey(h, "$tier")
@@ -528,11 +548,10 @@ end
 
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPeriod, DataRun, DetectorIdLike}; kwargs...)
     tier = DataTier(rsel[1])
-    # Per-det tiers use start_filekey since search_disk's tier-dir scan misses the per-det layout.
-    tier in _perdet_tiers && return LegendDataManagement.read_ldata(f, data, (tier, start_filekey(data, (rsel[3], rsel[4], rsel[2])), rsel[5]); kwargs...)
     fks = search_disk(FileKey, data.tier[tier, rsel[2], rsel[3], rsel[4]])
     if isempty(fks)
-        # Unlisted per-detector-file tier: no per-filekey files on disk, but the per-detector file may exist.
+        # Per-detector-file tier (jlhit/jlpeaks/jlpls style): search_disk's tier-dir scan
+        # sees no per-filekey names, but the per-detector file exists under start_filekey.
         fk0 = start_filekey(data, (rsel[3], rsel[4], rsel[2]))
         !isempty(string(rsel[5])) && isfile(data.tier[tier, fk0, rsel[5]]) &&
             return LegendDataManagement.read_ldata(f, data, (tier, fk0, rsel[5]); kwargs...)
