@@ -77,8 +77,8 @@ function get_exposure(data::LegendData, det::DetectorIdLike, rinfo::Table; is_an
     end
     cat_label::Symbol = Symbol(DataCategory(cat))
 
-    # determine livetime
-    rinfo_cat = getproperty(rinfo, cat_label) 
+    # skip runs without data in this category (startkey missing) and, if requested, non-analysis runs
+    rinfo_cat = filter(r -> !ismissing(r.startkey) && (!is_analysis_run || r.is_analysis_run), getproperty(rinfo, cat_label))
     exposure = 0.0u"kg * yr" 
     for r in rinfo_cat
         filekey = r.startkey
