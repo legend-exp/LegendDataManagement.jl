@@ -88,10 +88,11 @@ det     = first(filter(c -> c.system == :geds && c.processable, channelinfo(l200
 
 `PropSel`, `filterby`, `filtertier`, and `n_evts` work across all tiers. The detector system (`:geds`, `:spms`, `:pmts`) is auto-detected from `channelinfo` — no need to pass it.
 
-Tiers not in the built-in lists are classified from content: the per-detector file is
-probed on disk when the per-filekey file is missing, and a tier group carrying
-`geds`/`spms` subtables or `detector`/`trig_e_det` columns is treated as an event tier.
-A future tier therefore works without touching the reader.
+All tiers are classified dynamically — there is no static tier list in the reader.
+The layout (per-filekey vs per-detector files) is probed on disk, and a tier group
+carrying `geds`/`spms` subtables or `detector`/`trig_e_det` columns is treated as an
+event tier. The tier names in the tables above are examples of the classes, not a
+registry: a future tier works without touching the reader.
 
 ### Call forms
 
