@@ -171,7 +171,7 @@ struct _ExprFunction{hash} <:Function end
 end
 
 function _propfrom_from_expr(pf_body)
-    paths, argsym, args_body = subst_prop_refs(pf_body)
+    paths, argsym, _, _, args_body = subst_prop_refs(pf_body)
     args_body_hash = _expr_hash(args_body)
     get!(_argexpr_dict, args_body_hash, (arg = argsym, body = args_body))
 
