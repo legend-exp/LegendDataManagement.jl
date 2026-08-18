@@ -62,4 +62,9 @@ include("testing_utils.jl")
     @test @inferred(ljl_propfunc("0 < a <= 2")((a = 1,))) == true
     @test @inferred(ljl_propfunc("0 .< a .<= 2")((a = [1, 3],))) == [true, false]
     @test_throws ArgumentError parse_ljlexpr("0 < a ⊆ 2")
+
+    # All allowlisted functions must resolve in the evaluation scope:
+    @test all(f -> isdefined(LegendDataManagement, f), LegendDataManagement.ljl_expr_allowed_funcs)
+    @test @inferred(ljl_propfunc("mean(a) + norm(a)")((a = [3, 4],))) == 8.5
+    @test @inferred(ljl_propfunc("a in 1..3")((a = 2,))) == true
 end

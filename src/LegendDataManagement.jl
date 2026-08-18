@@ -11,6 +11,9 @@ import Distributed
 import LinearAlgebra
 import Pkg
 
+using LinearAlgebra: norm, normalize
+using Statistics: mean
+
 using Glob
 using YAML # ToDo: Switch to import YAML
 import JSON
@@ -24,7 +27,7 @@ using Measurements: ±, value, uncertainty
 
 using Printf: @printf
 
-using IntervalSets: AbstractInterval, ClosedInterval, leftendpoint, rightendpoint
+using IntervalSets: AbstractInterval, ClosedInterval, leftendpoint, rightendpoint, (..)
 using LRUCache: LRU
 using OhMyThreads: @tasks, tmapreduce
 using ParallelProcessingTools 
