@@ -29,7 +29,7 @@ using LRUCache: LRU
 using OhMyThreads: @tasks, tmapreduce
 using ParallelProcessingTools 
 using ProgressMeter: @showprogress
-using PropertyFunctions: PropertyFunction, @pf, filterby, sortby, props2varsyms, PropSelFunction
+using PropertyFunctions: PropertyFunction, PPath, @pf, filterby, sortby, subst_prop_refs, PropSelFunction
 using StaticStrings: StaticString
 import Tables
 using Tables: columns

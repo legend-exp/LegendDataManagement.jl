@@ -38,6 +38,7 @@ methods above. Uses LEGEND defaults, such as ADLChargeDriftModel2016.
 * `n_thickness::Number`: Thickness of the n+ contact in mm. Accepts units, if non are given will interpret as `mm`. If not provided, it will be taken from the metadata if available or defaulted.
 * `verbose::Bool`: Whether to print detailed information during the creation process. Default is `true`.
 * `save_ssd_config::Bool`: Whether to save the SSD configuration to a YAML file. Default is `false`.
+* `allow_cylindrical_asymmetry::Bool`: Whether to allow geometry features that break the cylindrical (azimuthal) symmetry of the detector, such as a `crack` defined in the metadata `geometry.extra`. When `true` (default) and such a feature is present, the affected volume is cut from the semiconductor and contacts and the simulation grid is switched to a full 3D azimuthal range (`phi` from `0` to `360`). When `false`, these features are ignored and the simulation remains 2D (azimuthally symmetric).
 """
 
 function SolidStateDetectors.SolidStateDetector(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); kwargs...)
@@ -92,6 +93,7 @@ methods above. Uses LEGEND defaults, such as ADLChargeDriftModel2016.
 * `operational_voltage::Number`: Operational voltage for the n+ contact. Accepts units, if non are given will interpret as `V`. If not provided, it will be taken from the metadata if available or defaulted.
 * `n_thickness::Number`: Thickness of the n+ contact in mm. Accepts units, if non are given will interpret as `mm`. If not provided, it will be taken from the metadata if available or defaulted.
 * `verbose::Bool`: Whether to print detailed information during the creation process. Default is `true`.
+* `allow_cylindrical_asymmetry::Bool`: Whether to allow geometry features that break the cylindrical (azimuthal) symmetry of the detector, such as a `crack` defined in the metadata `geometry.extra`. When `true` (default) and such a feature is present, the affected volume is cut from the semiconductor and contacts and the simulation grid is switched to a full 3D azimuthal range (`phi` from `0` to `360`). When `false`, these features are ignored and the simulation remains 2D (azimuthally symmetric).
 
 """
 function SolidStateDetectors.Simulation(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); kwargs...)
@@ -242,7 +244,7 @@ function get_taper_mantle_parts(dicttype, α, h, r_bot, r_top, z, li_thickness)
 end
 
 function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_meta::X, env::HPGeEnvironment = HPGeEnvironment(); 
-    dicttype = OrderedDict{String,Any}, verbose::Bool = true, operational_voltage::Number = NaN, n_thickness::Number = NaN, use_impurity_corrections::Bool = true, ssd_config_filename::Union{Missing, AbstractString} = missing) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
+    dicttype = OrderedDict{String,Any}, verbose::Bool = true, operational_voltage::Number = NaN, n_thickness::Number = NaN, use_impurity_corrections::Bool = true, allow_cylindrical_asymmetry::Bool = true, ssd_config_filename::Union{Missing, AbstractString} = missing) where {X <: Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}}
 
     # Not all possible configurations are yet implemented!
     gap = 1.0 # to ensure negative volumes do not match at surfaces
@@ -783,7 +785,7 @@ function create_SSD_config_dict_from_LEGEND_metadata(diode_meta::PropDict, xtal_
     end
 
     if haskey(geo, :extra) 
-        if haskey(geo.extra, :crack)
+        if allow_cylindrical_asymmetry && haskey(geo.extra, :crack)
             
             # cut the crack volume from the semiconductor
             radius_crack = geo.extra.crack.radius_in_mm

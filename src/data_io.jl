@@ -32,7 +32,7 @@ read_ldata(f, data::LegendData, selectors...; kwargs...) = read_ldata(f, data, s
 
 read_ldata(data::LegendData, selectors::Tuple; kwargs...) = read_ldata(identity, data, selectors; kwargs...)
 
-read_ldata(columns::NTuple{<:Any, Symbol}, data::LegendData, selectors::Tuple; kwargs...) = read_ldata(PropSelFunction{columns}(), data, selectors; kwargs...)
+read_ldata(columns::NTuple{<:Any, Symbol}, data::LegendData, selectors::Tuple; kwargs...) = read_ldata(PropSelFunction(columns...), data, selectors; kwargs...)
 
 read_ldata(column::Symbol, data::LegendData, selectors::Tuple; kwargs...) = read_ldata((column, ), data, selectors; kwargs...)
 
