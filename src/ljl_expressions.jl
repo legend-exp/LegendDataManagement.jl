@@ -92,6 +92,14 @@ function _process_ljlexpr_impl(x, @nospecialize(f_varsubst))
     throw(ArgumentError("Invalid component of type $(nameof(typeof(x))) in LEGEND Julia expression."))
 end
 
+function _ljl_funcname_allowed(f)
+    f in ljl_expr_allowed_funcs && return true
+    f isa Symbol || return false
+    f_str = string(f)
+    # Dotted operators like .+ broadcast an allowed operator:
+    f_str[begin] == '.' && Symbol(f_str[begin+1:end]) in ljl_expr_allowed_funcs
+end
+
 _process_ljlexpr_impl(x::Real, @nospecialize(f_varsubst)) = x
 _process_ljlexpr_impl(x::LineNumberNode, @nospecialize(f_varsubst)) = x
 _process_ljlexpr_impl(x::QuoteNode, @nospecialize(f_varsubst)) = x
@@ -126,11 +134,8 @@ function _process_ljlexpr_impl(@nospecialize(expr::Expr), @nospecialize(f_varsub
             end
         elseif expr.head == :call
             funcname = expr.args[begin]
-            funcname_str = string(funcname)
-            # Handle constructs like `a .+ b`:
-            base_funcname = funcname_str[begin] == '.' ? Symbol(funcname_str[begin+1:end]) : funcname
             funcargs = expr.args[begin+1:end]
-            if base_funcname in ljl_expr_allowed_funcs
+            if _ljl_funcname_allowed(funcname)
                 return Expr(expr.head, funcname, map(_process_inner, funcargs)...)
             else
                 throw(ArgumentError("Function \"$(funcname)\" not allowed in LEGEND Julia expression."))
