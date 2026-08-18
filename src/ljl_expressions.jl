@@ -157,13 +157,16 @@ const _jlexpr_namespace = UUID("cdf3a628-300d-4c5f-ac08-f586248318e9")
 
 _expr_hash(expr) = uuid5(_jlexpr_namespace, string(expr))
 
+# Written during property-function construction, read during generated-function
+# expansion, possibly on concurrent threads, so all access must hold the lock:
 const _argexpr_dict = IdDict{UUID, @NamedTuple{arg::Symbol, body}}()
+const _argexpr_dict_lock = ReentrantLock()
 
 
 struct _ExprFunction{hash} <:Function end
 
 @generated function (f::_ExprFunction{fhash})(__exprf_arg__) where fhash
-    argname, body = _argexpr_dict[fhash]
+    argname, body = lock(() -> _argexpr_dict[fhash], _argexpr_dict_lock)
     quote
         $argname = __exprf_arg__
         $body
@@ -173,7 +176,9 @@ end
 function _propfrom_from_expr(pf_body)
     paths, argsym, _, _, args_body = subst_prop_refs(pf_body)
     args_body_hash = _expr_hash(args_body)
-    get!(_argexpr_dict, args_body_hash, (arg = argsym, body = args_body))
+    lock(_argexpr_dict_lock) do
+        get!(_argexpr_dict, args_body_hash, (arg = argsym, body = args_body))
+    end
 
     sel_prop_func = _ExprFunction{args_body_hash}()
     PropertyFunction{Tuple{(PPath{p} for p in paths)...}}(sel_prop_func)
