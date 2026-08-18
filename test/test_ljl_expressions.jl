@@ -52,4 +52,9 @@ include("testing_utils.jl")
 
     @test @inferred(ljl_propfunc("a.+b")((a = [1,2,3], b = [5, 6, 7]))) == [6, 8, 10]
     @test @inferred(ljl_propfunc("log.(a)")((a = [1,2,3],))) ≈ [0.0, 0.6931471805599453, 1.0986122886681098]
+
+    # Broadcast callees must respect the function allowlist:
+    @test_throws ArgumentError parse_ljlexpr("readdir.(a)")
+    @test_throws ArgumentError parse_ljlexpr("Base.rand.(a)")
+    @test_throws ArgumentError parse_ljlexpr("objectid.(a)")
 end

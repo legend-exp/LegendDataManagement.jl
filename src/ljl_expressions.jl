@@ -125,7 +125,11 @@ function _process_ljlexpr_impl(@nospecialize(expr::Expr), @nospecialize(f_varsub
                     return Expr(expr.head, _process_ljlexpr_impl(arg1, f_varsubst), arg2)
                 elseif arg2 isa Expr && arg2.head == :tuple
                     # Broadcast syntax
-                    return Expr(expr.head, arg1, Expr(:tuple, map(_process_inner, arg2.args)...))
+                    if _ljl_funcname_allowed(arg1)
+                        return Expr(expr.head, arg1, Expr(:tuple, map(_process_inner, arg2.args)...))
+                    else
+                        throw(ArgumentError("Function \"$(arg1)\" not allowed in LEGEND Julia expression."))
+                    end
                 else
                     throw(ArgumentError("LEGEND Julia expressions don't support `$expr`"))
                 end
