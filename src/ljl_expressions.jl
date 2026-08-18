@@ -177,7 +177,9 @@ struct _ExprFunction{hash} <:Function end
 end
 
 function _propfrom_from_expr(pf_body)
-    paths, argsym, args_body = subst_prop_refs(pf_body)
+    # PropertyFunctions >= 0.3.1 returns extra values (callees, has_macro) - the substituted expression is always last
+    subst = subst_prop_refs(pf_body)
+    paths, argsym, args_body = subst[1], subst[2], subst[end]
     args_body_hash = _expr_hash(args_body)
     lock(_argexpr_dict_lock) do
         get!(_argexpr_dict, args_body_hash, (arg = argsym, body = args_body))
