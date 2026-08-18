@@ -57,4 +57,9 @@ include("testing_utils.jl")
     @test_throws ArgumentError parse_ljlexpr("readdir.(a)")
     @test_throws ArgumentError parse_ljlexpr("Base.rand.(a)")
     @test_throws ArgumentError parse_ljlexpr("objectid.(a)")
+
+    # Chained comparisons, non-dotted and dotted:
+    @test @inferred(ljl_propfunc("0 < a <= 2")((a = 1,))) == true
+    @test @inferred(ljl_propfunc("0 .< a .<= 2")((a = [1, 3],))) == [true, false]
+    @test_throws ArgumentError parse_ljlexpr("0 < a ⊆ 2")
 end

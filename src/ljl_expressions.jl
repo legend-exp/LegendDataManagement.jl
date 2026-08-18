@@ -144,6 +144,16 @@ function _process_ljlexpr_impl(@nospecialize(expr::Expr), @nospecialize(f_varsub
             else
                 throw(ArgumentError("Function \"$(funcname)\" not allowed in LEGEND Julia expression."))
             end
+        elseif expr.head == :comparison
+            # Operands and comparison operators alternate:
+            return Expr(expr.head, map(enumerate(expr.args)) do (i, arg)
+                isodd(i) && return _process_ljlexpr_impl(arg, f_varsubst)
+                if _ljl_funcname_allowed(arg)
+                    arg
+                else
+                    throw(ArgumentError("Function \"$(arg)\" not allowed in LEGEND Julia expression."))
+                end
+            end...)
         elseif expr.head == :macrocall
             macro_name = expr.args[begin]
             macro_args = expr.args[begin+1:end]
