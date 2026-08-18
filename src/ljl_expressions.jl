@@ -166,7 +166,6 @@ function _process_ljlexpr_impl(@nospecialize(expr::Expr), @nospecialize(f_varsub
             return Expr(expr.head, map(_process_inner, expr.args)...)
         end
     else
-        @info "EXPR:" expr
         throw(ArgumentError("Invalid head $(expr.head) in LEGEND Julia expression."))
     end
 end
