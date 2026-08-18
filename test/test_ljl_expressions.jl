@@ -7,6 +7,8 @@ using PropertyFunctions, StructArrays
 import Measurements
 
 using PropDicts: PropDict
+using Serialization
+using Unitful
 
 include("testing_utils.jl")
 
@@ -67,4 +69,19 @@ include("testing_utils.jl")
     @test all(f -> isdefined(LegendDataManagement, f), LegendDataManagement.ljl_expr_allowed_funcs)
     @test @inferred(ljl_propfunc("mean(a) + norm(a)")((a = [3, 4],))) == 8.5
     @test @inferred(ljl_propfunc("a in 1..3")((a = 2,))) == true
+
+    # Unit names denote units on both the string and the Expr entry path:
+    unit_pf = ljl_propfunc("E * keV")
+    @test @inferred(unit_pf((E = 3,))) == 3u"keV"
+    @test typeof(ljl_propfunc(:(E * keV))) === typeof(unit_pf)
+    @test ljl_propfunc(:(E * keV))((E = 3,)) == 3u"keV"
+    @test @inferred(ljl_propfunc("E * u\"keV\"")((E = 3,))) == 3u"keV"
+
+    # Compiled property functions are serializable (e.g. for Distributed):
+    io = IOBuffer()
+    serialize(io, num_pf)
+    seekstart(io)
+    num_pf2 = deserialize(io)
+    @test typeof(num_pf2) === typeof(num_pf)
+    @test num_pf2(data[1]) == num_pf(data[1])
 end

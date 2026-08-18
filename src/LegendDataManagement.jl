@@ -5,7 +5,6 @@ __precompile__(true)
 module LegendDataManagement
 
 using Dates
-using UUIDs
 
 import Distributed
 import LinearAlgebra
@@ -32,7 +31,7 @@ using LRUCache: LRU
 using OhMyThreads: @tasks, tmapreduce
 using ParallelProcessingTools 
 using ProgressMeter: @showprogress
-using PropertyFunctions: PropertyFunction, PPath, @pf, filterby, sortby, subst_prop_refs, PropSelFunction
+using PropertyFunctions: PropertyFunction, PPath, @pf, filterby, sortby, PropSelFunction
 using StaticStrings: StaticString
 import Tables
 using Tables: columns

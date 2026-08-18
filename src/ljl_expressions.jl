@@ -171,35 +171,33 @@ function _process_ljlexpr_impl(@nospecialize(expr::Expr), @nospecialize(f_varsub
 end
 
 
-const _jlexpr_namespace = UUID("cdf3a628-300d-4c5f-ac08-f586248318e9")
+# Function values for the names allowed in LEGEND Julia expressions:
+const _ljl_propfunc_env = Dict{Symbol,Any}(
+    sym => getproperty(@__MODULE__, sym) for sym in ljl_expr_allowed_funcs
+)
 
-_expr_hash(expr) = uuid5(_jlexpr_namespace, string(expr))
+_ljl_unit_envsym(unit_str::AbstractString) = Symbol("#u_str#", unit_str)
 
-# Written during property-function construction, read during generated-function
-# expansion, possibly on concurrent threads, so all access must hold the lock:
-const _argexpr_dict = IdDict{UUID, @NamedTuple{arg::Symbol, body}}()
-const _argexpr_dict_lock = ReentrantLock()
+# Unit macro calls can't be compiled at runtime, so they are replaced by
+# references to the parsed unit values:
+_lift_ustr!(env::Dict{Symbol,Any}, @nospecialize(x)) = x
 
-
-struct _ExprFunction{hash} <:Function end
-
-@generated function (f::_ExprFunction{fhash})(__exprf_arg__) where fhash
-    argname, body = lock(() -> _argexpr_dict[fhash], _argexpr_dict_lock)
-    quote
-        $argname = __exprf_arg__
-        $body
+function _lift_ustr!(env::Dict{Symbol,Any}, @nospecialize(expr::Expr))
+    if expr.head == :macrocall && expr.args[begin] == Symbol("@u_str")
+        unit_str = expr.args[end]::AbstractString
+        usym = _ljl_unit_envsym(unit_str)
+        env[usym] = uparse(unit_str, unit_context = [Unitful, UnitfulAtomic])
+        return usym
+    else
+        return Expr(expr.head, map(e -> _lift_ustr!(env, e), expr.args)...)
     end
 end
 
-function _propfrom_from_expr(pf_body)
-    paths, argsym, _, _, args_body = subst_prop_refs(pf_body)
-    args_body_hash = _expr_hash(args_body)
-    lock(_argexpr_dict_lock) do
-        get!(_argexpr_dict, args_body_hash, (arg = argsym, body = args_body))
-    end
-
-    sel_prop_func = _ExprFunction{args_body_hash}()
-    PropertyFunction{Tuple{(PPath{p} for p in paths)...}}(sel_prop_func)
+function _propfrom_from_expr(@nospecialize(pf_body))
+    unit_env = Dict{Symbol,Any}()
+    body = _lift_ustr!(unit_env, pf_body)
+    env = isempty(unit_env) ? _ljl_propfunc_env : merge(_ljl_propfunc_env, unit_env)
+    return PropertyFunction(body, env)
 end
 
 
@@ -210,7 +208,8 @@ const _ljlexpr_numbers = IdDict([
     :nothing => :nothing
 ])
 
-_pf_varsym(sym::Symbol) = get(_ljlexpr_numbers, sym, Expr(:$, sym))
+# Unit names denote units on both the string and the Expr entry path:
+_pf_varsym(sym::Symbol) = haskey(_ljlexpr_units, sym) ? _ljlexpr_units[sym] : get(_ljlexpr_numbers, sym, Expr(:$, sym))
 
 const _cached_ljl_propfunc = Dict{Union{LJlExprLike}, PropertyFunction}()
 const _cached_ljl_propfunc_lock = ReentrantLock()
