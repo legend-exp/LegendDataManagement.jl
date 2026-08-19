@@ -372,10 +372,48 @@ function _resolve_perdet_path(h, tier::DataTier, det::DetectorId)
     nothing
 end
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, DetectorIdLike}; filterby::Base.Callable=Returns(true), n_evts::Int=-1, ignore_missing::Bool=false, subgroup::Union{Symbol,AbstractString,Nothing}=nothing, kwargs...)
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, DetectorIdLike}; filterby::Base.Callable=Returns(true), filtertier::Union{DataTierLike,Nothing}=nothing, n_evts::Int=-1, ignore_missing::Bool=false, subgroup::Union{Symbol,AbstractString,Nothing}=nothing, kwargs...)
     tier, filekey = DataTier(rsel[1]), rsel[2]
     has_det = !isempty(string(rsel[3]))
     det_arg = has_det ? DetectorId(rsel[3]) : nothing
+
+    # Cross-tier filter: event-tier filtertier slices via *_detevtno; per-trigger filtertier (raw/jldsp) uses a row-aligned Bool mask.
+    if filtertier !== nothing && DataTier(filtertier) != tier
+        has_det || throw(ArgumentError("filtertier requires a DetectorId"))
+        ftier = DataTier(filtertier)
+        # Classify the filter tier and locate its detevtno column from the file itself:
+        # "<sys>_detevtno" when the system has its own subtable, bare "detevtno" otherwise.
+        ftier_evt, idx_col = _lh5_data_open(data, ftier, filekey, det_arg) do h
+            sys = channelinfo(data, filekey, det_arg).system
+            (ftier in _evt_tiers || _is_evt_group(h, ftier),
+             haskey(h, "$ftier/$sys") ? Symbol(sys, :_detevtno) : :detevtno)
+        end
+        sliced = if ftier_evt
+            tier in _evt_tiers && throw(ArgumentError("filtertier :$ftier and target :$tier are both event tiers; " *
+                "cross-tier *_detevtno slicing maps an event tier onto a per-detector tier (raw/jldsp), not event->event."))
+            idxs = getproperty(LegendDataManagement.read_ldata((idx_col,), data, (ftier, filekey, det_arg); filterby), idx_col)
+            tbl = LegendDataManagement.read_ldata(f, data, (tier, filekey, det_arg); ignore_missing, subgroup, kwargs...)
+            tbl === nothing && return nothing
+            (isempty(idxs) || (minimum(idxs) >= 1 && maximum(idxs) <= length(tbl))) ||
+                throw(ArgumentError("filtertier :$ftier gave row indices outside 1:$(length(tbl)) for :$tier of $det_arg; " *
+                    "likely a *_detevtno vs target-row-count mismatch (schema/period skew)."))
+            tbl[idxs]
+        elseif !(tier in _evt_tiers)
+            filt_cols = _propfunc_src_columnnames(filterby)
+            isempty(filt_cols) && throw(ArgumentError("filterby must be a @pf PropertyFunction with named source columns"))
+            ft_data = LegendDataManagement.read_ldata(filt_cols, data, (ftier, filekey, det_arg))
+            mask = coalesce.(filterby.(ft_data), false)
+            tbl = LegendDataManagement.read_ldata(f, data, (tier, filekey, det_arg); ignore_missing, subgroup, kwargs...)
+            tbl === nothing && return nothing
+            length(mask) == length(tbl) ||
+                throw(ArgumentError("per-trigger filtertier :$ftier row count $(length(mask)) != target :$tier row count " *
+                    "$(length(tbl)) for $det_arg; this 1:1 row alignment only holds between sibling per-trigger tiers (raw <-> jldsp)."))
+            tbl[mask]
+        else
+            throw(ArgumentError("Cannot use non-event filtertier :$ftier when reading event tier :$tier"))
+        end
+        return n_evts > 0 ? sliced[1:min(n_evts, length(sliced))] : sliced
+    end
 
     _lh5_data_open(data, tier, filekey, det_arg) do h
         if tier in _evt_tiers || (!(tier in _perdet_tiers) && _is_evt_group(h, tier))
