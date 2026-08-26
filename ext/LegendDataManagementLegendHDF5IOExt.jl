@@ -206,6 +206,10 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
                LegendDataManagement._can_convert_to(DataTier, x)
     ids = filter(valid, ids)
     @debug "Found keys: $ids"
+    if isempty(ids)
+        @warn "No valid `DetectorId` or `DataTier` key found in $(basename(data.tier[rsel[1], rsel[2]])), returning an empty result"
+        return NamedTuple()
+    end
     if length(ids) == 1
         if string(only(ids)) == string(rsel[1])
             LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], ""); kwargs...)
