@@ -9,6 +9,9 @@ using StructArrays
 using TypedTables, PropertyFunctions
 using Distributed, ProgressMeter
 
+const AbstractDataSelectorLike = Union{AbstractString, Symbol, DataTierLike, DataCategoryLike, DataPeriodLike, DataRunLike, DataPartitionLike, DetectorIdLike}
+const PossibleDataSelectors = [DataTier, DataCategory, DataPeriod, DataRun, DataPartition, DetectorId]
+
 
 
 const dataselector_bytypes = Dict{Type, String}()
