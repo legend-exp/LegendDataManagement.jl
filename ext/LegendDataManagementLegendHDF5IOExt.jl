@@ -9,7 +9,6 @@ using StructArrays
 using TypedTables, PropertyFunctions
 using Distributed, ProgressMeter
 
-const PossibleDataSelectors = [DataTier, DataCategory, DataPeriod, DataRun, DataPartition, DetectorId]
 
 
 const dataselector_bytypes = Dict{Type, String}()
