@@ -115,6 +115,7 @@ function __init__()
     (@isdefined DataCategory) && extend_datatype_dict(DataCategory, "datacategory")
     (@isdefined Timestamp) && extend_datatype_dict(Timestamp, "timestamp")
     (@isdefined FileKey) && extend_datatype_dict(FileKey, "filekey")
+    (@isdefined ChannelId) && extend_datatype_dict(ChannelId, "channelid")
     (@isdefined DetectorId) && extend_datatype_dict(DetectorId, "detectorid")
     (@isdefined DataPartition) && extend_datatype_dict(DataPartition, "datapartition")
 end
