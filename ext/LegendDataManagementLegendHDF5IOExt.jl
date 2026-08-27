@@ -150,12 +150,30 @@ _propfunc_trg_columnnames(f::PropSelFunction{src_paths, trg_cols}) where {src_pa
 _filter_spec(f::Base.Callable) = (nothing, f)
 _filter_spec(p::Pair) = (DataTier(first(p)), last(p))
 
-_sample_rows(x, n_evts::Int) = (n_evts < 1 || n_evts > length(x)) ? x : x[rand(1:length(x), n_evts)]
+# Row indices of a random subsample without replacement, `nothing` for a full read.
+function _sample_idx(n::Int, n_evts::Int)
+    (n_evts < 1 || n_evts >= n) && return nothing
+    idx = collect(1:n)
+    for i in 1:n_evts
+        j = rand(i:n)
+        idx[i], idx[j] = idx[j], idx[i]
+    end
+    sort!(resize!(idx, n_evts))
+end
 
-_load_all_keys(nt::NamedTuple, n_evts::Int=-1) = if length(nt) == 1 _load_all_keys(nt[first(keys(nt))], n_evts) else NamedTuple{keys(nt)}(map(x -> _load_all_keys(nt[x], n_evts), keys(nt))) end
-_load_all_keys(arr::AbstractArray, n_evts::Int=-1) = arr[:][if (n_evts < 1 || n_evts > length(arr)) 1:length(arr) else rand(1:length(arr), n_evts) end]
-_load_all_keys(t::Table, n_evts::Int=-1) = t[:][if (n_evts < 1 || n_evts > length(t)) 1:length(t) else rand(1:length(t), n_evts) end]
-_load_all_keys(x, n_evts::Int=-1) = x
+_nrows(nt::NamedTuple) = _nrows(first(nt))
+_nrows(x::Union{AbstractArray, Table}) = length(x)
+_nrows(x) = 0
+
+_sample_rows(x, n_evts::Int) = (idx = _sample_idx(_nrows(x), n_evts); isnothing(idx) ? x : x[idx])
+
+# One index for the whole read, so every column keeps the same rows.
+_load_all_keys(x, n_evts::Int=-1) = _take_rows(x, _sample_idx(_nrows(x), n_evts))
+
+_take_rows(nt::NamedTuple, idx) = length(nt) == 1 ? _take_rows(nt[first(keys(nt))], idx) :
+    NamedTuple{keys(nt)}(map(k -> _take_rows(nt[k], idx), keys(nt)))
+_take_rows(x::Union{AbstractArray, Table}, idx) = isnothing(idx) ? x[:] : x[:][idx]
+_take_rows(x, idx) = x
 
 const _evt_tiers = DataTier.([:jlevt, :jlskm])
 
@@ -189,9 +207,11 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
                 NamedTuple{_propfunc_trg_columnnames(f)}(Tuple(values(columns(_load_all_keys(getproperties(_propfunc_src_columnnames(f))(h[det_tier]), n_evts)))))
             end)
         else
-            lh5_data = _load_all_keys(h[det_tier], n_evts)
-            if filter_pf != Returns(true)
-                lh5_data = lh5_data |> PropertyFunctions.filterby(filter_pf)
+            lh5_data = if filter_pf == Returns(true)
+                _load_all_keys(h[det_tier], n_evts)
+            else
+                # Subsample the rows that pass the filter, not the rows on disk.
+                _sample_rows(_load_all_keys(h[det_tier]) |> PropertyFunctions.filterby(filter_pf), n_evts)
             end
             if f != identity
                 lh5_data = f.(lh5_data)

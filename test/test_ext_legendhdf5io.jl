@@ -89,8 +89,34 @@ using HDF5
             @test read_ldata(l200, tier, cat, period, run, det; parallel = true).timestamp == all_ts
             @test read_ldata(:timestamp, l200, tier, cat, period, run, det; parallel = true).timestamp == all_ts
 
-            # n_evts subsampling
-            @test length(read_ldata(l200, tier, fk, det; n_evts = 5)) == 5
+            @testset "n_evts subsampling" begin
+                @test length(read_ldata(l200, tier, fk, det; n_evts = 5)) == 5
+
+                # rows are drawn without replacement
+                r = read_ldata(l200, tier, fk, det; n_evts = n)
+                @test length(r) == n
+                @test sort(r.timestamp) == sort(data_fk.timestamp)
+                @test allunique(read_ldata(l200, tier, fk, det; n_evts = n - 1).timestamp)
+
+                # every column of a subsampled read keeps the rows of the same events
+                sub = read_ldata(l200, tier, fk, det; n_evts = 5)
+                rows = [findfirst(isequal(t), data_fk.timestamp) for t in sub.timestamp]
+                @test sub.baseline == data_fk.baseline[rows]
+                @test sub.daqenergy == data_fk.daqenergy[rows]
+
+                # subgroups of one file are subsampled together, not independently
+                grouped = l200.tier[DataTier(:jlgrp), fk]
+                mkpath(dirname(grouped))
+                lh5open(grouped, "w") do f
+                    f["$(det)/jlgrp/geds"] = Table(evtno = collect(1:n))
+                    f["$(det)/jlgrp/spms"] = Table(evtno = collect(1:n))
+                end
+                g = read_ldata(l200, :jlgrp, fk, det; n_evts = 5)
+                @test g.geds.evtno == g.spms.evtno
+
+                # more events requested than the file holds returns everything
+                @test length(read_ldata(l200, tier, fk, det; n_evts = 10 * n)) == n
+            end
 
             # filterby on the tier being read
             cut = @pf $daqenergy > 1000
@@ -102,6 +128,13 @@ using HDF5
                 data_fk.timestamp[keep]
             @test read_ldata((@pf (; bltime = $timestamp * $baseline, )), l200, tier, fk, det; filterby = cut).bltime ==
                 data_fk.timestamp[keep] .* data_fk.baseline[keep]
+
+            # n_evts draws from the rows passing the filter
+            @test length(read_ldata(l200, tier, fk, det; filterby = cut, n_evts = length(keep))) == length(keep)
+            let sub = read_ldata(l200, tier, fk, det; filterby = cut, n_evts = 3)
+                @test length(sub) == 3
+                @test all(sub.daqenergy .> 1000)
+            end
 
             # multi-run read over a run table
             rinfo = Table([(period = period, run = run)])
