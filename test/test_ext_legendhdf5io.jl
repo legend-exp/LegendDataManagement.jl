@@ -192,6 +192,26 @@ using HDF5
                 # the predicate has to name its source columns
                 @test_throws "PropertyFunction" read_ldata(l200, tier, fk, det; filterby = filter_tier => (row -> true))
 
+                @testset "several filter tiers" begin
+                    # rows have to pass every pair
+                    both = valid .& (data_fk.daqenergy .> 1000)
+                    r2 = read_ldata(l200, tier, fk, det; filterby = (filter_tier => hit_cut, tier => cut))
+                    @test r2.timestamp == data_fk.timestamp[both]
+                    # the pairs may be given in any order
+                    @test read_ldata(l200, tier, fk, det; filterby = (tier => cut, filter_tier => hit_cut)).timestamp ==
+                        r2.timestamp
+                    # a one-element tuple is the single-pair form
+                    @test read_ldata(l200, tier, fk, det; filterby = (filter_tier => hit_cut,)).timestamp ==
+                        data_fk.timestamp[valid]
+                    @test length(read_ldata(l200, tier, fk, det; filterby = (filter_tier => hit_cut, tier => cut), n_evts = 2)) == 2
+
+                    @test_throws "must name at least one tier" read_ldata(l200, tier, fk, det; filterby = ())
+                    @test_throws "must be a `DataTierLike => PropertyFunction` pair" read_ldata(l200, tier, fk, det;
+                        filterby = (filter_tier => hit_cut, hit_cut))
+                    # a chained pair is not a predicate
+                    @test_throws "PropertyFunction" read_ldata(l200, tier, fk, det; filterby = filter_tier => (tier => cut))
+                end
+
                 # rows correspond by position, so the row counts must agree
                 short = l200.tier[filter_tier, last(fks)]
                 lh5open(short, "w") do f

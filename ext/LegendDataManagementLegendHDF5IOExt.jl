@@ -146,10 +146,14 @@ _ppath_path(::Type{PropertyFunctions.PPath{path}}) where path = path
 _propfunc_src_columnnames(f::PropertyFunctions.PropertyFunction{src_paths}) where src_paths = map(P -> first(_ppath_path(P)), (src_paths.parameters...,))
 _propfunc_trg_columnnames(f::PropSelFunction{src_paths, trg_cols}) where {src_paths, trg_cols} = trg_cols
 
-# `filterby` is either a predicate evaluated on the tier being read, or `tier => predicate`
-# to evaluate the predicate on a different tier (see `_read_ldata_crosstier`).
-_filter_spec(f::Base.Callable) = (nothing, f)
-_filter_spec(p::Pair) = (DataTier(first(p)), last(p))
+# `filterby` is a predicate evaluated on the tier being read, a `tier => predicate` pair, or
+# a tuple of such pairs (see `_read_ldata_crosstier`).
+_filter_pairs(p::Pair) = (DataTier(first(p)) => last(p),)
+_filter_pairs(t::Tuple) = isempty(t) ?
+    throw(ArgumentError("filterby must name at least one tier")) : map(_filter_pairs_one, t)
+_filter_pairs_one(p::Pair) = DataTier(first(p)) => last(p)
+_filter_pairs_one(x) = throw(ArgumentError(
+    "every element of a filterby tuple must be a `DataTierLike => PropertyFunction` pair, got $(typeof(x))"))
 
 # Row indices of a random subsample without replacement, `nothing` for a full read.
 function _sample_idx(n::Int, n_evts::Int)
@@ -216,12 +220,18 @@ function _read_lh5_det(h, tier::DataTier, det, f::Base.Callable, filter_pf::Base
     end
 end
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, DetectorIdLike}; filterby::Union{Base.Callable, Pair}=Returns(true), n_evts::Int=-1, ignore_missing::Bool=false, parallel::Bool=false, wpool::WorkerPool=default_worker_pool())
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, DetectorIdLike}; filterby::Union{Base.Callable, Pair, Tuple}=Returns(true), n_evts::Int=-1, ignore_missing::Bool=false, parallel::Bool=false, wpool::WorkerPool=default_worker_pool())
     tier, filekey = DataTier(rsel[1]), rsel[2]
-    filter_tier, filter_pf = _filter_spec(filterby)
 
-    if !isnothing(filter_tier) && filter_tier != tier
-        return _read_ldata_crosstier(f, data, tier, filekey, rsel[3], filter_tier, filter_pf; n_evts, ignore_missing)
+    filter_pf = filterby
+    if !(filterby isa Base.Callable)
+        pairs = _filter_pairs(filterby)
+        # A single pair naming the tier being read is an ordinary filter on that tier.
+        if length(pairs) == 1 && first(first(pairs)) == tier
+            filter_pf = last(first(pairs))
+        else
+            return _read_ldata_crosstier(f, data, tier, filekey, rsel[3], pairs; n_evts, ignore_missing)
+        end
     end
 
     det = !isempty(string(rsel[3])) ? DetectorId(rsel[3]) : rsel[3]
@@ -238,37 +248,54 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     end
 end
 
-# Evaluate `filter_pf` on `filter_tier` and keep the rows of `tier` it selects. Rows
-# correspond by position: both tiers hold one row per trigger of the same detector, so
-# row i of `filter_tier` describes row i of `tier`. The row counts must therefore match.
+# Evaluate each `tier => predicate` pair on its own tier and keep the rows of `tier` that
+# every one of them selects. Rows correspond by position: the tiers hold one row per
+# trigger of the same detector, so row i of a filter tier describes row i of `tier`. The
+# row counts must therefore match.
 # TODO: switch to a lazy read once LegendHDF5IO supports scattered index reads
 # (`getindex` on `LH5Array` for `AbstractVector{Int}`). The row mask can then be pushed
 # into the target read instead of materializing every row and filtering in memory.
-function _read_ldata_crosstier(f::Base.Callable, data::LegendData, tier::DataTier, filekey::FileKey, detsel, filter_tier::DataTier, filter_pf::Base.Callable; n_evts::Int=-1, ignore_missing::Bool=false)
-    isempty(string(detsel)) && throw(ArgumentError("Filtering :$tier by :$filter_tier requires a DetectorId"))
+function _read_ldata_crosstier(f::Base.Callable, data::LegendData, tier::DataTier, filekey::FileKey, detsel, pairs; n_evts::Int=-1, ignore_missing::Bool=false)
+    isempty(string(detsel)) && throw(ArgumentError("Filtering :$tier by $(join(map(p -> ":$(first(p))", pairs), ", ")) requires a DetectorId"))
     det = DetectorId(detsel)
-    filter_pf isa PropertyFunctions.PropertyFunction || throw(ArgumentError(
-        "Filtering :$tier by :$filter_tier requires a `@pf` PropertyFunction that names its source columns, got $(typeof(filter_pf))"))
 
-    filter_data = LegendDataManagement.read_ldata(_propfunc_src_columnnames(filter_pf), data, (filter_tier, filekey, det))
-    mask = coalesce.(filter_pf.(filter_data), false)
+    mask, mask_tier = nothing, nothing
+    for (filter_tier, filter_pf) in pairs
+        filter_pf isa PropertyFunctions.PropertyFunction || throw(ArgumentError(
+            "Filtering :$tier by :$filter_tier requires a `@pf` PropertyFunction that names its source columns, got $(typeof(filter_pf))"))
+        filter_data = LegendDataManagement.read_ldata(_propfunc_src_columnnames(filter_pf), data, (filter_tier, filekey, det))
+        m = coalesce.(filter_pf.(filter_data), false)
+        if isnothing(mask)
+            mask, mask_tier = m, filter_tier
+        else
+            length(m) == length(mask) || throw(DimensionMismatch(
+                "Filter tier :$filter_tier has $(length(m)) rows but :$mask_tier has $(length(mask)) rows for $det in $filekey"))
+            mask = mask .& m
+        end
+    end
 
     lh5_data = LegendDataManagement.read_ldata(f, data, (tier, filekey, det); ignore_missing)
     isnothing(lh5_data) && return nothing
     length(mask) == length(lh5_data) || throw(DimensionMismatch(
-        "Filter tier :$filter_tier has $(length(mask)) rows but :$tier has $(length(lh5_data)) rows for $det in $filekey"))
+        "Filter tier :$mask_tier has $(length(mask)) rows but :$tier has $(length(lh5_data)) rows for $det in $filekey"))
 
     _sample_rows(lh5_data[mask], n_evts)
 end
 
 # Every detector listed here lives in the one file the store was opened on, so all of
 # them are read from that single open store.
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey}; filterby::Union{Base.Callable, Pair}=Returns(true), n_evts::Int=-1, ignore_missing::Bool=false, parallel::Bool=false, wpool::WorkerPool=default_worker_pool())
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey}; filterby::Union{Base.Callable, Pair, Tuple}=Returns(true), n_evts::Int=-1, ignore_missing::Bool=false, parallel::Bool=false, wpool::WorkerPool=default_worker_pool())
     tier = DataTier(rsel[1])
-    filter_tier, filter_pf = _filter_spec(filterby)
-    # A cross-tier filter needs a detector to align the two tiers on.
-    if !isnothing(filter_tier) && filter_tier != tier
-        return _read_ldata_crosstier(f, data, tier, rsel[2], "", filter_tier, filter_pf; n_evts, ignore_missing)
+
+    filter_pf = filterby
+    if !(filterby isa Base.Callable)
+        pairs = _filter_pairs(filterby)
+        # A cross-tier filter needs a detector to align the tiers on.
+        if length(pairs) == 1 && first(first(pairs)) == tier
+            filter_pf = last(first(pairs))
+        else
+            return _read_ldata_crosstier(f, data, tier, rsel[2], "", pairs; n_evts, ignore_missing)
+        end
     end
 
     _lh5_data_open(data, tier, rsel[2], "") do h
