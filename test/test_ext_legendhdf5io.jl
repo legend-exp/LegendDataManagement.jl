@@ -157,6 +157,11 @@ using HDF5
             @test_throws "No `DetectorId` or `DataTier` key found" read_ldata(l200, tier, empty_fk)
             rm(empty_path)
 
+            # selector combinations without a read_ldata method are reported, not recursed on
+            @test_throws "does not support the selector combination" read_ldata(l200, (tier,))
+            @test_throws "does not support the selector combination" read_ldata(l200, (tier, cat))
+            @test_throws "does not support the selector combination" read_ldata(l200, (:jldsp, :cal))
+
             @testset "cross-tier filterby" begin
                 valid = isodd.(1:n)
                 hit_cut = @pf $is_valid_hit

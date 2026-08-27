@@ -309,7 +309,7 @@ LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{
 ### Argument distinction for different DataSelector Types
 function _convert_rsel2dsel(rsel::NTuple{<:Any, AbstractDataSelectorLike})
     selector_types = [PossibleDataSelectors[LegendDataManagement._can_convert_to.(PossibleDataSelectors, Ref(s))] for s in rsel]
-    if length(selector_types[2]) > 1 && DataCategory in selector_types[2]
+    if length(selector_types) >= 2 && length(selector_types[2]) > 1 && DataCategory in selector_types[2]
         selector_types[2] = [DataCategory]
     end
     if isempty(last(selector_types))
@@ -322,7 +322,11 @@ function _convert_rsel2dsel(rsel::NTuple{<:Any, AbstractDataSelectorLike})
 end
 
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::NTuple{<:Any, AbstractDataSelectorLike}; kwargs...)
-    LegendDataManagement.read_ldata(f, data, _convert_rsel2dsel(rsel); kwargs...)
+    dsel = _convert_rsel2dsel(rsel)
+    # Converting an already converted selector reaches this method again: no method takes
+    # this combination, so recursing on it would not terminate.
+    typeof(dsel) == typeof(rsel) && throw(ArgumentError("read_ldata does not support the selector combination $(typeof.(dsel))"))
+    LegendDataManagement.read_ldata(f, data, dsel; kwargs...)
 end
 
 LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPeriod}; kwargs...) =
