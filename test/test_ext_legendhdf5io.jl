@@ -8,6 +8,7 @@ using LegendTestData
 using PropertyFunctions
 using TypedTables
 
+using YAML
 using HDF5
 
 @testset "test_ext_legendhdf5io" begin
@@ -22,8 +23,19 @@ using HDF5
     @testset "read_ldata" begin
         mktempdir() do tmpdir
             tierdir = joinpath(tmpdir, "generated", "tier")
-            config = joinpath(tmpdir, "config.json")
-            write(config, """{"setups": {"l200": {"paths": {"tier": "$(tierdir)"}}}}""")
+            config = joinpath(tmpdir, "config.yaml")
+            config_data = Dict(
+                "setups" => Dict(
+                    "l200" => Dict(
+                        "paths" => Dict(
+                            "tier" => tierdir
+                        )
+                    )
+                )
+            )
+            open(config, "w") do f
+                YAML.write(f, config_data)
+            end
             ENV["LEGEND_DATA_CONFIG"] = config
 
             l200 = LegendData(:l200)
