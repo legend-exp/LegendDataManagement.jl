@@ -148,6 +148,15 @@ using HDF5
             rinfo = Table([(period = period, run = run)])
             @test read_ldata(l200, tier, cat, rinfo, det).timestamp == all_ts
 
+            # a file holding no detector and no tier group is an error, not an empty result
+            empty_fk = FileKey("l200-p03-r000-cal-20230311T235959Z")
+            empty_path = l200.tier[tier, empty_fk]
+            lh5open(empty_path, "w") do f
+                f["not_a_detector"] = Table(a = collect(1.0:5))
+            end
+            @test_throws "No `DetectorId` or `DataTier` key found" read_ldata(l200, tier, empty_fk)
+            rm(empty_path)
+
             @testset "cross-tier filterby" begin
                 valid = isodd.(1:n)
                 hit_cut = @pf $is_valid_hit

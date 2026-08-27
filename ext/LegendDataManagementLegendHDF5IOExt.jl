@@ -277,10 +277,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
                    LegendDataManagement._can_convert_to(DataTier, x)
         ids = filter(valid, keys(h))
         @debug "Found keys: $ids"
-        if isempty(ids)
-            @warn "No valid `DetectorId` or `DataTier` key found in $(basename(string(h.data_store))), returning an empty result"
-            return NamedTuple()
-        end
+        isempty(ids) && throw(ArgumentError("No `DetectorId` or `DataTier` key found in $(basename(string(h.data_store)))"))
         read_det(d) = _read_lh5_det(h, tier, d, f, filter_pf, n_evts, ignore_missing)
         if length(ids) == 1
             read_det(string(only(ids)) == string(tier) ? "" : string(only(ids)))
