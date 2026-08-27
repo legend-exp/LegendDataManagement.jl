@@ -178,6 +178,44 @@ _take_rows(x, idx) = x
 
 const _evt_tiers = DataTier.([:jlevt, :jlskm])
 
+# Read one detector from an open store, so several detectors of one file can share it.
+function _read_lh5_det(h, tier::DataTier, det, f::Base.Callable, filter_pf::Base.Callable, n_evts::Int, ignore_missing::Bool)
+    det_tier = tier in _evt_tiers ? "/$tier" : "$det/$tier"
+    if !isempty(string(det)) && !(tier in _evt_tiers) && !haskey(h, "$det")
+        if ignore_missing
+            @warn "Detector $det not found in $(basename(string(h.data_store)))"
+            return nothing
+        else
+            throw(ArgumentError("Detector $det not found in $(basename(string(h.data_store)))"))
+        end
+    end
+
+    # load detector data
+    if f isa PropSelFunction && filter_pf == Returns(true)
+        # if no filter given optimize performance for property selection functions by only loading required columns
+        Table(if length(_propfunc_src_columnnames(f)) == 1
+            NamedTuple{_propfunc_trg_columnnames(f)}([_load_all_keys(getproperty(only(_propfunc_src_columnnames(f)))(h[det_tier]), n_evts)])
+        else
+            NamedTuple{_propfunc_trg_columnnames(f)}(Tuple(values(columns(_load_all_keys(getproperties(_propfunc_src_columnnames(f))(h[det_tier]), n_evts)))))
+        end)
+    else
+        lh5_data = if filter_pf == Returns(true)
+            _load_all_keys(h[det_tier], n_evts)
+        else
+            # Subsample the rows that pass the filter, not the rows on disk.
+            _sample_rows(_load_all_keys(h[det_tier]) |> PropertyFunctions.filterby(filter_pf), n_evts)
+        end
+        if f != identity
+            lh5_data = f.(lh5_data)
+        end
+        if TypedTables.Tables.istable(lh5_data)
+            Table(lh5_data)
+        else
+            lh5_data
+        end
+    end
+end
+
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey, DetectorIdLike}; filterby::Union{Base.Callable, Pair}=Returns(true), n_evts::Int=-1, ignore_missing::Bool=false, parallel::Bool=false, wpool::WorkerPool=default_worker_pool())
     tier, filekey = DataTier(rsel[1]), rsel[2]
     filter_tier, filter_pf = _filter_spec(filterby)
@@ -190,39 +228,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     det_tier = tier in _evt_tiers ? "/$tier" : "$det/$tier"
 
     data_tier = _lh5_data_open(data, tier, filekey, det) do h
-        if !isempty(string(det)) && !(tier in _evt_tiers) && !haskey(h, "$det")
-            if ignore_missing
-                @warn "Detector $det not found in $(basename(string(h.data_store)))"
-                return nothing
-            else
-                throw(ArgumentError("Detector $det not found in $(basename(string(h.data_store)))"))
-            end
-        end
-
-        # load detector data
-        if f isa PropSelFunction && filter_pf == Returns(true)
-            # if no filter given optimize performance for property selection functions by only loading required columns
-            Table(if length(_propfunc_src_columnnames(f)) == 1
-                NamedTuple{_propfunc_trg_columnnames(f)}([_load_all_keys(getproperty(only(_propfunc_src_columnnames(f)))(h[det_tier]), n_evts)])
-            else
-                NamedTuple{_propfunc_trg_columnnames(f)}(Tuple(values(columns(_load_all_keys(getproperties(_propfunc_src_columnnames(f))(h[det_tier]), n_evts)))))
-            end)
-        else
-            lh5_data = if filter_pf == Returns(true)
-                _load_all_keys(h[det_tier], n_evts)
-            else
-                # Subsample the rows that pass the filter, not the rows on disk.
-                _sample_rows(_load_all_keys(h[det_tier]) |> PropertyFunctions.filterby(filter_pf), n_evts)
-            end
-            if f != identity
-                lh5_data = f.(lh5_data)
-            end
-            if TypedTables.Tables.istable(lh5_data)
-                Table(lh5_data)
-            else
-                lh5_data
-            end
-        end
+        _read_lh5_det(h, tier, det, f, filter_pf, n_evts, ignore_missing)
     end
     # jlevt+det: keep events where the detector triggered (per-event entry in trig_e_det).
     if tier in _evt_tiers && !isempty(string(det))
@@ -255,27 +261,32 @@ function _read_ldata_crosstier(f::Base.Callable, data::LegendData, tier::DataTie
     _sample_rows(lh5_data[mask], n_evts)
 end
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey}; kwargs...)
-    ids = _lh5_data_open(data, rsel[1], rsel[2], "") do h
-        keys(h)
+# Every detector listed here lives in the one file the store was opened on, so all of
+# them are read from that single open store.
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTierLike, FileKey}; filterby::Union{Base.Callable, Pair}=Returns(true), n_evts::Int=-1, ignore_missing::Bool=false, parallel::Bool=false, wpool::WorkerPool=default_worker_pool())
+    tier = DataTier(rsel[1])
+    filter_tier, filter_pf = _filter_spec(filterby)
+    # A cross-tier filter needs a detector to align the two tiers on.
+    if !isnothing(filter_tier) && filter_tier != tier
+        return _read_ldata_crosstier(f, data, tier, rsel[2], "", filter_tier, filter_pf; n_evts, ignore_missing)
     end
-    # Top-level keys are either the tier itself (event-tier files) or detector ids.
-    valid(x) = LegendDataManagement._can_convert_to(DetectorId, x) ||
-               LegendDataManagement._can_convert_to(DataTier, x)
-    ids = filter(valid, ids)
-    @debug "Found keys: $ids"
-    if isempty(ids)
-        @warn "No valid `DetectorId` or `DataTier` key found in $(basename(data.tier[rsel[1], rsel[2]])), returning an empty result"
-        return NamedTuple()
-    end
-    if length(ids) == 1
-        if string(only(ids)) == string(rsel[1])
-            LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], ""); kwargs...)
-        else
-            LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], string(only(ids))); kwargs...)
+
+    _lh5_data_open(data, tier, rsel[2], "") do h
+        # Top-level keys are either the tier itself (event-tier files) or detector ids.
+        valid(x) = LegendDataManagement._can_convert_to(DetectorId, x) ||
+                   LegendDataManagement._can_convert_to(DataTier, x)
+        ids = filter(valid, keys(h))
+        @debug "Found keys: $ids"
+        if isempty(ids)
+            @warn "No valid `DetectorId` or `DataTier` key found in $(basename(string(h.data_store))), returning an empty result"
+            return NamedTuple()
         end
-    else
-        NamedTuple{Tuple(Symbol.(ids))}([LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], d); kwargs...) for d in ids])
+        read_det(d) = _read_lh5_det(h, tier, d, f, filter_pf, n_evts, ignore_missing)
+        if length(ids) == 1
+            read_det(string(only(ids)) == string(tier) ? "" : string(only(ids)))
+        else
+            NamedTuple{Tuple(Symbol.(ids))}([read_det(d) for d in ids])
+        end
     end
 end
 

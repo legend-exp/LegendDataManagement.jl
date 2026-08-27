@@ -71,11 +71,19 @@ using HDF5
             @test read_ldata((@pf (; bltime = $timestamp * $baseline, )), l200, tier, fk, det).bltime ==
                 data_fk.timestamp .* data_fk.baseline
 
-            # no detector given: one entry per detector in the file
+            # no detector given: one entry per detector in the file, each matching the
+            # result of reading that detector on its own
             perdet = read_ldata(l200, tier, fk)
             @test perdet isa NamedTuple
             @test Set(keys(perdet)) == Set(Symbol.(dets))
             @test perdet[Symbol(det)].timestamp == data_fk.timestamp
+            for d in dets
+                @test perdet[Symbol(d)] == read_ldata(l200, tier, fk, d)
+            end
+            @test read_ldata((:timestamp,), l200, (tier, fk))[Symbol(det)] ==
+                read_ldata((:timestamp,), l200, (tier, fk, det))
+            @test read_ldata(l200, tier, fk; filterby = @pf $daqenergy > 1000)[Symbol(det)] ==
+                read_ldata(l200, tier, fk, det; filterby = @pf $daqenergy > 1000)
 
             # whole run (both filekeys, flattened)
             all_ts = vcat((cols[k].timestamp for k in fks)...)
