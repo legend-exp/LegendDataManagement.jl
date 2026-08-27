@@ -121,18 +121,19 @@ function __init__()
     (@isdefined DataPartition) && extend_datatype_dict(DataPartition, "datapartition")
 end
 
+# Paths are resolved and stat'ed one at a time: file metadata lookups are expensive on
+# the parallel filesystems holding the production data.
 function _lh5_data_open(f::Function, data::LegendData, tier::DataTierLike, filekey::FileKey, det::DetectorIdLike, mode::AbstractString="r")
-    det_filename = data.tier[DataTier(tier), filekey, det]
-    filename = data.tier[DataTier(tier), filekey]
-    if isfile(det_filename)
+    t = DataTier(tier)
+    det_filename = isempty(string(det)) ? nothing : data.tier[t, filekey, det]
+    if !isnothing(det_filename) && isfile(det_filename)
         @debug "Read from $(basename(det_filename))"
-        LegendHDF5IO.lh5open(f, det_filename, mode)
-    elseif isfile(filename)
-        @debug "Read from $(basename(filename))"
-        LegendHDF5IO.lh5open(f, filename, mode)
-    else
-        throw(ArgumentError("Neither $(basename(filename)) nor $(basename(det_filename)) found"))
+        return LegendHDF5IO.lh5open(f, det_filename, mode)
     end
+    filename = data.tier[t, filekey]
+    isfile(filename) && return LegendHDF5IO.lh5open(f, filename, mode)
+    throw(ArgumentError(isnothing(det_filename) ? "$(basename(filename)) not found" :
+        "Neither $(basename(filename)) nor $(basename(det_filename)) found"))
 end
 
 _skipnothingmissing(xv::AbstractVector) = [x for x in skipmissing(xv) if !isnothing(x)]
