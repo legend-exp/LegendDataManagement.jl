@@ -162,7 +162,7 @@ function _dataprod_qc(data::LegendData, sel::AnyValiditySelection, detector::Det
     merge(_dataprod_qc(data, sel).default, get(_dataprod_qc(data, sel), detector, PropDict()))
 end
 
-const _cached_dataprod_qc_cuts_pf = LRU{Tuple{UInt, AnyValiditySelection}, PropertyFunction}(maxsize = 10^2)
+const _cached_dataprod_qc_cuts_pf = LRU{Tuple{UInt, AnyValiditySelection, DetectorId}, PropertyFunction}(maxsize = 10^2)
 
 
 """
@@ -171,7 +171,7 @@ const _cached_dataprod_qc_cuts_pf = LRU{Tuple{UInt, AnyValiditySelection}, Prope
 Get the Ge-detector QC cut definitions for the given data and validity selection.
 """
 function get_ged_qc_cuts_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    key = (objectid(data), sel)
+    key = (objectid(data), sel, detector)
     get!(_cached_dataprod_qc_cuts_pf, key) do
         cut_def_props = _dataprod_qc(data, sel, detector).labels
         return ljl_propfunc(cut_def_props)
@@ -179,7 +179,7 @@ function get_ged_qc_cuts_propfunc(data::LegendData, sel::AnyValiditySelection, d
 end
 export get_ged_qc_cuts_propfunc
 
-const _cached_dataprod_is_trig_pf = LRU{Tuple{UInt, AnyValiditySelection}, PropertyFunction}(maxsize = 10^2)
+const _cached_dataprod_is_trig_pf = LRU{Tuple{UInt, AnyValiditySelection, DetectorId}, PropertyFunction}(maxsize = 10^2)
 
 """
     get_ged_qc_istrig_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
@@ -187,7 +187,7 @@ const _cached_dataprod_is_trig_pf = LRU{Tuple{UInt, AnyValiditySelection}, Prope
 Get the Ge-detector trigger condition for the given data and validity selection.
 """
 function get_ged_qc_is_trig_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    key = (objectid(data), sel)
+    key = (objectid(data), sel, detector)
     get!(_cached_dataprod_is_trig_pf, key) do
         is_trig_def_props = _dataprod_qc(data, sel, detector).is_trig
         return ljl_propfunc(is_trig_def_props)
@@ -195,39 +195,69 @@ function get_ged_qc_is_trig_propfunc(data::LegendData, sel::AnyValiditySelection
 end
 export get_ged_qc_is_trig_propfunc
 
-const _cached_dataprod_is_physical_pf = LRU{Tuple{UInt, AnyValiditySelection}, PropertyFunction}(maxsize = 10^2)
+const _cached_dataprod_is_single_pulse_pf = LRU{Tuple{UInt, AnyValiditySelection, DetectorId}, PropertyFunction}(maxsize = 10^2)
 
 """
-    get_ged_qc_is_physical_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    get_ged_qc_is_single_pulse_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
 
-Get a `PropertyFunction` that returns `true` for events that fullfill the `is_physical` definition.
+Get a `PropertyFunction` that returns `true` for events that fullfill the `is_single_pulse` definition.
 """
-function get_ged_qc_is_physical_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    key = (objectid(data), sel)
-    get!(_cached_dataprod_is_physical_pf, key) do
-        is_physical_def_props = _dataprod_qc(data, sel, detector).is_physical
-        return ljl_propfunc(is_physical_def_props)
+function get_ged_qc_is_single_pulse_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    key = (objectid(data), sel, detector)
+    get!(_cached_dataprod_is_single_pulse_pf, key) do
+        is_single_pulse_def_props = _dataprod_qc(data, sel, detector).is_single_pulse
+        return ljl_propfunc(is_single_pulse_def_props)
     end
 end
-export get_ged_qc_is_physical_propfunc
+export get_ged_qc_is_single_pulse_propfunc
 
-const _cached_dataprod_is_baseline_pf = LRU{Tuple{UInt, AnyValiditySelection}, PropertyFunction}(maxsize = 10^2)
+const _cached_dataprod_is_single_pulse_ac_pf = LRU{Tuple{UInt, AnyValiditySelection, DetectorId}, PropertyFunction}(maxsize = 10^2)
 
 """
-    get_ged_qc_is_baseline_propfunc(data::LegendData, sel::AnyValiditySelection)
+    get_ged_qc_is_single_pulse_ac_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
 
-Get a `PropertyFunction` that returns `true` for events that fullfill the `is_baseline` definition.
+Get a `PropertyFunction` that returns `true` for events that fullfill the `is_single_pulse_ac` definition.
 """
-function get_ged_qc_is_baseline_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    key = (objectid(data), sel)
-    get!(_cached_dataprod_is_baseline_pf, key) do
-        is_baseline_def_props = _dataprod_qc(data, sel, detector).is_baseline
-        return ljl_propfunc(is_baseline_def_props)
+function get_ged_qc_is_single_pulse_ac_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    key = (objectid(data), sel, detector)
+    get!(_cached_dataprod_is_single_pulse_ac_pf, key) do
+        is_single_pulse_ac_def_props = _dataprod_qc(data, sel, detector).is_single_pulse_ac
+        return ljl_propfunc(is_single_pulse_ac_def_props)
     end
 end
-export get_ged_qc_is_baseline_propfunc
+export get_ged_qc_is_single_pulse_ac_propfunc
 
+const _cached_dataprod_is_empty_trace_pf = LRU{Tuple{UInt, AnyValiditySelection, DetectorId}, PropertyFunction}(maxsize = 10^2)
 
+"""
+    get_ged_qc_is_empty_trace_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+
+Get a `PropertyFunction` that returns `true` for events that fullfill the `is_empty_trace` definition.
+"""
+function get_ged_qc_is_empty_trace_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    key = (objectid(data), sel, detector)
+    get!(_cached_dataprod_is_empty_trace_pf, key) do
+        is_empty_trace_def_props = _dataprod_qc(data, sel, detector).is_empty_trace
+        return ljl_propfunc(is_empty_trace_def_props)
+    end
+end
+export get_ged_qc_is_empty_trace_propfunc
+
+const _cached_dataprod_is_crosstalk_pf = LRU{Tuple{UInt, AnyValiditySelection, DetectorId}, PropertyFunction}(maxsize = 10^2)
+
+"""
+    get_ged_qc_is_crosstalk_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+
+Get a `PropertyFunction` that returns `true` for events that fullfill the `is_crosstalk` definition.
+"""
+function get_ged_qc_is_crosstalk_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    key = (objectid(data), sel, detector)
+    get!(_cached_dataprod_is_crosstalk_pf, key) do
+        is_crosstalk_def_props = _dataprod_qc(data, sel, detector).is_crosstalk
+        return ljl_propfunc(is_crosstalk_def_props)
+    end
+end
+export get_ged_qc_is_crosstalk_propfunc
 
 
 ### HPGe cut functions
