@@ -184,8 +184,8 @@ const _evt_tiers = DataTier.([:jlevt, :jlskm])
 
 # Read one detector from an open store, so several detectors of one file can share it.
 function _read_lh5_det(h, tier::DataTier, det, f::Base.Callable, filter_pf::Base.Callable, n_evts::Int, ignore_missing::Bool)
-    det_tier = tier in _evt_tiers ? "/$tier" : "$det/$tier"
-    if !isempty(string(det)) && !(tier in _evt_tiers) && !haskey(h, "$det")
+    det_tier = tier in _evt_tiers || isempty(string(det)) ? "/$tier" : "$tier/$det"
+    if !isempty(string(det)) && !(tier in _evt_tiers) && !haskey(h, det_tier)
         if ignore_missing
             @warn "Detector $det not found in $(basename(string(h.data_store)))"
             return nothing
@@ -235,7 +235,6 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     end
 
     det = !isempty(string(rsel[3])) ? DetectorId(rsel[3]) : rsel[3]
-    det_tier = tier in _evt_tiers ? "/$tier" : "$det/$tier"
 
     data_tier = _lh5_data_open(data, tier, filekey, det) do h
         _read_lh5_det(h, tier, det, f, filter_pf, n_evts, ignore_missing)
@@ -299,10 +298,12 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     end
 
     _lh5_data_open(data, tier, rsel[2], "") do h
-        # Top-level keys are either the tier itself (event-tier files) or detector ids.
+        # Detector ids sit under the tier group (tier/<det>); event-tier files hold only the
+        # tier group itself. Listed via the HDF5 group: h["$tier"] would read the whole group.
         valid(x) = LegendDataManagement._can_convert_to(DetectorId, x) ||
                    LegendDataManagement._can_convert_to(DataTier, x)
-        ids = filter(valid, keys(h))
+        ids = haskey(h, "$tier") ? filter(x -> LegendDataManagement._can_convert_to(DetectorId, x), keys(h.data_store["$tier"])) : String[]
+        isempty(ids) && (ids = filter(valid, keys(h)))
         @debug "Found keys: $ids"
         isempty(ids) && throw(ArgumentError("No `DetectorId` or `DataTier` key found in $(basename(string(h.data_store)))"))
         read_det(d) = _read_lh5_det(h, tier, d, f, filter_pf, n_evts, ignore_missing)
