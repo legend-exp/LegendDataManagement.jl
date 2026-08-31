@@ -241,85 +241,82 @@ using HDF5
     # every tier carries.
     @testset "read_ldata on the LegendTestData Julia tiers" begin
         tier = DataTier(:jldsp)
-        if !(tier in search_disk(DataTier, l200_lh5.tier[]))
-            @info "no $tier tier in this LegendTestData version, skipping"
-        else
-            l200 = l200_lh5
-            cat = first(search_disk(DataCategory, l200.tier[tier]))
-            period = first(search_disk(DataPeriod, l200.tier[tier, cat]))
-            run = first(search_disk(DataRun, l200.tier[tier, cat, period]))
-            fks = search_disk(FileKey, l200.tier[tier, cat, period, run])
-            @test !isempty(fks)
-            fk = first(fks)
+        @test tier in search_disk(DataTier, l200_lh5.tier[])
+        l200 = l200_lh5
+        cat = first(search_disk(DataCategory, l200.tier[tier]))
+        period = first(search_disk(DataPeriod, l200.tier[tier, cat]))
+        run = first(search_disk(DataRun, l200.tier[tier, cat, period]))
+        fks = search_disk(FileKey, l200.tier[tier, cat, period, run])
+        @test !isempty(fks)
+        fk = first(fks)
 
-            # reference: the file read directly through LegendHDF5IO
-            dets = Symbol.(lh5open(f -> keys(f.data_store["$tier"]), l200.tier[tier, fk]))
-            @test !isempty(dets)
-            det = DetectorId(first(dets))
-            ref = lh5open(f -> f[Symbol(tier), Symbol(det)][:], l200.tier[tier, fk])
-            @test ref isa TypedTables.Table
-            n = length(ref)
-            x = ref.timestamp
+        # reference: the file read directly through LegendHDF5IO
+        dets = Symbol.(lh5open(f -> keys(f.data_store["$tier"]), l200.tier[tier, fk]))
+        @test !isempty(dets)
+        det = DetectorId(first(dets))
+        ref = lh5open(f -> f[Symbol(tier), Symbol(det)][:], l200.tier[tier, fk])
+        @test ref isa TypedTables.Table
+        n = length(ref)
+        x = ref.timestamp
 
-            # single filekey, column selection
-            @test isequal(read_ldata(l200, tier, fk, det).timestamp, x)
-            @test isequal(read_ldata(:timestamp, l200, tier, fk, det).timestamp, x)
-            @test isequal(read_ldata((:timestamp,), l200, tier, fk, det).timestamp, x)
+        # single filekey, column selection
+        @test isequal(read_ldata(l200, tier, fk, det).timestamp, x)
+        @test isequal(read_ldata(:timestamp, l200, tier, fk, det).timestamp, x)
+        @test isequal(read_ldata((:timestamp,), l200, tier, fk, det).timestamp, x)
 
-            # no detector: one entry per detector in the file
-            perdet = read_ldata((:timestamp,), l200, tier, fk)
-            @test Set(keys(perdet)) == Set(dets)
-            @test isequal(perdet[Symbol(det)].timestamp, x)
+        # no detector: one entry per detector in the file
+        perdet = read_ldata((:timestamp,), l200, tier, fk)
+        @test Set(keys(perdet)) == Set(dets)
+        @test isequal(perdet[Symbol(det)].timestamp, x)
 
-            # whole run and runtable: the filekeys concatenated in search_disk order
-            n_run = sum(length(lh5open(f -> f[Symbol(tier), Symbol(det)][:], l200.tier[tier, k])) for k in fks)
-            x_run = read_ldata(:timestamp, l200, tier, cat, period, run, det).timestamp
-            @test length(x_run) == n_run
-            @test isequal(x_run[1:n], x)
-            @test isequal(read_ldata(:timestamp, l200, tier, cat, Table([(period = period, run = run)]), det).timestamp, x_run)
+        # whole run and runtable: the filekeys concatenated in search_disk order
+        n_run = sum(length(lh5open(f -> f[Symbol(tier), Symbol(det)][:], l200.tier[tier, k])) for k in fks)
+        x_run = read_ldata(:timestamp, l200, tier, cat, period, run, det).timestamp
+        @test length(x_run) == n_run
+        @test isequal(x_run[1:n], x)
+        @test isequal(read_ldata(:timestamp, l200, tier, cat, Table([(period = period, run = run)]), det).timestamp, x_run)
 
-            # filterby with a threshold taken from the data, n_evts after the filter
-            thr = sort(x)[(n + 1) ÷ 2]
-            keep = findall(x .> thr)
-            @test 0 < length(keep) < n
-            @test isequal(read_ldata(:timestamp, l200, tier, fk, det; filterby = @pf($timestamp > thr)).timestamp, x[keep])
-            k = min(3, length(keep))
-            @test length(read_ldata(l200, tier, fk, det; filterby = @pf($timestamp > thr), n_evts = k)) == k
+        # filterby with a threshold taken from the data, n_evts after the filter
+        thr = sort(x)[(n + 1) ÷ 2]
+        keep = findall(x .> thr)
+        @test 0 < length(keep) < n
+        @test isequal(read_ldata(:timestamp, l200, tier, fk, det; filterby = @pf($timestamp > thr)).timestamp, x[keep])
+        k = min(3, length(keep))
+        @test length(read_ldata(l200, tier, fk, det; filterby = @pf($timestamp > thr), n_evts = k)) == k
 
-            # raw and jldsp hold one row per trigger: cross-tier filter in both directions
-            raw = read_ldata((:timestamp,), l200, :raw, fk, det)
-            @test length(raw) == n
-            xr = raw.timestamp
-            thr_raw = sort(xr)[(n + 1) ÷ 2]
-            keep_raw = findall(xr .> thr_raw)
-            @test isequal(read_ldata(:timestamp, l200, tier, fk, det; filterby = :raw => @pf($timestamp > thr_raw)).timestamp, x[keep_raw])
-            @test isequal(read_ldata(:timestamp, l200, :raw, fk, det; filterby = tier => @pf($timestamp > thr)).timestamp, xr[keep])
+        # raw and jldsp hold one row per trigger: cross-tier filter in both directions
+        raw = read_ldata((:timestamp,), l200, :raw, fk, det)
+        @test length(raw) == n
+        xr = raw.timestamp
+        thr_raw = sort(xr)[(n + 1) ÷ 2]
+        keep_raw = findall(xr .> thr_raw)
+        @test isequal(read_ldata(:timestamp, l200, tier, fk, det; filterby = :raw => @pf($timestamp > thr_raw)).timestamp, x[keep_raw])
+        @test isequal(read_ldata(:timestamp, l200, :raw, fk, det; filterby = tier => @pf($timestamp > thr)).timestamp, xr[keep])
 
-            # per-detector-file tier: one file per detector, its subgroups come back by name
-            hit_tier = DataTier(:jlhit)
-            hit_path = l200.tier[hit_tier, fk, det]
-            @test isfile(hit_path)
-            subgroups = Symbol.(lh5open(f -> keys(f.data_store["$hit_tier/$det"]), hit_path))
-            @test Set(propertynames(read_ldata(l200, hit_tier, fk, det))) == Set(subgroups)
+        # per-detector-file tier: one file per detector, its subgroups come back by name
+        hit_tier = DataTier(:jlhit)
+        hit_path = l200.tier[hit_tier, fk, det]
+        @test isfile(hit_path)
+        subgroups = Symbol.(lh5open(f -> keys(f.data_store["$hit_tier/$det"]), hit_path))
+        @test Set(propertynames(read_ldata(l200, hit_tier, fk, det))) == Set(subgroups)
 
-            # event tier: the whole file, then sliced to the events of one detector
-            evt_tier = DataTier(:jlevt)
-            cat_evt = first(search_disk(DataCategory, l200.tier[evt_tier]))
-            period_evt = first(search_disk(DataPeriod, l200.tier[evt_tier, cat_evt]))
-            run_evt = first(search_disk(DataRun, l200.tier[evt_tier, cat_evt, period_evt]))
-            fk_evt = first(search_disk(FileKey, l200.tier[evt_tier, cat_evt, period_evt, run_evt]))
-            evt = read_ldata(l200, evt_tier, fk_evt)
-            @test evt isa TypedTables.Table
-            @test :geds in propertynames(evt)
-            det_evt = first(first(filter(!isempty, evt.geds.trig_e_det)))
-            evt_det = read_ldata(l200, evt_tier, fk_evt, det_evt)
-            @test 0 < length(evt_det) <= length(evt)
-            @test all(any.(map.(isequal(det_evt), evt_det.geds.trig_e_det)))
+        # event tier: the whole file, then sliced to the events of one detector
+        evt_tier = DataTier(:jlevt)
+        cat_evt = first(search_disk(DataCategory, l200.tier[evt_tier]))
+        period_evt = first(search_disk(DataPeriod, l200.tier[evt_tier, cat_evt]))
+        run_evt = first(search_disk(DataRun, l200.tier[evt_tier, cat_evt, period_evt]))
+        fk_evt = first(search_disk(FileKey, l200.tier[evt_tier, cat_evt, period_evt, run_evt]))
+        evt = read_ldata(l200, evt_tier, fk_evt)
+        @test evt isa TypedTables.Table
+        @test :geds in propertynames(evt)
+        det_evt = first(first(filter(!isempty, evt.geds.trig_e_det)))
+        evt_det = read_ldata(l200, evt_tier, fk_evt, det_evt)
+        @test 0 < length(evt_det) <= length(evt)
+        @test all(any.(map.(isequal(det_evt), evt_det.geds.trig_e_det)))
 
-            # single-system event tier (no per-detector groups) is read as one table
-            if DataTier(:jlpmt) in search_disk(DataTier, l200.tier[])
-                @test read_ldata(l200, :jlpmt, fk_evt) isa TypedTables.Table
-            end
+        # single-system event tier (no per-detector groups) is read as one table
+        if DataTier(:jlpmt) in search_disk(DataTier, l200.tier[])
+            @test read_ldata(l200, :jlpmt, fk_evt) isa TypedTables.Table
         end
     end
 
