@@ -11,7 +11,16 @@ using Unitful
     @test setup.label == :l200
     @test @inferred(string(setup)) == "l200"
     @test @inferred(ExpSetup("l200")) == setup
-    @test_throws ArgumentError DataPeriod("invalidsetup")
+    @test_throws ArgumentError ExpSetup("invalidsetup")
+    @test_throws ArgumentError ExpSetup(:invalidsetup)
+
+    tier = DataTier(:dsp)
+    @test tier.label == :dsp
+    @test @inferred(string(tier)) == "dsp"
+    @test @inferred(DataTier("dsp")) == tier
+    @test @inferred(DataTier("jldsp")) == DataTier(:jldsp)
+    @test_throws ArgumentError DataTier("jlpeaks")
+    @test_throws ArgumentError DataTier(:jlpeaks)
 
     period = DataPeriod(2)
     @test period.no == 2
@@ -33,6 +42,7 @@ using Unitful
     @test @inferred(string(category)) == "cal"
     @test @inferred(DataCategory("cal")) == category
     @test_throws ArgumentError DataCategory("invalidstring")
+    @test_throws ArgumentError DataCategory(:invalidsymbol)
 
     p = DataPartition("calgroup001a")
     @test p.no == 1
