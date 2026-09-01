@@ -39,6 +39,13 @@ ExpSetup("l200") == setup
 """
 struct ExpSetup <: DataSelector
     label::Symbol
+    function ExpSetup(label::Symbol)
+        s = string(label)
+        _can_convert_to(ExpSetup, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND setup name"))
+        length(s) < 3 && throw(ArgumentError("String \"$s\" is too short to be a valid LEGEND setup name"))
+        length(s) > 8 && throw(ArgumentError("String \"$s\" is too long to be a valid LEGEND setup name"))
+        new(label)
+    end
 end
 export ExpSetup
 
@@ -54,12 +61,7 @@ _can_convert_to(::Type{ExpSetup}, s::Symbol) = _can_convert_to(ExpSetup, string(
 _can_convert_to(::Type{ExpSetup}, s::ExpSetup) = true
 _can_convert_to(::Type{ExpSetup}, s) = false
 
-function ExpSetup(s::AbstractString)
-    _can_convert_to(ExpSetup, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND setup name"))
-    length(s) < 3 && throw(ArgumentError("String \"$s\" is too short to be a valid LEGEND setup name"))
-    length(s) > 8 && throw(ArgumentError("String \"$s\" is too long to be a valid LEGEND setup name"))
-    ExpSetup(Symbol(s))
-end
+ExpSetup(s::AbstractString) = ExpSetup(Symbol(s))
 
 Base.convert(::Type{ExpSetup}, s::Symbol) = ExpSetup(s)
 Base.convert(::Type{ExpSetup}, s::AbstractString) = ExpSetup(s)
@@ -95,6 +97,12 @@ DataTier("raw") == tier
 """
 struct DataTier <: DataSelector
     label::Symbol
+    function DataTier(label::Symbol)
+        s = string(label)
+        _can_convert_to(DataTier, s) ||
+            throw(ArgumentError("String \"$s\" does not look like a valid LEGEND data tier"))
+        new(label)
+    end
 end
 export DataTier
 
@@ -103,19 +111,14 @@ export DataTier
 Base.:(==)(a::DataTier, b::DataTier) = a.label == b.label
 Base.isless(a::DataTier, b::DataTier) = isless(a.label, b.label)
 
-const tier_expr = r"^([a-z]+)$"
+const tier_expr = r"^(?:jl)?[a-z]{3}$"
 
 _can_convert_to(::Type{DataTier}, s::AbstractString) = !isnothing(match(tier_expr, s))
 _can_convert_to(::Type{DataTier}, s::Symbol) = _can_convert_to(DataTier, string(s))
 _can_convert_to(::Type{DataTier}, s::DataTier) = true
 _can_convert_to(::Type{DataTier}, s) = false
 
-function DataTier(s::AbstractString)
-    _can_convert_to(DataTier, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data tier"))
-    length(s) < 3 && throw(ArgumentError("String \"$s\" is too short to be a valid LEGEND data tier"))
-    length(s) > 6 && throw(ArgumentError("String \"$s\" is too long to be a valid LEGEND data tier"))
-    DataTier(Symbol(s))
-end
+DataTier(s::AbstractString) = DataTier(Symbol(s))
 
 Base.convert(::Type{DataTier}, s::AbstractString) = DataTier(s)
 Base.convert(::Type{DataTier}, s::Symbol) = DataTier(s)
@@ -271,6 +274,12 @@ DataCategory("cal") == category
 """
 struct DataCategory <: DataSelector
     label::Symbol
+    function DataCategory(label::Symbol)
+        s = string(label)
+        _can_convert_to(DataCategory, s) ||
+            throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data category"))
+        new(label)
+    end
 end
 export DataCategory
 
@@ -286,12 +295,7 @@ _can_convert_to(::Type{DataCategory}, s::Symbol) = _can_convert_to(DataCategory,
 _can_convert_to(::Type{DataCategory}, s::DataCategory) = true
 _can_convert_to(::Type{DataCategory}, s) = false
 
-function DataCategory(s::AbstractString)
-    _can_convert_to(DataCategory, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data category"))
-    length(s) < 3 && throw(ArgumentError("String \"$s\" is too short to be a valid LEGEND data category"))
-    length(s) > 6 && throw(ArgumentError("String \"$s\" is too long to be a valid LEGEND data category"))
-    DataCategory(Symbol(s))
-end
+DataCategory(s::AbstractString) = DataCategory(Symbol(s))
 
 Base.convert(::Type{DataCategory}, s::AbstractString) = DataCategory(s)
 Base.convert(::Type{DataCategory}, s::Symbol) = DataCategory(s)
