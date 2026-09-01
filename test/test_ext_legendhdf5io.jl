@@ -318,6 +318,18 @@ using HDF5
         if DataTier(:jlpmt) in search_disk(DataTier, l200.tier[])
             @test read_ldata(l200, :jlpmt, fk_evt) isa TypedTables.Table
         end
+
+        # every detector of every file of this tier, whatever its column schema
+        for c in search_disk(DataCategory, l200.tier[tier]),
+            p in search_disk(DataPeriod, l200.tier[tier, c]),
+            r in search_disk(DataRun, l200.tier[tier, c, p]),
+            k in search_disk(FileKey, l200.tier[tier, c, p, r])
+
+            for d in lh5open(f -> keys(f.data_store["$tier"]), l200.tier[tier, k])
+                t = read_ldata(l200, tier, k, DetectorId(d))
+                @test t isa TypedTables.Table && !isempty(t) && !isempty(propertynames(t))
+            end
+        end
     end
 
     @testset "DataSelector LH5 I/O" begin
