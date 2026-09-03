@@ -429,7 +429,8 @@ function _get_md_property(@nospecialize(pd::PropsDB), s::Symbol)
         _check_propery_access(pd, yaml_override_filename)
         readlprops(yaml_override_filename)
     else
-        if !_needs_vsel(pd) && (isnothing(_validity_sel(pd)) || isempty(_validity_sel(pd)))
+        # without a validity selection a missing entry is a writable placeholder, even if the directory has a validity.yaml
+        if isnothing(_validity_sel(pd)) || isempty(_validity_sel(pd))
             NoSuchPropsDBEntry(_base_path(pd), push!(copy(_rel_path(pd)), string(s)))
         else
             throw(ArgumentError("Metadata entry doesn't have a property $s"))
