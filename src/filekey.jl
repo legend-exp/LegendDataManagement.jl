@@ -40,10 +40,8 @@ ExpSetup("l200") == setup
 struct ExpSetup <: DataSelector
     label::Symbol
     function ExpSetup(label::Symbol)
-        s = string(label)
-        _can_convert_to(ExpSetup, s) || throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND setup name"))
-        length(s) < 3 && throw(ArgumentError("String \"$s\" is too short to be a valid LEGEND setup name"))
-        length(s) > 8 && throw(ArgumentError("String \"$s\" is too long to be a valid LEGEND setup name"))
+        _can_convert_to(ExpSetup, label) ||
+            throw(ArgumentError("Symbol \"$label\" does not look like a valid LEGEND setup name"))
         new(label)
     end
 end
@@ -56,7 +54,8 @@ Base.isless(a::ExpSetup, b::ExpSetup) = isless(a.label, b.label)
 
 const _setup_expr = r"^([a-z][a-z0-9]*)$"
 
-_can_convert_to(::Type{ExpSetup}, s::AbstractString) = !isnothing(match(_setup_expr, s))
+_can_convert_to(::Type{ExpSetup}, s::AbstractString) =
+    !isnothing(match(_setup_expr, s)) && 3 <= length(s) <= 8
 _can_convert_to(::Type{ExpSetup}, s::Symbol) = _can_convert_to(ExpSetup, string(s))
 _can_convert_to(::Type{ExpSetup}, s::ExpSetup) = true
 _can_convert_to(::Type{ExpSetup}, s) = false
@@ -98,9 +97,8 @@ DataTier("raw") == tier
 struct DataTier <: DataSelector
     label::Symbol
     function DataTier(label::Symbol)
-        s = string(label)
-        _can_convert_to(DataTier, s) ||
-            throw(ArgumentError("String \"$s\" does not look like a valid LEGEND data tier"))
+        _can_convert_to(DataTier, label) ||
+            throw(ArgumentError("Symbol \"$label\" does not look like a valid LEGEND data tier"))
         new(label)
     end
 end
@@ -154,6 +152,11 @@ DataPeriod("p02") == period
 """
 struct DataPeriod <: DataSelector
     no::Int
+    function DataPeriod(no::Int)
+        _can_convert_to(DataPeriod, no) ||
+            throw(ArgumentError("Integer \"$no\" does not look like a valid LEGEND data period"))
+        new(no)
+    end
 end
 export DataPeriod
 
@@ -169,6 +172,7 @@ const period_expr = r"^p([0-9]{2})$"
 
 _can_convert_to(::Type{DataPeriod}, s::AbstractString) = !isnothing(match(period_expr, s))
 _can_convert_to(::Type{DataPeriod}, s::Symbol) = _can_convert_to(DataPeriod, string(s))
+_can_convert_to(::Type{DataPeriod}, no::Integer) = 0 <= no <= 99
 _can_convert_to(::Type{DataPeriod}, s::DataPeriod) = true
 _can_convert_to(::Type{DataPeriod}, s) = false
 
@@ -215,6 +219,11 @@ DataRun("r006") == r
 """
 struct DataRun <: DataSelector
     no::Int
+    function DataRun(no::Int)
+        _can_convert_to(DataRun, no) ||
+            throw(ArgumentError("Integer \"$no\" does not look like a valid LEGEND data run"))
+        new(no)
+    end
 end
 export DataRun
 
@@ -230,6 +239,7 @@ const run_expr = r"^r([0-9]{3})$"
 
 _can_convert_to(::Type{DataRun}, s::AbstractString) = !isnothing(match(run_expr, s))
 _can_convert_to(::Type{DataRun}, s::Symbol) = _can_convert_to(DataRun, string(s))
+_can_convert_to(::Type{DataRun}, no::Integer) = 0 <= no <= 999
 _can_convert_to(::Type{DataRun}, s::DataRun) = true
 _can_convert_to(::Type{DataRun}, s) = false
 
@@ -275,9 +285,8 @@ DataCategory("cal") == category
 struct DataCategory <: DataSelector
     label::Symbol
     function DataCategory(label::Symbol)
-        s = string(label)
-        _can_convert_to(DataCategory, s) ||
-            throw(ArgumentError("String \"$s\" does not look like a valid file LEGEND data category"))
+        _can_convert_to(DataCategory, label) ||
+            throw(ArgumentError("Symbol \"$label\" does not look like a valid LEGEND data category"))
         new(label)
     end
 end
@@ -360,7 +369,11 @@ struct DataPartition <: DataSelector
     no::Int
     set::Symbol
     cat::DataCategory
-    DataPartition(no::Int, set::Symbol = :a, cat::DataCategory = DataCategory(:cal)) = new(no, set, cat)
+    function DataPartition(no::Int, set::Symbol = :a, cat::DataCategory = DataCategory(:cal))
+        0 <= no <= 999 && set in _partition_sets ||
+            throw(ArgumentError("Arguments \"$no\", \"$set\", and \"$cat\" do not represent a valid LEGEND data partition"))
+        new(no, set, cat)
+    end
 end
 export DataPartition
 
@@ -373,6 +386,7 @@ Base.print(io::IO, partition::DataPartition) = print(io, "$(partition.cat.label)
 Base.show(io::IO, partition::DataPartition) = print(io, "DataPartition($partition)")
 
 const partition_expr = r"^(?:([a-z]{3}))?(?:group|partition|part)?([0-9]{2,3})([A-Za-z])?$"
+const _partition_sets = Set(Symbol.(collect('a':'z')))
 
 _can_convert_to(::Type{DataPartition}, s::AbstractString) = !isnothing(match(partition_expr, s))
 _can_convert_to(::Type{DataPartition}, s::Symbol) = _can_convert_to(DataPartition, string(s))
