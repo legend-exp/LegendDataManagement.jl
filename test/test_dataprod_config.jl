@@ -16,6 +16,10 @@ using Unitful
         @test only(rinfo).startkey.period   == DataPeriod(2)
         @test only(rinfo).startkey.run      == DataRun(6)
         @test only(rinfo).startkey.category == DataCategory(:cal)
+        @test only(rinfo).filekeys isa Vector{FileKey}
+        # enable once LegendTestData ships datasets/filekeys (filekeys/p02/l200-p02-r006-filekeys.yaml):
+        # @test only(rinfo).filekeys == FileKey.(["l200-p02-r006-cal-20220701T000000Z", "l200-p02-r006-cal-20220701T010000Z", "l200-p02-r006-cal-20220701T020000Z"])
+        # @test only(runinfo(l200, (DataPeriod(2), DataRun(5), :cal)).filekeys) == FileKey[]
         @test_nowarn empty!(LegendDataManagement._cached_runinfo)
     end
 

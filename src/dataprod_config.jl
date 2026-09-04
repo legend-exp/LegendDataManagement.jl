@@ -317,6 +317,14 @@ export cal_groupings_default
 const MaybeFileKey = Union{FileKey, Missing}
 const _cached_runinfo = LRU{UInt, Table}(maxsize = 300)
 
+# All DAQ cycle keys of a run, by category, from `datasets/filekeys` (empty if not available)
+function _run_filekeys(fkdb, setup, period::DataPeriod, run::DataRun)
+    fkdb isa PropsDB && Symbol(period) in keys(fkdb) || return PropDict()
+    pdb = fkdb[Symbol(period)]
+    fname = Symbol("$setup-$period-$run-filekeys")
+    fname in keys(pdb) ? PropDict(pdb[fname]) : PropDict()
+end
+
 """
     runinfo(data::LegendData)::Table
     runinfo(data::LegendData, runsel::RunSelLike)::NamedTuple
@@ -328,7 +336,7 @@ Get the run information for `data` based on various selection criteria.
 - `data::LegendData`: The dataset to query run information from.
 
 # Returns
-A table of run information with one named tuple per category (e.g. `:cal`, `:phy`), each containing `startkey`, `livetime`, and `is_analysis_run`
+A table of run information with one named tuple per category (e.g. `:cal`, `:phy`), each containing `startkey`, `livetime`, `is_analysis_run` and `filekeys` (all DAQ cycle keys of the run)
 
 # Example
 runinfo(data)                                   # full table of valid runs
@@ -343,18 +351,20 @@ function runinfo(data::LegendData)
 
         # Detect categories dynamically (as Symbols)
         categories = unique(Symbol.(reduce(vcat, (collect(keys(ri)) for (_, runs) in rinfo for (_, ri) in runs))))
-        nttype = @NamedTuple{startkey::MaybeFileKey, livetime::typeof(1.0u"s"), is_analysis_run::Bool}
+        nttype = @NamedTuple{startkey::MaybeFileKey, livetime::typeof(1.0u"s"), is_analysis_run::Bool, filekeys::Vector{FileKey}}
+        fkdb = data.metadata.datasets.filekeys
 
         function make_row(p, r, ri)
             period, run = DataPeriod(p), DataRun(r)
+            fkeys = _run_filekeys(fkdb, data.name, period, run)
             function get_cat_entry(cat)
                 if haskey(ri, cat)
                     fk = ifelse(haskey(ri[cat], :start_key), FileKey(data.name, period, run, cat, Timestamp(get(ri[cat], :start_key, 1))), missing)
                     livetime = get(ri[cat], :livetime_in_s, NaN) * u"s"
                     is_ana_run::Bool = !ismissing(fk) && (!(cat in (:phy, :cal)) || any(row.period == period && row.run == run for row in analysis_runs(data, cat)))
-                    nttype((fk, livetime, is_ana_run))
+                    nttype((fk, livetime, is_ana_run, FileKey.(get(fkeys, cat, String[]))))
                 else
-                    nttype((missing, NaN*u"s", false))
+                    nttype((missing, NaN*u"s", false, FileKey[]))
                 end
             end
             (; period, run, NamedTuple{Tuple(categories)}(Tuple(get_cat_entry(cat) for cat in categories))...)
