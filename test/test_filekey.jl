@@ -11,13 +11,23 @@ using Unitful
     @test setup.label == :l200
     @test @inferred(string(setup)) == "l200"
     @test @inferred(ExpSetup("l200")) == setup
-    @test_throws ArgumentError DataPeriod("invalidsetup")
+    @test_throws ArgumentError ExpSetup("invalidsetup")
+    @test_throws ArgumentError ExpSetup(:invalidsetup)
+
+    tier = DataTier(:dsp)
+    @test tier.label == :dsp
+    @test @inferred(string(tier)) == "dsp"
+    @test @inferred(DataTier("dsp")) == tier
+    @test @inferred(DataTier("jldsp")) == DataTier(:jldsp)
+    @test_throws ArgumentError DataTier("jlpeaks")
+    @test_throws ArgumentError DataTier(:jlpeaks)
 
     period = DataPeriod(2)
     @test period.no == 2
     @test @inferred(string(period)) == "p02"
     @test @inferred(DataPeriod("p02")) == period
     @test_throws ArgumentError DataPeriod("invalidperiod")
+    @test_throws ArgumentError DataPeriod(-1)
     # test broadcasting of DataSelector
     periods = [DataPeriod(1), DataPeriod(2), DataPeriod(3)]
     @test (periods .== period) == [false, true, false]
@@ -27,12 +37,14 @@ using Unitful
     @test @inferred(string(r)) == "r006"
     @test @inferred(DataRun("r006")) == r
     @test_throws ArgumentError DataRun("invalidrun")
+    @test_throws ArgumentError DataRun(-1)
 
     category = DataCategory(:cal)
     @test category.label == :cal
     @test @inferred(string(category)) == "cal"
     @test @inferred(DataCategory("cal")) == category
     @test_throws ArgumentError DataCategory("invalidstring")
+    @test_throws ArgumentError DataCategory(:invalidsymbol)
 
     p = DataPartition("calgroup001a")
     @test p.no == 1
@@ -42,10 +54,13 @@ using Unitful
     @test p == DataPartition(001)
     @test p < DataPartition(:calgroup002)
     @test_throws ArgumentError DataPartition("invalidstring")
+    @test_throws ArgumentError DataPartition(1, :invalidset)
+    @test_throws ArgumentError DataPartition(-1)
 
     timestamp = @inferred(Timestamp("20221226T200846Z"))
     @test timestamp.unixtime == 1672085326
     @test @inferred(string(timestamp)) == "20221226T200846Z"
+    @test_throws ArgumentError Timestamp("invalidtimestamp")
 
     unix_timestamp = 1672085326u"s"
     timestamp2 = @inferred(Timestamp(unix_timestamp))
@@ -61,6 +76,7 @@ using Unitful
     @test FileKey("l200-p02-r006-cal-20221226T200846Z") == key
     @test @inferred(FileKey("tier/raw/cal/p02/r006/l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5")) == key
     @test @inferred(FileKey("l200", "p02", "r006", "cal", "20221226T200846Z")) == key
+    @test_throws ArgumentError FileKey("invalidfilekey")
 
     @test @inferred(LegendDataManagement._is_filekey_string("l200-p02-r006-cal-20221226T200846Z")) == true
     @test @inferred(LegendDataManagement._is_filekey_string("20221226T200846Z")) == false
@@ -76,6 +92,8 @@ using Unitful
     @test ch.no == 1083204
     @test @inferred(string(ch)) == "ch1083204"
     @test @inferred(ChannelId("ch1083204")) == ch
+    @test_throws ArgumentError ChannelId("invalidchannel")
+    @test_throws ArgumentError ChannelId(1000)
 
     # Basic DetectorId tests
     detector = DetectorId(:V99000A)
@@ -264,6 +282,7 @@ using Unitful
         # Error cases
         @testset "Invalid DetectorId" begin
             @test_throws ArgumentError DetectorId("INVALID")
+            @test_throws ArgumentError DetectorId(:INVALID)
             @test_throws ArgumentError DetectorId("X00000A")
             @test_throws ArgumentError DetectorId("B0000A")  # Only 4 digits
             @test_throws ArgumentError DetectorId("B000000A")  # 6 digits
