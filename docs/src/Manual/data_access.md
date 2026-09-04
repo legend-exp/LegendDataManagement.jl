@@ -38,14 +38,18 @@ data tiers and metadata.
 
 ## Inspecting available data tiers
 
-with the `search_disk` function you can check what kind of data is available to you in the LegendData object:
+With the `search_disk` function, you can check what kind of data is available
+through the `LegendData` object.
 
-You can check for available `DataTier` with
-``` julia
+Check for available `DataTier` values with:
+
+```julia
 search_disk(DataTier, l200.tier[])
 ```
-and available `DataCategory` with
-``` julia
+
+Check for available `DataCategory` values with:
+
+```julia
 search_disk(DataCategory, l200.tier[:raw])
 ```
 
@@ -56,17 +60,20 @@ search_disk(DataCategory, l200.tier[:raw])
 Data selection is performed using data selectors rather than hard-coded paths.
 Common selectors include:
 
-- `DataCategory(:XXX)`
-- `DataPeriod(pXX)`
-- `DataRun(rXXX)`
-- `DetectorID(XYYYYYZ)`
+- `DataCategory(:cal)`
+- `DataPeriod(:p03)`
+- `DataRun(:r001)`
+- `DetectorID(:V08682A)`
 
 ## Reading data
 
-Data can be loaded using `read_ldata`. First, specify the `LegendData` object and `DataTier`, then provide a set of selectors to restrict the data to the subset you want to read.
+Data can be loaded using `read_ldata`. First, specify the `LegendData` object and
+`DataTier`, then provide selectors to restrict the data to the subset you want
+to read.
+
 ```julia
-data = read_ldata(l200, :jlhit, DataCategory(:cal), DataPeriod(p03), DataRun(r001), DetectorID(:V08682A))
+data = read_ldata(l200, :jlhit, DataCategory(:cal), DataPeriod(:p03), DataRun(:r001), DetectorID(:V08682A))
 ```
 
-More about the read_ldata function can be found in Manual/read_ldata
-
+See [Reading data with `read_ldata`](@ref) for links to further examples and the
+API reference.

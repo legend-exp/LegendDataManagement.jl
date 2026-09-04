@@ -2,7 +2,7 @@
 
 ## `Plots` extension
 
-LegendDataManagment provides an extension for [Plots](https://github.com/JuliaPlots/Plots.jl). This makes it possible to directly plot LEGEND data via the `plot` function. The extension is automatically loaded when both packages are loaded.
+LegendDataManagement provides an extension for [Plots](https://github.com/JuliaPlots/Plots.jl). This makes it possible to directly plot LEGEND data via the `plot` function. The extension is automatically loaded when both packages are loaded.
 You can plot a parameter overview as a 2D plot over a set of detectors (requires a `$LEGEND_DATA_CONFIG` environment variable pointing to a legend data-config file):
 
 ```julia
@@ -29,8 +29,6 @@ The plot recipe takes three arguments:
 There are also keyword arguments:
 - `calculate_mean`: If set to `true`, then the mean values are included in the legend labels. For values with uncertainties, the mean values are calculated as weighted means.
 - `verbose`: some output when the plot is generated, e.g. if values for (some) detectors are missing
-
-A 3D plot is WIP.
 
 In addition, you can plot an event display of the `raw` waveforms:
 ``` julia
@@ -62,7 +60,7 @@ The following additional keywords arguments can be set (the `plot_waveform` kwar
 
 ## `LegendHDF5IO` extension
 
-LegendDataManagment provides an extension for [LegendHDF5IO](https://github.com/legend-exp/LegendHDF5IO.jl).
+LegendDataManagement provides an extension for [LegendHDF5IO](https://github.com/legend-exp/LegendHDF5IO.jl).
 This makes it possible to directly load LEGEND data from HDF5 files via the `read_ldata` function. The extension is automatically loaded when both packages are loaded. 
 Example (requires a `$LEGEND_DATA_CONFIG` environment variable pointing to a legend data-config file):
     
@@ -79,13 +77,13 @@ dsp = read_ldata(l200, :jldsp, first(filekeys), ch)
 dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, ch)
 dsp = read_ldata((:e_cusp, :e_trap, :blmean, :blslope), l200, :jldsp, :cal, :p03, :r000, ch)
 ```
-`read_ldata` automitcally loads LEGEND data for a specific `DataTier` and data selection like e.g. a `FileKey` or a run-selection based for a given `ChannelId`. The `search_disk` function allows the user to search for available `DataTier` and `FileKey` on disk. The first argument can be either a selection of keys in form of a `NTuple` of `Symbol` or a [PropertyFunction](https://github.com/oschulz/PropertyFunctions.jl/tree/main) which will be applied during loading. 
+`read_ldata` automatically loads LEGEND data for a specific `DataTier` and data selection like e.g. a `FileKey` or a run-selection based for a given `ChannelId`. The `search_disk` function allows the user to search for available `DataTier` and `FileKey` on disk. The first argument can be either a selection of keys in form of a `NTuple` of `Symbol` or a [PropertyFunction](https://github.com/oschulz/PropertyFunctions.jl/tree/main) which will be applied during loading.
 It is also possible to load whole a `DataPartition` or `DataPeriod` for a given `ChannelId` ch:
 ```julia
 dsp = read_ldata(l200, :jldsp, :cal, DataPartition(1), ch)
 dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), ch)
 ```
-In additon, it is possible to load a random selection of `n_evts` events randomly selected from each loaded file:
+In addition, it is possible to load a random selection of `n_evts` events from each loaded file:
 ```julia
 dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, ch; n_evts=1000)
 ```
@@ -113,11 +111,11 @@ using Distributed
 addprocs(4)
 @everywhere using LegendDataManagement, LegendHDF5IO
 ```
-In addition, the `wpool`kwarg allows to parse a custome `WorkerPool` for more sophisticated load patterns.
+In addition, the `wpool` keyword allows you to pass a custom `WorkerPool` for more sophisticated load patterns.
 
 ## `SolidStateDetectors` extension
 
-LegendDataManagment provides an extension for [SolidStateDetectors](https://github.com/JuliaPhysics/SolidStateDetectors.jl). This makes it possible to create `SolidStateDetector` and `Simulation` instances from LEGEND metadata. The default drift model used when creating a detector/simulation through LegendDataManagment is ADLChargeDriftModel2016.
+LegendDataManagement provides an extension for [SolidStateDetectors](https://github.com/JuliaPhysics/SolidStateDetectors.jl). This makes it possible to create `SolidStateDetector` and `Simulation` instances from LEGEND metadata. The default drift model used when creating a detector/simulation through LegendDataManagement is ADLChargeDriftModel2016.
 
 Example (requires a `$LEGEND_DATA_CONFIG` environment variable pointing to a legend data-config file):
 
