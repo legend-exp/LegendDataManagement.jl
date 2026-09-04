@@ -27,6 +27,11 @@ makedocs(
     ),
     pages = [
         "Home" => "index.md",
+        "Manual" => [
+            "Data access and discovery" => "Manual/data_access.md",
+            "Reading data" => "Manual/read_ldata.md",
+            "Validity and metadata" => "Manual/validity.md",
+        ],
         "API" => "api.md",
         "Extensions" => "extensions.md",
         "LICENSE" => "LICENSE.md",
