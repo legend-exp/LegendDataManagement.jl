@@ -73,39 +73,51 @@ filekeys = search_disk(FileKey, l200.tier[:jldsp, :cal, :p03, :r000])
 
 chinfo = channelinfo(l200, (:p03, :r000, :cal); system=:geds, only_processable=true)
 
-ch = chinfo[1].channel
+det = chinfo[1].detector
 
-dsp = read_ldata(l200, :jldsp, first(filekeys), ch)
-dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, ch)
-dsp = read_ldata((:e_cusp, :e_trap, :blmean, :blslope), l200, :jldsp, :cal, :p03, :r000, ch)
+dsp = read_ldata(l200, :jldsp, first(filekeys), det)
+dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, det)
+dsp = read_ldata((:e_cusp, :e_trap, :blmean, :blslope), l200, :jldsp, :cal, :p03, :r000, det)
 ```
-`read_ldata` automitcally loads LEGEND data for a specific `DataTier` and data selection like e.g. a `FileKey` or a run-selection based for a given `ChannelId`. The `search_disk` function allows the user to search for available `DataTier` and `FileKey` on disk. The first argument can be either a selection of keys in form of a `NTuple` of `Symbol` or a [PropertyFunction](https://github.com/oschulz/PropertyFunctions.jl/tree/main) which will be applied during loading. 
-It is also possible to load whole a `DataPartition` or `DataPeriod` for a given `ChannelId` ch:
+`read_ldata` automatically loads LEGEND data for a specific `DataTier` and data selection like e.g. a `FileKey` or a run-selection based for a given `DetectorId`. The `search_disk` function allows the user to search for available `DataTier` and `FileKey` on disk. The first argument can be either a selection of keys in form of a `NTuple` of `Symbol` or a [PropertyFunction](https://github.com/oschulz/PropertyFunctions.jl/tree/main) which will be applied during loading. 
+It is also possible to load whole a `DataPartition` or `DataPeriod` for a given `DetectorId` det:
 ```julia
-dsp = read_ldata(l200, :jldsp, :cal, DataPartition(1), ch)
-dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), ch)
+dsp = read_ldata(l200, :jldsp, :cal, DataPartition(1), det)
+dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), det)
+```
+Omitting the detector loads every detector of a file into a `NamedTuple` keyed by detector:
+```julia
+dsp = read_ldata(l200, :jldsp, first(filekeys))
 ```
 In additon, it is possible to load a random selection of `n_evts` events randomly selected from each loaded file:
 ```julia
-dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, ch; n_evts=1000)
+dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, det; n_evts=1000)
 ```
-For simplicity, the ch can also be given as a `DetectorID` which will be converted internally to a `ChannelId`:
-```julia
-det = chinfo[1].detector
-dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, det)
-```
-In case, a `ChannelId` is missing in a file, the function will throw an `ArgumentError`. To avoid this and return `nothing` instead, you can use the `ignore_missing` keyword argument.
+The events are drawn without replacement, and all columns of a file are subsampled together.
+
+In case, a `DetectorId` is missing in a file, the function will throw an `ArgumentError`. To avoid this and return `nothing` instead, you can use the `ignore_missing` keyword argument.
 
 The data can be filtered by a `filterby` keyword argument which is a [PropertyFunction](https://github.com/oschulz/PropertyFunctions.jl/tree/main) applied to each chunk of loaded data:
 ```julia
-dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, ch; filterby=@pf($e_trap > 0.0))
+dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, det; filterby=@pf($e_trap > 0.0))
 ```
-This will only load data where the `e_trap` property is greater than 0.
+This will only load data where the `e_trap` property is greater than 0. Given `n_evts` as well, the events are drawn from the rows passing the filter.
+
+Passing `filterby` a `DataTierLike => PropertyFunction` pair evaluates the function on that tier instead and applies the resulting row selection to the tier being read:
+```julia
+raw = read_ldata(l200, :raw, :cal, :p03, :r000, det; filterby=:jlhit => @pf($is_valid_hit))
+```
+Several pairs can be given as a tuple, in which case only the rows passing every one of them are loaded:
+```julia
+raw = read_ldata(l200, :raw, :cal, :p03, :r000, det;
+                 filterby=(:jlhit => @pf($e_cusp > 100), :jldsp => @pf($blmean > 1000)))
+```
+All tiers involved hold one row per trigger of the same detector, so their rows correspond by position; a row-count mismatch raises a `DimensionMismatch`. A cross-tier filter requires a detector.
 
 It is possible to read in multiple files in parallel using the `Distributed` functionalities from within a session. You can activate parallel read with the `parallel` kwarg.
 ``` julia
-dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), ch)
-dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), ch; parallel=true)
+dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), det)
+dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), det; parallel=true)
 ```
 However, it is necessary that a worker allocation was already performed and the `LegendDataManagement` as well as `LegendHDF5IO` package is loaded on all workers, e.g. with
 ``` julia

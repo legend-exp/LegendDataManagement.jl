@@ -8,7 +8,11 @@
 
 Read `lh5` data from disk for a given set of `selectors`. After reading in, a PropertyFunction `f` can be applied to the data. 
 If a tuple of `Symbol`s is given, the properties from the tuple are selected. If the `n_evts` kwarg is provided, a random selection with `n_evts` number of
-events per file is performed. `ch` can be either a `ChannelId` or a `DetectorId`.
+events per file is performed. `det` is a `DetectorId`.
+
+The `filterby` kwarg takes a `PropertyFunction` selecting rows of the tier being read. Given a `tier => PropertyFunction` pair instead,
+the function is evaluated on `tier` and the resulting row selection is applied to the tier being read. Both tiers must hold one row per
+trigger of the same detector, so that their rows correspond by position; a row-count mismatch raises a `DimensionMismatch`.
 # Examples
 ```julia
 dsp = read_ldata(l200, :jldsp, filekey, ch)
@@ -20,7 +24,10 @@ dsp = read_ldata(l200, :jldsp, :cal, DataPartition(:calgroup001a), ch)
 dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), ch)
 dsp = read_ldata(l200, :jldsp, :cal, runinfo(l200)[1:3], ch)
 
-dsp = read_ldata(l200, :jldsp, filekey, ch; n_evts=1000)
+dsp = read_ldata(l200, :jldsp, filekey, det; n_evts=1000)
+
+dsp = read_ldata(l200, :jldsp, filekey, det; filterby = @pf(\$e_cusp > 1000))
+raw = read_ldata(l200, :raw, filekey, det; filterby = :jlhit => @pf(\$is_valid_hit))
 ```
 """
 function read_ldata end
