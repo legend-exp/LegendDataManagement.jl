@@ -47,8 +47,8 @@ filterby(@pf $processable && $usability)(chinfo)
 ## Get started
 
 - Browse the *Manual* for an explanation of basic functions and practical examples.
-- Check *Extensions* for information about the package extensions for `Plots`,
-  `LegendHDF5IO`, and `SolidStateDetectors`.
+- Check *Extensions* for information about plotting with `LegendMakie` and the
+  package extensions for `LegendHDF5IO` and `SolidStateDetectors`.
 - Consult the *API* section for detailed information on selectors and helper
   functions such as `LegendData`, `DataTier`, `DataPeriod`, `search_disk`, and
   `read_ldata`.
