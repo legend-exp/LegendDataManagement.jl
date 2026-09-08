@@ -56,6 +56,8 @@ Create a log table for a given result which can be added in a report.
 function create_logtbl(result)
     tbl = vcat([collect(values(res.log)) for (itr, res) in result if res.log isa Dict]...)
     append!(tbl, [res.log for (itr, res) in result if !(res.log isa Dict)])
+    # empty result (nothing processable): readable one-row table instead of reduce() throwing
+    isempty(tbl) && return StructArray([(Status = "no entries - nothing was processed",)])
     unique_keys = unique(reduce(vcat, collect.(keys.(tbl))))
     StructArray([NamedTuple{Tuple(unique_keys)}([get(nt, k, "-") for k in unique_keys]...) for nt in tbl])
 end

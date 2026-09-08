@@ -12,6 +12,7 @@ function units_from_string(s::AbstractString)
             uparse(s, unit_context=[Unitful, UnitfulAtomic])
         catch e
             s == "e" && return u"e_au" # parse "e" as u"e_au" from UnitfulAtomic
+            s == "%" && return u"percent" # Unitful prints percent as "%", which uparse cannot read back
             if e isa ErrorException
                 rethrow(ArgumentError("Unknown physical unit \"$s\""))
             else
