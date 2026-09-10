@@ -13,7 +13,7 @@ The package expects a configuration file (see the [example "config.yaml"](https:
 export LEGEND_DATA_CONFIG="/path/to/legend_data_config.json"
 ```
 
-LegendDataManagment provides a [SolidStateDetectors extension](@ref) that makes it possible to create `SolidStateDetector` objects from LEGEND metadata.
+LegendDataManagement provides a [SolidStateDetectors extension](@ref) that makes it possible to create `SolidStateDetector` objects from LEGEND metadata.
 
 
 Usage examples:
@@ -37,8 +37,8 @@ filterby(@pf $processable && $usability)(chinfo)
 
 ## Documentation structure
 
-- **Examples** provide step-by-step workflows for common data access and
-  metadata-management tasks.
+- **Manual** pages provide step-by-step workflows for data access and explain
+  the validity-based metadata model.
 - **API** contains the automatically generated reference documentation for
   exported types and functions.
 
@@ -46,9 +46,9 @@ filterby(@pf $processable && $usability)(chinfo)
 
 ## Get started
 
-- Browse the *Manual* for a explanation of basic functions and practical examples.
-- Check the *Tutorials* section for ...
-- Check *Extenstions* for an explantion about the Package extensions of `Plots`, `LegendHDF5IO` and `SolidStateDetectors`.
+- Browse the *Manual* for an explanation of basic functions and practical examples.
+- Check *Extensions* for information about plotting with `LegendMakie` and the
+  package extensions for `LegendHDF5IO` and `SolidStateDetectors`.
 - Consult the *API* section for detailed information on selectors and helper
   functions such as `LegendData`, `DataTier`, `DataPeriod`, `search_disk`, and
   `read_ldata`.

@@ -1,12 +1,19 @@
 # Extensions
 
-## `Plots` extension
+## `LegendMakie` extension
 
-LegendDataManagment provides an extension for [Plots](https://github.com/JuliaPlots/Plots.jl). This makes it possible to directly plot LEGEND data via the `plot` function. The extension is automatically loaded when both packages are loaded.
-You can plot a parameter overview as a 2D plot over a set of detectors (requires a `$LEGEND_DATA_CONFIG` environment variable pointing to a legend data-config file):
+[LegendMakie](https://github.com/legend-exp/LegendMakie.jl) provides plotting
+support for `LegendDataManagement` using Makie. The extension is loaded when
+`LegendMakie`, a Makie backend, and `LegendDataManagement` are loaded.
+
+You can plot a parameter overview for a set of detectors (requires a
+`$LEGEND_DATA_CONFIG` environment variable pointing to a LEGEND data-config
+file):
 
 ```julia
-using LegendDataManagement, Plots
+using LegendDataManagement
+using LegendMakie
+using CairoMakie
 
 l200 = LegendData(:l200)
 
@@ -17,24 +24,24 @@ properties = [:e_cusp_ctc, :fwhm, :qbb];
 
 chinfo = channelinfo(l200, filekey; system = :geds, only_processable = true)
 
-plot(chinfo, pars, properties, verbose = true, color = 1, markershape = :o, calculate_mean = true)
+fig = lplot(chinfo, pars, properties; color = :blue)
 ```
 
-The plot recipe takes three arguments:
+The plotting method takes three arguments:
+
 - `chinfo`: the channel info with all detectors to be plotted on the x-axis
 - `pars`: a `PropDict` that has the detector IDs as keys and parameters as values
 - `properties`: an array of `Symbols` to access the data that should be plotted
-(if no `properties` are provided, the `PropDict` `pars` is expected to just contain the data to be plotted as values)
-
-There are also keyword arguments:
-- `calculate_mean`: If set to `true`, then the mean values are included in the legend labels. For values with uncertainties, the mean values are calculated as weighted means.
-- `verbose`: some output when the plot is generated, e.g. if values for (some) detectors are missing
-
-A 3D plot is WIP.
+  (if no `properties` are provided, the `PropDict` `pars` is expected to contain
+  the values to plot directly)
 
 In addition, you can plot an event display of the `raw` waveforms:
-``` julia
-using Unitful, LegendDataManagement, Plots
+
+```julia
+using Unitful
+using LegendDataManagement, LegendHDF5IO
+using LegendMakie
+using CairoMakie
 
 l200 = LegendData(:l200)
 
@@ -42,27 +49,30 @@ ts = 1.6785791257987175e9u"s"
 
 ch = ChannelId(1104000)
 
-plot(l200, ts, ch)
+fig = lplot(l200, ts, ch)
 ```
 
 - `plot_tier`: The data tier to be plotted. Default is `DataTier(:raw)`.
 - `plot_waveform`: All waveforms to be plotted from the data. Default is `[:waveform_presummed]` which plots the presummed waveform.
-- `show_unixtime`: If set to `true`, use unix time instead of the datetime in the title. Default is `false`.
 
-If the channel is not given, the recipe automtically searches for the correct event in the data.
-``` julia
+If the channel is not given, `lplot` automatically searches for the correct
+event in the data.
+
+```julia
 ts = 1.6785791257987175e9u"s"
 
-plot(l200, ts)
+fig = lplot(l200, ts)
 ```
 In case of a `cal` event, only the HPGe channel with that event is plotted. In case of a `phy` event, all waveforms of the full HPGe and SiPM systems are plotted. 
 The following additional keywords arguments can be set (the `plot_waveform` kwarg is replaced by the `system` kwarg here):
 - `system`: The system and the waveforms to be plotted for each system. Default is `Dict{Symbol, Vector{Symbol}}([:geds, :spms] .=> [[:waveform_presummed], [:waveform_bit_drop]])`
-- `only_processable`: If set to `true`, only processable channels are plotted. Default is `true`.
+- `only_processable`: Controls validation of the automatically selected channel
+  for calibration events. The default is `true`; physics-event displays use
+  processable channels.
 
 ## `LegendHDF5IO` extension
 
-LegendDataManagment provides an extension for [LegendHDF5IO](https://github.com/legend-exp/LegendHDF5IO.jl).
+LegendDataManagement provides an extension for [LegendHDF5IO](https://github.com/legend-exp/LegendHDF5IO.jl).
 This makes it possible to directly load LEGEND data from HDF5 files via the `read_ldata` function. The extension is automatically loaded when both packages are loaded. 
 Example (requires a `$LEGEND_DATA_CONFIG` environment variable pointing to a legend data-config file):
     
@@ -79,13 +89,13 @@ dsp = read_ldata(l200, :jldsp, first(filekeys), ch)
 dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, ch)
 dsp = read_ldata((:e_cusp, :e_trap, :blmean, :blslope), l200, :jldsp, :cal, :p03, :r000, ch)
 ```
-`read_ldata` automitcally loads LEGEND data for a specific `DataTier` and data selection like e.g. a `FileKey` or a run-selection based for a given `ChannelId`. The `search_disk` function allows the user to search for available `DataTier` and `FileKey` on disk. The first argument can be either a selection of keys in form of a `NTuple` of `Symbol` or a [PropertyFunction](https://github.com/oschulz/PropertyFunctions.jl/tree/main) which will be applied during loading. 
+`read_ldata` automatically loads LEGEND data for a specific `DataTier` and data selection like e.g. a `FileKey` or a run-selection based for a given `ChannelId`. The `search_disk` function allows the user to search for available `DataTier` and `FileKey` on disk. The first argument can be either a selection of keys in form of a `NTuple` of `Symbol` or a [PropertyFunction](https://github.com/oschulz/PropertyFunctions.jl/tree/main) which will be applied during loading.
 It is also possible to load whole a `DataPartition` or `DataPeriod` for a given `ChannelId` ch:
 ```julia
 dsp = read_ldata(l200, :jldsp, :cal, DataPartition(1), ch)
 dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), ch)
 ```
-In additon, it is possible to load a random selection of `n_evts` events randomly selected from each loaded file:
+In addition, it is possible to load a random selection of `n_evts` events from each loaded file:
 ```julia
 dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, ch; n_evts=1000)
 ```
@@ -113,11 +123,11 @@ using Distributed
 addprocs(4)
 @everywhere using LegendDataManagement, LegendHDF5IO
 ```
-In addition, the `wpool`kwarg allows to parse a custome `WorkerPool` for more sophisticated load patterns.
+In addition, the `wpool` keyword allows you to pass a custom `WorkerPool` for more sophisticated load patterns.
 
 ## `SolidStateDetectors` extension
 
-LegendDataManagment provides an extension for [SolidStateDetectors](https://github.com/JuliaPhysics/SolidStateDetectors.jl). This makes it possible to create `SolidStateDetector` and `Simulation` instances from LEGEND metadata. The default drift model used when creating a detector/simulation through LegendDataManagment is ADLChargeDriftModel2016.
+LegendDataManagement provides an extension for [SolidStateDetectors](https://github.com/JuliaPhysics/SolidStateDetectors.jl). This makes it possible to create `SolidStateDetector` and `Simulation` instances from LEGEND metadata. The default drift model used when creating a detector/simulation through LegendDataManagement is ADLChargeDriftModel2016.
 
 Example (requires a `$LEGEND_DATA_CONFIG` environment variable pointing to a legend data-config file):
 

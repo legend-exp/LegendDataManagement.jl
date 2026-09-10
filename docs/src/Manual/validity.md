@@ -11,7 +11,9 @@ entries and how to apply them in practice.
 Each validity entry contains the following fields:
 
 - `valid_from`: timestamp indicating when the change becomes effective.
-- `category`: metadata category, e.g., `"cal"`, `"phy"`, `"all"`. Here `"all"` means NOT does apply to all cetegories, but is its own category. 
+- `category`: metadata category, e.g., `"cal"`, `"phy"`, or `"all"`. The value
+  `"all"` is its own category; it does not mean that the entry applies to every
+  category.
 - `mode`: operation type, one of `reset`, `append`, `remove`, or `replace`.
 - `apply`: list of files affected by the operation.
 
@@ -34,5 +36,3 @@ Example:
 - **append**: adds the listed files to the current active list.
 - **remove**: deletes the listed files from the current active list.
 - **replace**: substitutes one file for another.
-
----

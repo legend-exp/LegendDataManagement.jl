@@ -13,15 +13,3 @@
 
 * [Documentation for stable version](https://legend-exp.github.io/LegendDataManagement.jl/stable)
 * [Documentation for development version](https://legend-exp.github.io/LegendDataManagement.jl/dev)
-
-
-## Installation
-
-From the Julia REPL:
-
-```julia
-# install from GitHub
-] add https://github.com/legend-exp/LegendDataManagement.jl
-
-# or if the package is registered
-] add LegendDataManagement
