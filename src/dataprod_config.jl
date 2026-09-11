@@ -328,7 +328,8 @@ Get the run information for `data` based on various selection criteria.
 - `data::LegendData`: The dataset to query run information from.
 
 # Returns
-A table of run information with one named tuple per category (e.g. `:cal`, `:phy`), each containing `startkey`, `livetime`, and `is_analysis_run`
+A table of run information with one named tuple per category (e.g. `:cal`, `:phy`), each containing `startkey`, `livetime`, `is_analysis_run` and `keys` (all DAQ cycle keys of that category),
+plus `keys` with the cycle keys of all categories sorted by time
 
 # Example
 runinfo(data)                                   # full table of valid runs
@@ -340,24 +341,28 @@ runinfo(data, fk::FileKey)                      # same as above via FileKey
 function runinfo(data::LegendData)
     get!(_cached_runinfo, objectid(data)) do
         rinfo = PropDict(data.metadata.datasets.runinfo)
+        fkdb = data.metadata.datasets.filekeys
 
         # Detect categories dynamically (as Symbols)
         categories = unique(Symbol.(reduce(vcat, (collect(keys(ri)) for (_, runs) in rinfo for (_, ri) in runs))))
-        nttype = @NamedTuple{startkey::MaybeFileKey, livetime::typeof(1.0u"s"), is_analysis_run::Bool}
+        nttype = @NamedTuple{startkey::MaybeFileKey, livetime::typeof(1.0u"s"), is_analysis_run::Bool, keys::Vector{FileKey}}
 
         function make_row(p, r, ri)
             period, run = DataPeriod(p), DataRun(r)
+            fkeys = fkdb[period, run]
             function get_cat_entry(cat)
                 if haskey(ri, cat)
                     fk = ifelse(haskey(ri[cat], :start_key), FileKey(data.name, period, run, cat, Timestamp(get(ri[cat], :start_key, 1))), missing)
                     livetime = get(ri[cat], :livetime_in_s, NaN) * u"s"
                     is_ana_run::Bool = !ismissing(fk) && (!(cat in (:phy, :cal)) || any(row.period == period && row.run == run for row in analysis_runs(data, cat)))
-                    nttype((fk, livetime, is_ana_run))
+                    fkeys[cat] isa AbstractVector || throw(ArgumentError("No file keys found for period $period run $run category $cat in metadata datasets/filekeys"))
+                    nttype((fk, livetime, is_ana_run, FileKey[FileKey(data.name, period, run, cat, Timestamp(ts)) for ts in fkeys[cat]]))
                 else
-                    nttype((missing, NaN*u"s", false))
+                    nttype((missing, NaN*u"s", false, FileKey[]))
                 end
             end
-            (; period, run, NamedTuple{Tuple(categories)}(Tuple(get_cat_entry(cat) for cat in categories))...)
+            cats = NamedTuple{Tuple(categories)}(Tuple(get_cat_entry(cat) for cat in categories))
+            (; period, run, keys = sort(reduce(vcat, [c.keys for c in cats]); by = Timestamp), cats...)
         end
 
         # Build rows

@@ -16,6 +16,10 @@ using Unitful
         @test only(rinfo).startkey.period   == DataPeriod(2)
         @test only(rinfo).startkey.run      == DataRun(6)
         @test only(rinfo).startkey.category == DataCategory(:cal)
+        @test only(rinfo).keys isa Vector{FileKey} && !isempty(only(rinfo).keys)
+        ri = only(runinfo(l200, (DataPeriod(2), DataRun(6))))
+        @test ri.keys == sort(vcat(ri.cal.keys, ri.phy.keys), by = Timestamp)
+        @test all(issorted(row.keys, by = Timestamp) for row in runinfo(l200))
         @test_nowarn empty!(LegendDataManagement._cached_runinfo)
     end
 
