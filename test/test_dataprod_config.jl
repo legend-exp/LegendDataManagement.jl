@@ -20,6 +20,8 @@ using Unitful
         ri = only(runinfo(l200, (DataPeriod(2), DataRun(6))))
         @test ri.keys == sort(vcat(ri.cal.keys, ri.phy.keys), by = Timestamp)
         @test all(issorted(row.keys, by = Timestamp) for row in runinfo(l200))
+        @test find_filekey(DataSet(ri.keys), first(ri.keys).time) == first(ri.keys)
+        @test find_filekey(l200, last(ri.keys).time) == last(ri.keys)
         @test_nowarn empty!(LegendDataManagement._cached_runinfo)
     end
 
