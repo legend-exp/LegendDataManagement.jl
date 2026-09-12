@@ -16,6 +16,13 @@ using Unitful
         @test only(rinfo).startkey.period   == DataPeriod(2)
         @test only(rinfo).startkey.run      == DataRun(6)
         @test only(rinfo).startkey.category == DataCategory(:cal)
+        @test only(rinfo).keys isa Vector{FileKey} && !isempty(only(rinfo).keys)
+        ri = only(runinfo(l200, (DataPeriod(2), DataRun(6))))
+        @test ri.keys == sort(vcat(ri.cal.keys, ri.phy.keys), by = Timestamp)
+        @test all(issorted(row.keys, by = Timestamp) for row in runinfo(l200))
+        @test find_filekey(DataSet(ri.keys), first(ri.keys).time) == first(ri.keys)
+        @test find_filekey(l200, last(ri.keys).time) == last(ri.keys)
+        @test find_filekey(l200, Timestamp((ri.keys[1].time.unixtime + ri.keys[2].time.unixtime) ÷ 2)) == ri.keys[1]   # between two cycles -> the earlier one
         @test_nowarn empty!(LegendDataManagement._cached_runinfo)
     end
 
