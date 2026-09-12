@@ -12,18 +12,21 @@ include("testing_utils.jl")
 
 @testset "test_ext_ssd" begin
     l200 = LegendData(:l200)
+    mktempdir() do tmpdir
     for detname in (:V99000A, :B99000A, :C99000A, :P99000A)
         @testset "$(detname)" begin
             det = SolidStateDetector(l200, detname)
             @test det isa SolidStateDetector
-            det = SolidStateDetector{Float64}(l200, detname) 
+            det = SolidStateDetector{Float64}(l200, detname)
             @test det isa SolidStateDetector
-            @test !isfile("$(detname).yaml")
-            
-            sim = Simulation{Float64}(l200, detname, ssd_config_filename = "$detname.yaml")
+
+            config_filename = joinpath(tmpdir, "$(detname).yaml")
+            @test !isfile(config_filename)
+
+            sim = Simulation{Float64}(l200, detname, ssd_config_filename = config_filename)
             @test sim isa Simulation
 
-            sim2 = Simulation{Float64}("$detname.yaml")
+            sim2 = Simulation{Float64}(config_filename)
             @test sim2 == sim
 
 
@@ -37,7 +40,7 @@ include("testing_utils.jl")
             @test isapprox(active_volume_ssd, active_volume_ldm, rtol = 0.01)
 
             # The creation via config files allows to save Simulations to files using LegendHDF5IO
-            lh5name = "$(detname).lh5"
+            lh5name = joinpath(tmpdir, "$(detname).lh5")
             isfile(lh5name) && rm(lh5name)
             @test_nowarn ssd_write(lh5name, sim)
             @test isfile(lh5name)
@@ -45,6 +48,7 @@ include("testing_utils.jl")
             @test_nowarn rm(lh5name)
             @test !isfile(lh5name)
         end
+    end
     end
 
     @testset "Test Extra features" begin
