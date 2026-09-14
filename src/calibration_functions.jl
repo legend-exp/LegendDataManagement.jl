@@ -159,7 +159,17 @@ function _dataprod_qc(data::LegendData, sel::AnyValiditySelection)
 end
 
 function _dataprod_qc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    merge(_dataprod_qc(data, sel).default, get(_dataprod_qc(data, sel), detector, PropDict()))
+    dataprod_qc = _dataprod_qc(data, sel)
+    usability = channelinfo(data, sel, detector).usability
+    _merge_dataprod_qc_config(dataprod_qc, usability, detector)
+end
+
+function _merge_dataprod_qc_config(dataprod_qc::PropDict, usability::Symbol, detector::DetectorId)
+    merge(
+        deepcopy(dataprod_qc.default),
+        deepcopy(get(dataprod_qc, usability, PropDict())),
+        deepcopy(get(dataprod_qc, detector, PropDict())),
+    )
 end
 
 const _cached_dataprod_qc_cuts_pf = LRU{Tuple{UInt, AnyValiditySelection, DetectorId}, PropertyFunction}(maxsize = 10^2)
@@ -169,6 +179,11 @@ const _cached_dataprod_qc_cuts_pf = LRU{Tuple{UInt, AnyValiditySelection, Detect
     get_ged_qc_cuts_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
 
 Get the Ge-detector QC cut definitions for the given data and validity selection.
+
+The effective QC configuration is merged in increasing order of precedence:
+`default`, the detector's usability group (for example `ac`), and the detector.
+Each layer is copied so resolving one detector cannot mutate the cached
+configuration used by another detector.
 """
 function get_ged_qc_cuts_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
     key = (objectid(data), sel, detector)
@@ -200,7 +215,9 @@ const _cached_dataprod_is_single_pulse_pf = LRU{Tuple{UInt, AnyValiditySelection
 """
     get_ged_qc_is_single_pulse_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
 
-Get a `PropertyFunction` that returns `true` for events that fullfill the `is_single_pulse` definition.
+Get a `PropertyFunction` that returns `true` for events that fulfill the effective
+`is_single_pulse` definition. Usability-group and detector-specific QC overrides
+are applied while resolving the detector's QC configuration.
 """
 function get_ged_qc_is_single_pulse_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
     key = (objectid(data), sel, detector)
@@ -210,22 +227,6 @@ function get_ged_qc_is_single_pulse_propfunc(data::LegendData, sel::AnyValidityS
     end
 end
 export get_ged_qc_is_single_pulse_propfunc
-
-const _cached_dataprod_is_single_pulse_ac_pf = LRU{Tuple{UInt, AnyValiditySelection, DetectorId}, PropertyFunction}(maxsize = 10^2)
-
-"""
-    get_ged_qc_is_single_pulse_ac_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-
-Get a `PropertyFunction` that returns `true` for events that fullfill the `is_single_pulse_ac` definition.
-"""
-function get_ged_qc_is_single_pulse_ac_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    key = (objectid(data), sel, detector)
-    get!(_cached_dataprod_is_single_pulse_ac_pf, key) do
-        is_single_pulse_ac_def_props = _dataprod_qc(data, sel, detector).is_single_pulse_ac
-        return ljl_propfunc(is_single_pulse_ac_def_props)
-    end
-end
-export get_ged_qc_is_single_pulse_ac_propfunc
 
 const _cached_dataprod_is_empty_trace_pf = LRU{Tuple{UInt, AnyValiditySelection, DetectorId}, PropertyFunction}(maxsize = 10^2)
 
