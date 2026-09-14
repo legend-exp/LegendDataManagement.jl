@@ -286,7 +286,7 @@ function search_disk(::Type{DataSet}, data::LegendData; search_categories::Vecto
                     end
                 end for cat in search_categories]...)
             end)
-        end)
+        end, data.dataset)
     end
 end
 
@@ -307,11 +307,23 @@ end
 const _cached_runinfo_dataset = LRU{UInt, DataSet}(maxsize = 300)
 
 function find_filekey(data::LegendData, ts::TimestampLike)
-    ds = get!(_cached_runinfo_dataset, objectid(data)) do
-        DataSet(sort(reduce(vcat, runinfo(data).keys); by = Timestamp))
-    end
-    find_filekey(ds, ts)
+    find_filekey(get!(() -> DataSet(data), _cached_runinfo_dataset, objectid(data)), ts)
 end
+
+
+"""
+    DataSet(data::LegendData)
+    DataSet(data::LegendData, period::DataPeriodLike)
+    DataSet(data::LegendData, period::DataPeriodLike, run::DataRunLike)
+    DataSet(data::LegendData, rinfo::Table)
+
+The DAQ cycle keys of every category of the given runs, sorted by time and named after
+`data.dataset`. Without a selection the set holds the keys of every run of `runinfo(data)`.
+"""
+DataSet(data::LegendData, rinfo::Table) = DataSet(sort(reduce(vcat, rinfo.keys; init = FileKey[]); by = Timestamp), data.dataset)
+DataSet(data::LegendData) = DataSet(data, runinfo(data))
+DataSet(data::LegendData, period::DataPeriodLike) = DataSet(data, runinfo(data, DataPeriod(period)))
+DataSet(data::LegendData, period::DataPeriodLike, run::DataRunLike) = DataSet(data, runinfo(data, (DataPeriod(period), DataRun(run))))
 
 
 const _cached_channelinfo = LRU{Tuple{UInt, AnyValiditySelection, Bool}, StructVector}(maxsize = 10^3)
