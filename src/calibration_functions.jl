@@ -161,14 +161,10 @@ end
 function _dataprod_qc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
     dataprod_qc = _dataprod_qc(data, sel)
     usability = channelinfo(data, sel, detector).usability
-    _merge_dataprod_qc_config(dataprod_qc, usability, detector)
-end
-
-function _merge_dataprod_qc_config(dataprod_qc::PropDict, usability::Symbol, detector::DetectorId)
     merge(
-        deepcopy(dataprod_qc.default),
-        deepcopy(get(dataprod_qc, usability, PropDict())),
-        deepcopy(get(dataprod_qc, detector, PropDict())),
+        dataprod_qc.default,
+        get(dataprod_qc, usability, PropDict()),
+        get(dataprod_qc, detector, PropDict()),
     )
 end
 
@@ -182,8 +178,6 @@ Get the Ge-detector QC cut definitions for the given data and validity selection
 
 The effective QC configuration is merged in increasing order of precedence:
 `default`, the detector's usability group (for example `ac`), and the detector.
-Each layer is copied so resolving one detector cannot mutate the cached
-configuration used by another detector.
 """
 function get_ged_qc_cuts_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
     key = (objectid(data), sel, detector)

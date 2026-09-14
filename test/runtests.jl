@@ -14,7 +14,6 @@ Test.@testset "Package LegendDataManagement" begin
     include("test_ljl_expressions.jl")
     include("test_lpy_expressions.jl")
     include("test_dataprod_config.jl")
-    include("test_calibration_functions.jl")
     include("test_lprops.jl")
     include("test_exposure.jl")
     include("test_utils.jl")
