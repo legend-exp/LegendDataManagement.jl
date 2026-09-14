@@ -10,8 +10,10 @@ Constructors:
 
 * `LegendData(setup_config::SetupConfig)`.
 
-* `LegendData(setup::Symbol)` - requires the `\$$_data_config_envvar_name` environment variable to
-  be set.
+* `LegendData(setup::Symbol; dataset::Symbol = :default)` - requires the `\$$_data_config_envvar_name`
+  environment variable to be set. `dataset` names the run list in the metadata `datasets/runlists`
+  that `runinfo` and `analysis_runs` read; `:default` selects no run list, so `runinfo` holds every
+  run the metadata has.
 
 Examples:
 
@@ -101,9 +103,7 @@ end
 
 function LegendData(setup::Symbol; dataset::Symbol = :default)
     ldata = getproperty(LegendDataConfig().setups, setup)
-    # Only override if dataset keyword is non-empty
-    selected_dataset = dataset == :default ? Symbol(ldata.dataset) : dataset
-    LegendData(ldata, setup, selected_dataset)
+    LegendData(ldata, setup, dataset)
 end
 
 Base.@deprecate data_filename(data::LegendData, filekey::FileKey, tier::DataTierLike) data.tier[tier, filekey]

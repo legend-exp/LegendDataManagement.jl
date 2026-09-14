@@ -25,9 +25,8 @@ include("testing_utils.jl")
         props_base_path = data_path(LegendDataConfig().setups.l200, "metadata")
         @test l200.metadata isa LegendDataManagement.PropsDB
 
-        @test l200.dataset == :valid
-        #@test LegendData(:l200_nu24).dataset == :nu24 
-        #@test LegendData(:l200_nu24; dataset = :valid).dataset == :valid
+        @test l200.dataset == :default
+        @test LegendData(:l200; dataset = :valid).dataset == :valid
     end
 
     @testset "channelinfo" begin
@@ -66,9 +65,14 @@ include("testing_utils.jl")
     l200_lh5 = LegendData(:l200)
 
     @testset "search_disk" begin
-        datasets = search_disk(DataSet, l200)
-        # LegendTestData is probably not in the correct formats
-        @test_broken !(isempty(datasets))
+        # `search_disk` walks the runs of `runinfo`, which reads the DAQ cycle keys of a run from
+        # the metadata `datasets/filekeys`. LegendTestData holds neither those nor data in the
+        # tiers to find. TODO: drop the guard once the test data holds them.
+        if !haskey(l200.metadata.datasets, :filekeys)
+            @test_broken search_disk(DataSet, l200) isa DataSet
+        else
+            @test_broken !(isempty(search_disk(DataSet, l200)))
+        end
         # check search_disk
         @test search_disk(DataTier, l200_lh5.tier[]) isa Vector{DataTier}
         @test search_disk(DataCategory, l200_lh5.tier[:dsp]) isa Vector{DataCategory}

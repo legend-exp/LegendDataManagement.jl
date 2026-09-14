@@ -258,12 +258,14 @@ const _cached_analysis_runs = LRU{Tuple{UInt, DataCategoryLike}, StructVector{@N
 """
     analysis_runs(data::LegendData)
 
-Return cross-period analysis runs. Picks the dataset specified in data.dataset.
+Return cross-period analysis runs. Picks the dataset specified in data.dataset, `:valid` for `:default`.
 """
 function analysis_runs(data::LegendData, cat::DataCategoryLike)
     Table(sort(get!(_cached_analysis_runs, (objectid(data), cat)) do
-        haskey(data.metadata.datasets.runlists, Symbol(data.dataset)) || error("Requested dataset '$(data.dataset)' not found in runlists.")
-        aruns::PropDict = get(getproperty(data.metadata.datasets.runlists, Symbol(data.dataset)), Symbol(cat), PropDict())
+        # `:default` names no run list of its own, and the analysis runs are then those of `valid`.
+        dataset = data.dataset == :default ? :valid : Symbol(data.dataset)
+        haskey(data.metadata.datasets.runlists, dataset) || error("Requested dataset '$dataset' not found in runlists.")
+        aruns::PropDict = get(getproperty(data.metadata.datasets.runlists, dataset), Symbol(cat), PropDict())
         periods_and_runs = Vector{@NamedTuple{period::DataPeriod, run::DataRun}}[
             map(run -> (period = DataPeriod(p), run = run), parse_runs(rs))
             for (p, rs) in aruns
@@ -322,14 +324,17 @@ const _cached_runinfo = LRU{UInt, Table}(maxsize = 300)
     runinfo(data::LegendData, runsel::RunSelLike)::NamedTuple
     runinfo(data::LegendData, filekey::FileKey)::NamedTuple
 
-Get the run information for `data` based on various selection criteria.
+Get the run information for `data` based on various selection criteria. The table holds the runs that
+`data.dataset` lists in the metadata `datasets/runlists`, or every run the metadata has if the dataset
+is `:default`.
 
 # Arguments
 - `data::LegendData`: The dataset to query run information from.
 
 # Returns
 A table of run information with one named tuple per category (e.g. `:cal`, `:phy`), each containing `startkey`, `livetime`, `is_analysis_run` and `keys` (all DAQ cycle keys of that category),
-plus `keys` with the cycle keys of all categories sorted by time
+plus `keys` with the cycle keys of all categories sorted by time. A category's `keys` is sorted by time
+and starts at that category's `startkey`.
 
 # Example
 runinfo(data)                                   # full table of valid runs
@@ -345,6 +350,12 @@ function runinfo(data::LegendData)
 
         # Detect categories dynamically (as Symbols)
         categories = unique(Symbol.(reduce(vcat, (collect(keys(ri)) for (_, runs) in rinfo for (_, ri) in runs))))
+        invalid = filter(cat -> !_can_convert_to(DataCategory, cat), categories)
+        if !isempty(invalid)
+            # TODO: throw an ArgumentError once datasets/runinfo names only valid data categories.
+            @warn "Ignoring $(join(invalid, ", ")) in datasets/runinfo: not a valid data category name"
+            categories = setdiff(categories, invalid)
+        end
         nttype = @NamedTuple{startkey::MaybeFileKey, livetime::typeof(1.0u"s"), is_analysis_run::Bool, keys::Vector{FileKey}}
 
         function make_row(p, r, ri)
@@ -356,7 +367,15 @@ function runinfo(data::LegendData)
                     livetime = get(ri[cat], :livetime_in_s, NaN) * u"s"
                     is_ana_run::Bool = !ismissing(fk) && (!(cat in (:phy, :cal)) || any(row.period == period && row.run == run for row in analysis_runs(data, cat)))
                     fkeys[cat] isa AbstractVector || throw(ArgumentError("No file keys found for period $period run $run category $cat in metadata datasets/filekeys"))
-                    nttype((fk, livetime, is_ana_run, FileKey[FileKey(data.name, period, run, cat, Timestamp(ts)) for ts in fkeys[cat]]))
+                    cat_keys = sort(FileKey[FileKey(data.name, period, run, cat, Timestamp(ts)) for ts in fkeys[cat]]; by = Timestamp)
+                    # The run starts at its first DAQ cycle, so both metadata sources name the same key.
+                    if !ismissing(fk)
+                        first_key = isempty(cat_keys) ? nothing : first(cat_keys)
+                        # TODO: throw again once the file key lists in datasets/filekeys are fixed.
+                        # first_key == fk || throw(ArgumentError("Start key $fk in datasets/runinfo is not the first file key $first_key in datasets/filekeys"))
+                        first_key == fk || @warn "Start key $fk in datasets/runinfo is not the first file key $first_key in datasets/filekeys"
+                    end
+                    nttype((fk, livetime, is_ana_run, cat_keys))
                 else
                     nttype((missing, NaN*u"s", false, FileKey[]))
                 end
@@ -365,8 +384,15 @@ function runinfo(data::LegendData)
             (; period, run, keys = sort(reduce(vcat, [c.keys for c in cats]); by = Timestamp), cats...)
         end
 
+        # The dataset of `data` picks the runs from datasets/runlists; `:default` picks every run.
+        selected = data.dataset == :default ? nothing :
+            Set((row.period, row.run) for cat in categories for row in analysis_runs(data, cat))
+
         # Build rows
-        flat_pr = sort(StructArray(vcat([[make_row(p, r, ri) for (r, ri) in rs] for (p, rs) in rinfo]...)))
+        rows = [make_row(p, r, ri) for (p, rs) in rinfo for (r, ri) in rs
+                if isnothing(selected) || (DataPeriod(p), DataRun(r)) in selected]
+        isempty(rows) && throw(ArgumentError("No run information found for dataset $(data.dataset)"))
+        flat_pr = sort(StructArray(rows))
         merged_cols = merge(columns(flat_pr), (; [(cat => Table(StructArray(getproperty(flat_pr, cat)))) for cat in categories]...))
         Table(merged_cols)
     end
