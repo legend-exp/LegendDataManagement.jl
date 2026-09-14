@@ -23,14 +23,17 @@ using Unitful
             @test only(rinfo).startkey.period   == DataPeriod(2)
             @test only(rinfo).startkey.run      == DataRun(6)
             @test only(rinfo).startkey.category == DataCategory(:cal)
-            @test only(rinfo).keys isa Vector{FileKey} && !isempty(only(rinfo).keys)
+            @test only(rinfo).keys isa DataSet && !isempty(only(rinfo).keys)
+            @test only(rinfo).keys._name == l200.dataset
             ri = only(runinfo(l200, (DataPeriod(2), DataRun(6))))
             @test ri.keys == sort(vcat(ri.cal.keys, ri.phy.keys), by = Timestamp)
             @test all(issorted(row.keys, by = Timestamp) for row in runinfo(l200))
+            @test first(ri.keys).time in ri.keys && last(ri.keys).time in ri.keys
+            @test !(Timestamp(first(ri.keys).time.unixtime - 1) in ri.keys)
             @test DataSet(l200)._name == l200.dataset
-            @test DataSet(l200, DataPeriod(2), DataRun(6)).keys == ri.keys
-            @test DataSet(l200, DataPeriod(2)).keys == sort(reduce(vcat, runinfo(l200, DataPeriod(2)).keys), by = Timestamp)
-            @test find_filekey(DataSet(ri.keys), first(ri.keys).time) == first(ri.keys)
+            @test DataSet(l200, DataPeriod(2), DataRun(6)) == ri.keys
+            @test DataSet(l200, DataPeriod(2)) == sort(reduce(vcat, runinfo(l200, DataPeriod(2)).keys), by = Timestamp)
+            @test find_filekey(ri.keys, first(ri.keys).time) == first(ri.keys)
             @test find_filekey(l200, last(ri.keys).time) == last(ri.keys)
             @test find_filekey(l200, Timestamp((ri.keys[1].time.unixtime + ri.keys[2].time.unixtime) ÷ 2)) == ri.keys[1]   # between two cycles -> the earlier one
         end

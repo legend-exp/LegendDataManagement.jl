@@ -298,6 +298,22 @@ using Unitful
                                "l200-p04-r000-cal-20230414T215158Z"]))
         @test ds._name == :default
         @test DataSet(ds.keys, :valid)._name == :valid
+
+        # a DataSet is the vector of its keys
+        @test ds isa AbstractVector{FileKey}
+        @test length(ds) == 3
+        @test ds[2] == FileKey("l200-p03-r000-phy-20230312T114001Z")
+        @test collect(ds) == ds.keys
+        @test issorted(ds, by = Timestamp)
+
+        # a timestamp lies in the time the keys of a set cover
+        @test first(ds).time in ds
+        @test last(ds).time in ds
+        @test Timestamp(1679000000) in ds
+        @test !(Timestamp(first(ds).time.unixtime - 1) in ds)
+        @test !(Timestamp(last(ds).time.unixtime + 1) in ds)
+        @test !(first(ds).time in DataSet(FileKey[]))
+
         @test sprint(show, ds) == "DataSet(:default, 3 file keys)"
         @test sprint(show, DataSet(FileKey[])) == "DataSet(:default, 0 file keys)"
         @test sprint(show, MIME"text/plain"(), DataSet(FileKey[])) == "DataSet(:default, 0 file keys)"

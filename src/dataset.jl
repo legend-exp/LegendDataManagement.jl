@@ -3,12 +3,25 @@
 
 export DataSet
 
-mutable struct DataSet
+mutable struct DataSet <: AbstractVector{FileKey}
     keys::Vector{FileKey}
     _name::Symbol
 end
 
 DataSet(keys::AbstractVector{FileKey}) = DataSet(keys, :default)
+
+Base.size(ds::DataSet) = size(ds.keys)
+Base.getindex(ds::DataSet, i::Int) = ds.keys[i]
+Base.IndexStyle(::Type{DataSet}) = IndexLinear()
+
+"""
+    in(ts::TimestampLike, ds::DataSet)
+
+Whether `ts` lies in the time the DAQ cycles of `ds` cover, from the first key of the set to the
+last. `ds` must be sorted by time.
+"""
+Base.in(ts::TimestampLike, ds::DataSet) =
+    !isempty(ds) && Timestamp(first(ds)) <= Timestamp(ts) <= Timestamp(last(ds))
 
 
 const ds_ignore_line_expr = r"^(\s*#.*)?$"
