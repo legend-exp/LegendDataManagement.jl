@@ -329,7 +329,8 @@ Get the run information for `data` based on various selection criteria.
 
 # Returns
 A table of run information with one named tuple per category (e.g. `:cal`, `:phy`), each containing `startkey`, `livetime`, `is_analysis_run` and `keys` (all DAQ cycle keys of that category),
-plus `keys` with the cycle keys of all categories sorted by time
+plus `keys` with the cycle keys of all categories sorted by time. A category's `keys` is sorted by time
+and starts at that category's `startkey`.
 
 # Example
 runinfo(data)                                   # full table of valid runs
@@ -356,7 +357,13 @@ function runinfo(data::LegendData)
                     livetime = get(ri[cat], :livetime_in_s, NaN) * u"s"
                     is_ana_run::Bool = !ismissing(fk) && (!(cat in (:phy, :cal)) || any(row.period == period && row.run == run for row in analysis_runs(data, cat)))
                     fkeys[cat] isa AbstractVector || throw(ArgumentError("No file keys found for period $period run $run category $cat in metadata datasets/filekeys"))
-                    nttype((fk, livetime, is_ana_run, FileKey[FileKey(data.name, period, run, cat, Timestamp(ts)) for ts in fkeys[cat]]))
+                    cat_keys = sort(FileKey[FileKey(data.name, period, run, cat, Timestamp(ts)) for ts in fkeys[cat]]; by = Timestamp)
+                    # The run starts at its first DAQ cycle, so both metadata sources name the same key.
+                    if !ismissing(fk)
+                        first_key = isempty(cat_keys) ? nothing : first(cat_keys)
+                        first_key == fk || throw(ArgumentError("Start key $fk in datasets/runinfo is not the first file key $first_key in datasets/filekeys"))
+                    end
+                    nttype((fk, livetime, is_ana_run, cat_keys))
                 else
                     nttype((missing, NaN*u"s", false, FileKey[]))
                 end
