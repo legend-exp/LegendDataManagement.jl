@@ -20,3 +20,16 @@ end
 
 import Base.==
 ==(a::DataSet, b::DataSet) = a.keys == b.keys
+
+
+Base.show(io::IO, ds::DataSet) = print(io, "DataSet(", length(ds.keys), " file keys)")
+
+function Base.show(io::IO, ::MIME"text/plain", ds::DataSet)
+    show(io, ds)
+    isempty(ds.keys) && return
+    println(io)
+    println(io, "  periods:    ", join(sort(unique(key.period for key in ds.keys)), ", "))
+    println(io, "  categories: ", join(sort(unique(key.category for key in ds.keys)), ", "))
+    println(io, "  first:      ", first(ds.keys))
+    print(io,   "  last:       ", last(ds.keys))
+end

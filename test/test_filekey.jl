@@ -292,4 +292,17 @@ using Unitful
             @test_throws ArgumentError DetectorId("B00000R")
         end
     end
+
+    @testset "DataSet" begin
+        ds = DataSet(FileKey.(["l200-p03-r000-cal-20230311T235840Z", "l200-p03-r000-phy-20230312T114001Z",
+                               "l200-p04-r000-cal-20230414T215158Z"]))
+        @test sprint(show, ds) == "DataSet(3 file keys)"
+        @test sprint(show, DataSet(FileKey[])) == "DataSet(0 file keys)"
+        @test sprint(show, MIME"text/plain"(), DataSet(FileKey[])) == "DataSet(0 file keys)"
+        str = sprint(show, MIME"text/plain"(), ds)
+        @test occursin("periods:    p03, p04", str)
+        @test occursin("categories: cal, phy", str)
+        @test occursin("first:      l200-p03-r000-cal-20230311T235840Z", str)
+        @test occursin("last:       l200-p04-r000-cal-20230414T215158Z", str)
+    end
 end
