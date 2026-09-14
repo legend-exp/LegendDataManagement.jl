@@ -292,19 +292,25 @@ end
 
 """
     find_filekey(ds::DataSet, ts::TimestampLike)
-    find_filekey(data::LegendData, ts::TimestampLike; kwargs...)
-Find the filekey in a dataset that is closest to a given timestamp.
-The kwargs are passed to `search_disk` to generate the `DataSet`.
+    find_filekey(data::LegendData, ts::TimestampLike)
+Find the filekey of the DAQ cycle that contains a given timestamp, i.e. the last key
+that starts at or before `ts`. `ds.keys` must be sorted by time; for `data` the
+`DataSet` is built (and cached) from the cycle keys of `runinfo(data)`.
 """
 function find_filekey end
 export find_filekey
 
 function find_filekey(ds::DataSet, ts::TimestampLike)
-    last(filter(fk -> fk.time < Timestamp(ts), ds.keys))
+    ds.keys[searchsortedlast(ds.keys, Timestamp(ts); by = Timestamp)]
 end
 
-function find_filekey(data::LegendData, ts; kwargs...)
-    find_filekey(search_disk(DataSet, data; kwargs...), ts)
+const _cached_runinfo_dataset = LRU{UInt, DataSet}(maxsize = 300)
+
+function find_filekey(data::LegendData, ts::TimestampLike)
+    ds = get!(_cached_runinfo_dataset, objectid(data)) do
+        DataSet(sort(reduce(vcat, runinfo(data).keys); by = Timestamp))
+    end
+    find_filekey(ds, ts)
 end
 
 
