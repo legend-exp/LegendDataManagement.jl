@@ -9,6 +9,12 @@
 Read `lh5` data from disk for a given set of `selectors`. After reading in, a PropertyFunction `f` can be applied to the data. 
 If a tuple of `Symbol`s is given, the properties from the tuple are selected. `det` is a `DetectorId`.
 
+A vector of `Unitful.Time` timestamps in place of a `FileKey` reads only the rows with those timestamps, in time order:
+each is looked up with [`find_filekey`](@ref) in the DAQ cycle that contains it, and only those rows of the cycle's file
+are read. The time of a row is its `timestamp` column, or `tstart` in an event tier. A table without one of the timestamps
+is an error, or is skipped with `ignore_missing`. With a `FileKey` and the timestamps, `(tier, filekey, timestamps, det)`,
+the cycle is given instead of looked up and the rows follow the timestamps.
+
 The `filterby` kwarg takes a `PropertyFunction` selecting rows of the tier being read. Given a `tier => PropertyFunction` pair instead,
 the function is evaluated on `tier` and the resulting row selection is applied to the tier being read. Both tiers must hold one row per
 trigger of the same detector, so that their rows correspond by position; a row-count mismatch raises a `DimensionMismatch`.
@@ -22,6 +28,9 @@ dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, ch)
 dsp = read_ldata(l200, :jldsp, :cal, DataPartition(:calgroup001a), ch)
 dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), ch)
 dsp = read_ldata(l200, :jldsp, :cal, runinfo(l200)[1:3], ch)
+
+dsp = read_ldata(l200, :jldsp, [1.6e9u"s", 1.7e9u"s"], ch)
+dsp = read_ldata(l200, :jldsp, filekey, [1.6e9u"s", 1.7e9u"s"], ch)
 
 dsp = read_ldata(l200, :jldsp, filekey, det; filterby = @pf(\$e_cusp > 1000))
 raw = read_ldata(l200, :raw, filekey, det; filterby = :jlhit => @pf(\$is_valid_hit))
