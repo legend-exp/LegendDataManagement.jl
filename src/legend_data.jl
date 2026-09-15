@@ -10,8 +10,10 @@ Constructors:
 
 * `LegendData(setup_config::SetupConfig)`.
 
-* `LegendData(setup::Symbol)` - requires the `\$$_data_config_envvar_name` environment variable to
-  be set.
+* `LegendData(setup::Symbol; dataset::Symbol = :default)` - requires the `\$$_data_config_envvar_name`
+  environment variable to be set. `dataset` names the run list in the metadata `datasets/runlists`
+  that `runinfo` and `analysis_runs` read; `:default` selects no run list, so `runinfo` holds every
+  run the metadata has.
 
 Examples:
 
@@ -101,9 +103,7 @@ end
 
 function LegendData(setup::Symbol; dataset::Symbol = :default)
     ldata = getproperty(LegendDataConfig().setups, setup)
-    # Only override if dataset keyword is non-empty
-    selected_dataset = dataset == :default ? Symbol(ldata.dataset) : dataset
-    LegendData(ldata, setup, selected_dataset)
+    LegendData(ldata, setup, dataset)
 end
 
 Base.@deprecate data_filename(data::LegendData, filekey::FileKey, tier::DataTierLike) data.tier[tier, filekey]
@@ -286,26 +286,44 @@ function search_disk(::Type{DataSet}, data::LegendData; search_categories::Vecto
                     end
                 end for cat in search_categories]...)
             end)
-        end)
+        end, data.dataset)
     end
 end
 
 """
     find_filekey(ds::DataSet, ts::TimestampLike)
-    find_filekey(data::LegendData, ts::TimestampLike; kwargs...)
-Find the filekey in a dataset that is closest to a given timestamp.
-The kwargs are passed to `search_disk` to generate the `DataSet`.
+    find_filekey(data::LegendData, ts::TimestampLike)
+Find the filekey of the DAQ cycle that contains a given timestamp, i.e. the last key
+that starts at or before `ts`. `ds.keys` must be sorted by time; for `data` the
+`DataSet` is built (and cached) from the cycle keys of `runinfo(data)`.
 """
 function find_filekey end
 export find_filekey
 
 function find_filekey(ds::DataSet, ts::TimestampLike)
-    last(filter(fk -> fk.time < Timestamp(ts), ds.keys))
+    ds.keys[searchsortedlast(ds.keys, Timestamp(ts); by = Timestamp)]
 end
 
-function find_filekey(data::LegendData, ts; kwargs...)
-    find_filekey(search_disk(DataSet, data; kwargs...), ts)
+const _cached_runinfo_dataset = LRU{UInt, DataSet}(maxsize = 300)
+
+function find_filekey(data::LegendData, ts::TimestampLike)
+    find_filekey(get!(() -> DataSet(data), _cached_runinfo_dataset, objectid(data)), ts)
 end
+
+
+"""
+    DataSet(data::LegendData)
+    DataSet(data::LegendData, period::DataPeriodLike)
+    DataSet(data::LegendData, period::DataPeriodLike, run::DataRunLike)
+    DataSet(data::LegendData, rinfo::Table)
+
+The DAQ cycle keys of every category of the given runs, sorted by time and named after
+`data.dataset`. Without a selection the set holds the keys of every run of `runinfo(data)`.
+"""
+DataSet(data::LegendData, rinfo::Table) = DataSet(sort(reduce(vcat, rinfo.keys; init = FileKey[]); by = Timestamp), data.dataset)
+DataSet(data::LegendData) = DataSet(data, runinfo(data))
+DataSet(data::LegendData, period::DataPeriodLike) = DataSet(data, runinfo(data, DataPeriod(period)))
+DataSet(data::LegendData, period::DataPeriodLike, run::DataRunLike) = DataSet(data, runinfo(data, (DataPeriod(period), DataRun(run))))
 
 
 const _cached_channelinfo = LRU{Tuple{UInt, AnyValiditySelection, Bool}, StructVector}(maxsize = 10^3)
