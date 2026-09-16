@@ -10,6 +10,7 @@ using StructArrays
 using TypedTables, PropertyFunctions
 using Distributed, ProgressMeter
 using Unitful: Unitful, @u_str
+using PrecompileTools: @setup_workload, @compile_workload
 
 
 const AbstractDataSelectorLike = Union{AbstractString, Symbol, DataTierLike, DataCategoryLike, DataPeriodLike, DataRunLike, DataPartitionLike, DetectorIdLike}
@@ -516,5 +517,38 @@ end
 
 LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, Table}; kwargs...) =
     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], rsel[3], nothing); kwargs...)
+
+# The read paths, compiled on a production of two cycles written for the purpose. The code
+# that depends on the columns of a real tier still compiles on first use, the rest does not.
+@setup_workload begin
+    dir = mktempdir()
+    write(joinpath(dir, "config.json"), """{"setups": {"l200": {"paths": {"tier": "$dir/tier"}}}}""")
+    @compile_workload withenv("LEGEND_DATA_CONFIG" => joinpath(dir, "config.json")) do
+        data = LegendData(:l200)
+        fks = [FileKey("l200-p00-r000-cal-20200101T000000Z"), FileKey("l200-p00-r000-cal-20200101T010000Z")]
+        det = DetectorId("V00000A")
+        for fk in fks
+            ts = (Timestamp(fk).unixtime .+ (1:20)) .* 1.0u"s"
+            mkpath(dirname(data.tier[:jldsp, fk]))
+            LegendHDF5IO.lh5open(data.tier[:jldsp, fk], "w") do f
+                f["jldsp/$det"] = Table(timestamp = ts, e = rand(20), n = rand(Int32, 20), t = rand(Float32, 20) .* u"μs")
+            end
+        end
+        LegendDataManagement._cached_runinfo_dataset[objectid(data)] = DataSet(fks, data.dataset)
+        ts = LegendDataManagement.read_ldata(:timestamp, data, :jldsp, fks[1], det).timestamp[[2, 5, 6, 19]]
+        LegendDataManagement.read_ldata(data, :jldsp, fks[1], det)
+        LegendDataManagement.read_ldata(data, :jldsp, fks[1])
+        LegendDataManagement.read_ldata(data, :jldsp, fks, det)
+        LegendDataManagement.read_ldata((:e, :n), data, :jldsp, fks[1], det)
+        LegendDataManagement.read_ldata((@pf $e * 2), data, :jldsp, fks[1], det)
+        LegendDataManagement.read_ldata(data, :jldsp, fks[1], det; filterby = @pf($e > 0.5))
+        LegendDataManagement.read_ldata(data, :jldsp, fks[1], ts, det)
+        LegendDataManagement.read_ldata(:e, data, :jldsp, fks[1], ts, det)
+        LegendDataManagement.read_ldata(data, :jldsp, fks[1], ts, det; filterby = @pf($e > 0.5))
+        LegendDataManagement.read_ldata(data, :jldsp, vcat(ts, ts .+ 3600u"s"), det)
+        delete!(LegendDataManagement._cached_runinfo_dataset, objectid(data))
+    end
+    rm(dir; recursive = true)
+end
 
 end # module
