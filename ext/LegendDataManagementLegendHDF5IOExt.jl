@@ -4,16 +4,20 @@ using LegendDataManagement
 LegendDataManagement._lh5_ext_loaded(::Val{true}) = true
 using LegendDataManagement: RunCategorySelLike
 using LegendHDF5IO
+using ParallelProcessingTools: @always_everywhere, ensure_procinit
 using LegendDataTypes: fast_flatten
 using StructArrays
 using TypedTables, PropertyFunctions
 using Distributed, ProgressMeter
+using Unitful: Unitful, @u_str
 
 
 const AbstractDataSelectorLike = Union{AbstractString, Symbol, DataTierLike, DataCategoryLike, DataPeriodLike, DataRunLike, DataPartitionLike, DetectorIdLike}
 # `nothing` reads every channel of the tier; a channel of a raw tier need not be a detector.
 const DetectorSel = Union{DetectorId, Nothing}
 const ChannelSel = Union{DetectorId, AbstractString, Nothing}
+# The rows of a table: every row, or only those whose time is among the given ones.
+const TimestampSel = Union{Nothing, AbstractVector{<:Unitful.Time}}
 # What an element of a selection may be: a selector, a filekey, a run table, or a vector.
 const RSelLike = Union{AbstractDataSelectorLike, FileKey, AbstractVector, Nothing}
 const PossibleDataSelectors = [DataTier, DataCategory, DataPeriod, DataRun, DataPartition, DetectorId]
@@ -107,6 +111,9 @@ function LegendHDF5IO.LH5Array(ds::LegendHDF5IO.HDF5.Dataset,
 end
 
 function __init__()
+    # A parallel read runs this on the workers of its pool first, whichever way they were added.
+    @always_everywhere using LegendDataManagement, LegendHDF5IO
+
     function extend_datatype_dict(::Type{T}, key::String
         ) where {T <: LegendDataManagement.DataSelector}
 
@@ -142,7 +149,10 @@ function _lh5_data_open(f::Function, data::LegendData, tier::DataTier, filekey::
 end
 
 _skipnothingmissing(xv::AbstractVector) = [x for x in skipmissing(xv) if !isnothing(x)]
-lflatten(x) = fast_flatten(collect(_skipnothingmissing(x)))
+# Reads that `ignore_missing` skipped leave nothing to flatten, like a single skipped read.
+lflatten(x) = let v = collect(_skipnothingmissing(x))
+    isempty(v) ? nothing : fast_flatten(v)
+end
 # Each file holds the detectors that triggered in it, so the flatten is key-wise over every
 # key any of them has: a file without that key simply contributes no rows.
 function lflatten(nts::AbstractVector{<:NamedTuple})
@@ -180,19 +190,45 @@ function _nest(paths, vals)
 end
 
 # Every column of a group keeps the rows `sel` selects; a single column is unwrapped.
-# TODO: pass `sel` to the read once `LH5Array` supports `AbstractVector{Int}` indices.
+# TODO: pass a mask to the read once `LH5Array` supports `AbstractVector{Bool}` indices.
 _load_all_keys(nt::NamedTuple, sel=(:)) = length(nt) == 1 ? _load_all_keys(nt[first(keys(nt))], sel) :
     NamedTuple{keys(nt)}(map(k -> _load_all_keys(nt[k], sel), keys(nt)))
 _load_all_keys(x::Union{AbstractArray, Table}, sel=(:)) = sel === (:) ? x[:] : x[:][sel]
+# Rows named by index are read range by range, as an `LH5Array` reads ranges. Every read of a
+# column costs tens of microseconds however few rows it takes, so rows of scalars are read
+# along with gaps of up to `_bridged_rows` between them rather than one range per row; rows
+# holding arrays -- waveforms -- cost their bytes and are read in ranges of adjacent rows.
+const _bridged_rows = 256
+function _load_all_keys(x::Union{AbstractArray, Table}, sel::AbstractVector{Int})
+    isempty(sel) && return x[1:0]
+    maxgap = isbitstype(eltype(x)) ? _bridged_rows : 0
+    rows = sort(unique(sel))
+    ranges = [rows[1]:rows[1]]
+    for r in rows[2:end]
+        r - last(ranges[end]) - 1 <= maxgap ? (ranges[end] = first(ranges[end]):r) : push!(ranges, r:r)
+    end
+    read = fast_flatten([x[rg] for rg in ranges])
+    offsets = cumsum(length.(ranges)) .- length.(ranges)
+    pos = map(i -> (k = searchsortedlast(first.(ranges), i); offsets[k] + i - first(ranges[k]) + 1), sel)
+    pos == 1:length(read) ? read : read[pos]
+end
 _load_all_keys(x, sel=(:)) = x
 
 _nrows(nt::NamedTuple) = _nrows(first(nt))
 _nrows(x) = length(x)
 
+# How far a row's timestamp may lie from a requested one: `Float64` seconds resolve a quarter
+# of a microsecond at the LEGEND epoch, and a unit conversion of the request costs an ulp.
+const _timestamp_tol = 1u"μs"
+# The columns that hold the time of a row: `timestamp` in the tiers of one row per trigger,
+# `tstart` in the event tiers, where a row is the global event built from the triggers.
+const _timestamp_columns = ("timestamp", "tstart")
+
 # Read the table at `group`, or every table below it. Each pair of `filter_pairs` is read
-# from its own tier and selects by position, every tier holding one row per trigger.
+# from its own tier and selects by position, every tier holding one row per trigger. Given
+# `ts`, only the rows of each table whose time is one of them are read, in that order.
 function _read_lh5_det(h, data::LegendData, tier::DataTier, filekey::FileKey, det::ChannelSel, f::Base.Callable, filter_pairs::Tuple, ignore_missing::Bool,
-    group::AbstractString = isnothing(det) ? "$tier" : "$tier/$det")
+    group::AbstractString = isnothing(det) ? "$tier" : "$tier/$det", ts::TimestampSel = nothing)
 
     if !haskey(h, group)
         ignore_missing || throw(ArgumentError("$group not found in $(basename(string(h.data_store)))"))
@@ -218,7 +254,7 @@ function _read_lh5_det(h, data::LegendData, tier::DataTier, filekey::FileKey, de
         # them navigates them itself and so is applied to this level, below.
         if named && f isa PropSelFunction && all(p -> length(p) == 1, paths)
             length(sub) == 1 && return _read_lh5_det(h, data, tier, filekey, det, identity,
-                filter_pairs, ignore_missing, "$group/$(only(sub))")
+                filter_pairs, ignore_missing, "$group/$(only(sub))", ts)
             ks, f = sub, identity
         end
         if !(named && f isa PropertyFunctions.PropertyFunction)
@@ -227,7 +263,7 @@ function _read_lh5_det(h, data::LegendData, tier::DataTier, filekey::FileKey, de
                 # every one of them is a `DetectorId`: a raw tier also holds the electronics.
                 child = !isnothing(det) ? det :
                     LegendDataManagement._can_convert_to(DetectorId, k) ? DetectorId(k) : k
-                _read_lh5_det(h, data, tier, filekey, child, f, filter_pairs, ignore_missing, "$group/$k")
+                _read_lh5_det(h, data, tier, filekey, child, f, filter_pairs, ignore_missing, "$group/$k", ts)
             end)
             # A child that `ignore_missing` skipped leaves no entry behind.
             keep = findall(!isnothing, read)
@@ -250,25 +286,48 @@ function _read_lh5_det(h, data::LegendData, tier::DataTier, filekey::FileKey, de
     lazy = f isa PropertyFunctions.PropertyFunction ?
         map(path -> _lh5_path(h, group, path), paths) : ((h[group], ()),)
 
-    sel = (:)
+    # Only the timestamp column is read in full to locate the rows; the rows of the table are
+    # in DAQ order, so each timestamp is found by bisection. A table without one of them is
+    # treated like one without a column the function names.
+    idxs = if isnothing(ts)
+        nothing
+    else
+        tcolname = findfirst(c -> haskey(h, "$group/$c"), _timestamp_columns)
+        isnothing(tcolname) && throw(ArgumentError("Neither $(join(("$group/$c" for c in _timestamp_columns), " nor ")) found in $(basename(string(h.data_store)))"))
+        tcol = h["$group/$(_timestamp_columns[tcolname])"][:]
+        issorted(tcol) || throw(ArgumentError("The timestamps of $group in $filekey are not sorted"))
+        found = map(t -> searchsortedlast(tcol, t + _timestamp_tol), ts)
+        missing_ts = findfirst(((i, t),) -> i < firstindex(tcol) || tcol[i] < t - _timestamp_tol, collect(zip(found, ts)))
+        if !isnothing(missing_ts)
+            ignore_missing || throw(ArgumentError("No row with timestamp $(ts[missing_ts]) in $group of $filekey"))
+            @debug "No row with timestamp $(ts[missing_ts]) in $group of $filekey"
+            return nothing
+        end
+        found
+    end
+
+    keep = (:)
     for p in filter_pairs
         filter_tier, filter_pf = DataTier(first(p)), last(p)
         # The predicate is read like any other function, giving one row mask per filter tier.
         m = if filter_tier == tier
-            _read_lh5_det(h, data, tier, filekey, det, filter_pf, (), ignore_missing, group)
+            _read_lh5_det(h, data, tier, filekey, det, filter_pf, (), ignore_missing, group, ts)
         else
             _lh5_data_open(data, filter_tier, filekey, det) do fh
                 # An event tier holds one table for the whole file, not one per detector.
                 fgroup = !isnothing(det) && haskey(fh, "$filter_tier/$det") ?
                     "$filter_tier/$det" : "$filter_tier"
-                _read_lh5_det(fh, data, filter_tier, filekey, det, filter_pf, (), ignore_missing, fgroup)
+                _read_lh5_det(fh, data, filter_tier, filekey, det, filter_pf, (), ignore_missing, fgroup, ts)
             end
         end
         isnothing(m) && return nothing
-        length(m) == _nrows(first(first(lazy))) || throw(DimensionMismatch(
-            "Filter tier :$filter_tier has $(length(m)) rows but :$tier has $(_nrows(first(first(lazy)))) rows for $det in $filekey"))
-        sel = sel === (:) ? coalesce.(m, false) : sel .& coalesce.(m, false)
+        # A filter read with `ts` holds the rows the timestamps name, as this table will.
+        n = isnothing(idxs) ? _nrows(first(first(lazy))) : length(idxs)
+        length(m) == n || throw(DimensionMismatch(
+            "Filter tier :$filter_tier has $(length(m)) rows but :$tier has $n rows for $det in $filekey"))
+        keep = keep === (:) ? coalesce.(m, false) : keep .& coalesce.(m, false)
     end
+    sel = isnothing(idxs) ? keep : keep === (:) ? idxs : idxs[keep]
 
     vals = map(lazy) do (obj, rest)
         foldl(getproperty, rest; init = _load_all_keys(obj, sel))
@@ -286,12 +345,12 @@ function _read_lh5_det(h, data::LegendData, tier::DataTier, filekey::FileKey, de
 end
 
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, FileKey, DetectorSel};
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, FileKey, TimestampSel, DetectorSel};
     filterby::Union{Nothing, PropertyFunctions.PropertyFunction, Pair{<:DataTierLike, <:PropertyFunctions.PropertyFunction},
         Tuple{Vararg{Pair{<:DataTierLike, <:PropertyFunctions.PropertyFunction}}}}=nothing,
     ignore_missing::Bool=false, kwargs...)
 
-    tier, filekey, det = rsel
+    tier, filekey, ts, det = rsel
 
     filterby === () && throw(ArgumentError("`filterby` must name at least one `DataTier`"))
     # A bare PropertyFunction is a predicate on the tier being read.
@@ -300,9 +359,39 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
         filterby isa Pair ? (filterby,) : filterby
 
     _lh5_data_open(data, tier, filekey, det) do h
-        _read_lh5_det(h, data, tier, filekey, det, f, filter_pairs, ignore_missing)
+        _read_lh5_det(h, data, tier, filekey, det, f, filter_pairs, ignore_missing, isnothing(det) ? "$tier" : "$tier/$det", ts)
     end
 end
+
+LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, FileKey, DetectorSel}; kwargs...) =
+    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], nothing, rsel[3]); kwargs...)
+LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, FileKey, AbstractVector{<:Unitful.Time}}; kwargs...) =
+    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], rsel[3], nothing); kwargs...)
+
+# Timestamps are read from the DAQ cycles that contain them, one cycle at a time. The rows
+# come back in time order, as from any read spanning several cycles.
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, AbstractVector{<:Unitful.Time}, DetectorSel}; parallel::Bool=false, wpool::WorkerPool=default_worker_pool(), kwargs...)
+    tier, ts, det = rsel
+    isempty(ts) && throw(ArgumentError("No timestamps given"))
+    ts = sort(ts)
+    fks = map(t -> find_filekey(data, t), ts)
+    cycles = [fk => ts[findall(==(fk), fks)] for fk in unique(fks)]
+    p = Progress(length(cycles), desc="Reading $(length(ts)) timestamps from $(length(cycles)) filekeys", showspeed=true)
+    lflatten(if parallel
+                @debug "Parallel read with $(length(workers())) workers from $(length(cycles)) filekeys"
+                ensure_procinit(workers(wpool))
+                progress_pmap(wpool, cycles; progress=p) do (fk, fk_ts)
+                    LegendDataManagement.read_ldata(f, data, (tier, fk, fk_ts, det); kwargs...)
+                end
+            else
+                @debug "Sequential read from $(length(cycles)) filekeys"
+                progress_map(cycles; progress=p) do (fk, fk_ts)
+                    LegendDataManagement.read_ldata(f, data, (tier, fk, fk_ts, det); kwargs...)
+                end
+            end)
+end
+LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, AbstractVector{<:Unitful.Time}}; kwargs...) =
+    LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], nothing); kwargs...)
 
 
 LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, FileKey}; kwargs...) =
@@ -314,6 +403,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     lflatten(if parallel
                 # TODO: Check if wpool is connected via :master_worker if myid() != 1
                 @debug "Parallel read with $(length(workers())) workers from $(length(rsel[2])) filekeys"
+                ensure_procinit(workers(wpool))
                 progress_pmap(wpool, rsel[2]; progress=p) do fk
                     LegendDataManagement.read_ldata(f, data, (rsel[1], fk, rsel[3]); kwargs...)
                 end
@@ -404,6 +494,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     lflatten(if parallel
                 # TODO: Check if wpool is connected via :master_worker if myid() != 1
                 @debug "Parallel read with $(length(workers())) workers from $(length(rsel[3])) runs"
+                ensure_procinit(workers(wpool))
                 progress_pmap(wpool, rsel[3]; progress=p) do r
                     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], r.period, r.run, rsel[4]); parallel, wpool, kwargs...)
                 end
@@ -425,6 +516,5 @@ end
 
 LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, Table}; kwargs...) =
     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], rsel[3], nothing); kwargs...)
-
 
 end # module

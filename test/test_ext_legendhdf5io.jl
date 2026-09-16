@@ -7,9 +7,11 @@ using LegendHDF5IO
 using LegendTestData
 using PropertyFunctions
 using TypedTables
+using Unitful
 
 using YAML
 using HDF5
+using Distributed
 
 @testset "test_ext_legendhdf5io" begin
 
@@ -88,6 +90,15 @@ using HDF5
         # parallel read
         @test read_ldata(l200, tier, cat, period, run, det; parallel = true) isa TypedTables.Table
         @test read_ldata(l200, tier, cat, period, run, det; parallel = true).timestamp == all_ts
+        # a parallel read loads the packages on the workers of its pool itself
+        pid = only(addprocs(1; exeflags = "--project=$(Base.active_project())"))
+        try
+            @test !remotecall_fetch(isdefined, pid, Main, :LegendHDF5IO)
+            @test read_ldata(l200, tier, fks, det; parallel = true, wpool = WorkerPool([pid])).timestamp == all_ts
+            @test remotecall_fetch(isdefined, pid, Main, :LegendHDF5IO)
+        finally
+            rmprocs(pid)
+        end
 
         # multi-run read over a run table
         rinfo = Table([(period = period, run = run)])
@@ -247,6 +258,99 @@ using HDF5
                     @test r[Symbol(det)].e == collect(1.0:m)[valid]
                     @test read_ldata(l200_tmp, chan_tier, fk, det; filterby = evt_tier => @pf $is_good).e ==
                         collect(1.0:m)[valid]
+                end
+            end
+        end
+
+        @testset "rows by timestamp" begin
+            ts1, ts2 = (tbl(tier, k, det).timestamp for k in fks)
+            data_fk2 = tbl(tier, fks[2], det)
+            # a file with the timestamps given reads them in the order given
+            rows = [2, 5, 9]
+            r = read_ldata(l200, tier, fk, data_fk.timestamp[rows], det)
+            @test r isa TypedTables.Table
+            @test r == data_fk[rows]
+            @test read_ldata(l200, tier, fk, data_fk.timestamp[reverse(rows)], det) == data_fk[reverse(rows)]
+            @test read_ldata(:e_fc, l200, tier, fk, data_fk.timestamp[rows], det).e_fc == data_fk.e_fc[rows]
+            @test read_ldata((@pf $e_fc * 2), l200, tier, fk, data_fk.timestamp[rows], det) == data_fk.e_fc[rows] .* 2
+            # a timestamp in any time unit, within the tolerance of the stored seconds
+            @test read_ldata(:timestamp, l200, tier, fk, uconvert.(u"ms", data_fk.timestamp[rows]), det).timestamp ==
+                data_fk.timestamp[rows]
+            @test read_ldata(:timestamp, l200, tier, fk, data_fk.timestamp[rows] .+ 0.5u"μs", det).timestamp ==
+                data_fk.timestamp[rows]
+            # a timestamp given twice names its row twice
+            @test read_ldata(l200, tier, fk, data_fk.timestamp[[3, 3, 1]], det) == data_fk[[3, 3, 1]]
+            # a stored type is read like any column; a lone column reads adjacent rows as one
+            # range and skips the gaps between the others
+            wf_full = read_ldata((@pf $waveform_presummed), l200, filter_tier, fk, det)
+            wf = read_ldata((@pf $waveform_presummed), l200, filter_tier, fk, data_fk.timestamp[rows], det)
+            @test wf == wf_full[rows]
+            @test read_ldata((@pf $waveform_presummed), l200, filter_tier, fk, data_fk.timestamp[[7, 2, 3, 9]], det) ==
+                wf_full[[7, 2, 3, 9]]
+            # filters apply to the rows the timestamps name
+            @test read_ldata(l200, tier, fk, data_fk.timestamp[rows], det; filterby = cut) == data_fk[rows][data_fk.e_fc[rows] .> ecut]
+            dcut = sort(tbl(filter_tier, fk, det).daqenergy)[end ÷ 2]
+            valid = tbl(filter_tier, fk, det).daqenergy .> dcut
+            @test read_ldata(l200, tier, fk, data_fk.timestamp[rows], det; filterby = filter_tier => @pf($daqenergy > dcut)) ==
+                data_fk[rows][valid[rows]]
+            # a table without one of the timestamps is an error, or skipped
+            @test_throws "No row with timestamp" read_ldata(l200, tier, fk, [data_fk.timestamp[1] + 1u"ms"], det)
+            @test_throws "No row with timestamp" read_ldata(l200, tier, fk, [data_fk.timestamp[1] + 2u"μs"], det)
+            @test isnothing(read_ldata(l200, tier, fk, [data_fk.timestamp[1] + 1u"ms"], det; ignore_missing = true))
+            # without a detector, the channels that hold the rows
+            @test_throws "No row with timestamp" read_ldata(l200, tier, fk, data_fk.timestamp[rows])
+            nodet = read_ldata(:timestamp, l200, tier, fk, data_fk.timestamp[rows]; ignore_missing = true)
+            @test nodet isa NamedTuple && keys(nodet) == (Symbol(det),)
+            @test nodet[Symbol(det)].timestamp == data_fk.timestamp[rows]
+            # a table without a time column cannot name rows by it
+            @test_throws "qc/timestamp nor" read_ldata(:qc, l200, DataTier(:jlhit), fk, data_fk.timestamp[rows], det)
+            # an event tier keys its rows by tstart
+            evt_ts = read_ldata((@pf $tstart), l200, DataTier(:jlevt), pfk)
+            @test read_ldata((:tstart, :geds), l200, DataTier(:jlevt), pfk, evt_ts[[4, 2]]).tstart == evt_ts[[4, 2]]
+            @test read_ldata((@pf $geds.timestamp), l200, DataTier(:jlevt), pfk, evt_ts[[4, 2]]) ==
+                read_ldata((@pf $geds.timestamp), l200, DataTier(:jlevt), pfk)[[4, 2]]
+
+            # Without a file key the timestamps are looked up with `find_filekey`, which needs
+            # keys whose cycle times match the rows: the test data holds synthetic ones, so the
+            # files are copied under keys starting at their first row.
+            mktempdir() do tmpdir
+                config = joinpath(tmpdir, "config.yaml")
+                open(config, "w") do f
+                    YAML.write(f, Dict("setups" => Dict("l200" => Dict("paths" =>
+                        Dict("tier" => joinpath(tmpdir, "generated", "tier"))))))
+                end
+                withenv("LEGEND_DATA_CONFIG" => config) do
+                    l200_tmp = LegendData(:l200)
+                    keys_tmp = [FileKey(k.setup, k.period, k.run, k.category, Timestamp(first(t)))
+                        for (k, t) in zip(fks, (ts1, ts2))]
+                    for (k, k_tmp) in zip(fks, keys_tmp), t in (tier, filter_tier)
+                        mkpath(dirname(l200_tmp.tier[t, k_tmp]))
+                        cp(l200.tier[t, k], l200_tmp.tier[t, k_tmp])
+                    end
+                    LegendDataManagement._cached_runinfo_dataset[objectid(l200_tmp)] = DataSet(keys_tmp, l200_tmp.dataset)
+                    @test find_filekey(l200_tmp, ts2[3]) == keys_tmp[2]
+
+                    # rows of several cycles come back in time order, whatever the order given
+                    sel = vcat(ts2[[7, 1]], ts1[[5]], ts2[[3]], ts1[[2]])
+                    r = read_ldata(l200_tmp, tier, sel, det)
+                    @test r isa TypedTables.Table
+                    @test r == vcat(data_fk[[2, 5]], data_fk2[[1, 3, 7]])
+                    @test r.timestamp == sort(sel)
+                    @test read_ldata(:e_fc, l200_tmp, tier, sel, det).e_fc == r.e_fc
+                    @test read_ldata(l200_tmp, tier, sel, det; parallel = true) == r
+                    @test read_ldata((@pf $e_fc * 2), l200_tmp, tier, sel, det) == r.e_fc .* 2
+                    @test read_ldata(l200_tmp, tier, sel, det; filterby = cut) == r[r.e_fc .> ecut]
+                    @test read_ldata(l200_tmp, tier, sel, det; filterby = filter_tier => @pf($timestamp > ts1[2])) ==
+                        r[r.timestamp .> ts1[2]]
+                    n = length(data_fk)
+                    @test read_ldata((@pf $waveform_presummed), l200_tmp, filter_tier, sel, det) ==
+                        read_ldata((@pf $waveform_presummed), l200_tmp, filter_tier, cat, period, run, det)[[2, 5, n + 1, n + 3, n + 7]]
+                    nodet = read_ldata(:timestamp, l200_tmp, tier, sel; ignore_missing = true)
+                    @test keys(nodet) == (Symbol(det),) && nodet[Symbol(det)].timestamp == sort(sel)
+                    @test_throws "No row with timestamp" read_ldata(l200_tmp, tier, sel)
+                    @test_throws "No row with timestamp" read_ldata(l200_tmp, tier, [ts1[1] + 1u"ms"], det)
+                    @test isnothing(read_ldata(l200_tmp, tier, [ts1[1] + 1u"ms"], det; ignore_missing = true))
+                    @test_throws "No timestamps given" read_ldata(l200_tmp, tier, eltype(ts1)[], det)
                 end
             end
         end
