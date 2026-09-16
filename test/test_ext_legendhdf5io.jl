@@ -11,6 +11,7 @@ using Unitful
 
 using YAML
 using HDF5
+using Distributed
 
 @testset "test_ext_legendhdf5io" begin
 
@@ -89,6 +90,15 @@ using HDF5
         # parallel read
         @test read_ldata(l200, tier, cat, period, run, det; parallel = true) isa TypedTables.Table
         @test read_ldata(l200, tier, cat, period, run, det; parallel = true).timestamp == all_ts
+        # a parallel read loads the packages on the workers of its pool itself
+        pid = only(addprocs(1; exeflags = "--project=$(Base.active_project())"))
+        try
+            @test !remotecall_fetch(isdefined, pid, Main, :LegendHDF5IO)
+            @test read_ldata(l200, tier, fks, det; parallel = true, wpool = WorkerPool([pid])).timestamp == all_ts
+            @test remotecall_fetch(isdefined, pid, Main, :LegendHDF5IO)
+        finally
+            rmprocs(pid)
+        end
 
         # multi-run read over a run table
         rinfo = Table([(period = period, run = run)])

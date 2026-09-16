@@ -4,6 +4,7 @@ using LegendDataManagement
 LegendDataManagement._lh5_ext_loaded(::Val{true}) = true
 using LegendDataManagement: RunCategorySelLike
 using LegendHDF5IO
+using ParallelProcessingTools: @always_everywhere, ensure_procinit
 using LegendDataTypes: fast_flatten
 using StructArrays
 using TypedTables, PropertyFunctions
@@ -110,6 +111,9 @@ function LegendHDF5IO.LH5Array(ds::LegendHDF5IO.HDF5.Dataset,
 end
 
 function __init__()
+    # A parallel read runs this on the workers of its pool first, whichever way they were added.
+    @always_everywhere using LegendDataManagement, LegendHDF5IO
+
     function extend_datatype_dict(::Type{T}, key::String
         ) where {T <: LegendDataManagement.DataSelector}
 
@@ -375,6 +379,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     p = Progress(length(cycles), desc="Reading $(length(ts)) timestamps from $(length(cycles)) filekeys", showspeed=true)
     lflatten(if parallel
                 @debug "Parallel read with $(length(workers())) workers from $(length(cycles)) filekeys"
+                ensure_procinit(workers(wpool))
                 progress_pmap(wpool, cycles; progress=p) do (fk, fk_ts)
                     LegendDataManagement.read_ldata(f, data, (tier, fk, fk_ts, det); kwargs...)
                 end
@@ -398,6 +403,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     lflatten(if parallel
                 # TODO: Check if wpool is connected via :master_worker if myid() != 1
                 @debug "Parallel read with $(length(workers())) workers from $(length(rsel[2])) filekeys"
+                ensure_procinit(workers(wpool))
                 progress_pmap(wpool, rsel[2]; progress=p) do fk
                     LegendDataManagement.read_ldata(f, data, (rsel[1], fk, rsel[3]); kwargs...)
                 end
@@ -488,6 +494,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     lflatten(if parallel
                 # TODO: Check if wpool is connected via :master_worker if myid() != 1
                 @debug "Parallel read with $(length(workers())) workers from $(length(rsel[3])) runs"
+                ensure_procinit(workers(wpool))
                 progress_pmap(wpool, rsel[3]; progress=p) do r
                     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], r.period, r.run, rsel[4]); parallel, wpool, kwargs...)
                 end
@@ -509,6 +516,5 @@ end
 
 LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, Table}; kwargs...) =
     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], rsel[3], nothing); kwargs...)
-
 
 end # module
