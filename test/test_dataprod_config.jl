@@ -46,6 +46,7 @@ include("testing_utils.jl")
         mktempdir() do tmpdir
             metadata = joinpath(tmpdir, "metadata")
             cp(joinpath(testdata_dir, "metadata"), metadata)
+            chmod(metadata, 0o755; recursive = true)   # the artifact's files are read-only
             config = joinpath(tmpdir, "config.yaml")
             open(config, "w") do f
                 YAML.write(f, Dict("setups" => Dict("l200" => Dict("paths" => Dict("metadata" => metadata)))))
