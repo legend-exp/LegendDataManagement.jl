@@ -111,10 +111,25 @@ function LegendHDF5IO.LH5Array(ds::LegendHDF5IO.HDF5.Dataset,
     end
 end
 
-function __init__()
-    # A parallel read runs this on the workers of its pool first, whichever way they were added.
-    @always_everywhere using LegendDataManagement, LegendHDF5IO
+# A parallel read loads the packages on the workers of its pool first, whichever way they
+# were added. The code is registered by the first parallel read, not when the extension
+# loads: registering it imports ParallelProcessingTools into Main, which only a project
+# that depends on it can do.
+const _procinit_registered = Threads.Atomic{Bool}(false)
+const _procinit_lock = ReentrantLock()
+function _init_workers(wpool::WorkerPool)
+    if !_procinit_registered[]
+        lock(_procinit_lock) do
+            if !_procinit_registered[]
+                @always_everywhere using LegendDataManagement, LegendHDF5IO
+                _procinit_registered[] = true
+            end
+        end
+    end
+    ensure_procinit(workers(wpool))
+end
 
+function __init__()
     function extend_datatype_dict(::Type{T}, key::String
         ) where {T <: LegendDataManagement.DataSelector}
 
@@ -380,7 +395,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     p = Progress(length(cycles), desc="Reading $(length(ts)) timestamps from $(length(cycles)) filekeys", showspeed=true)
     lflatten(if parallel
                 @debug "Parallel read with $(length(workers())) workers from $(length(cycles)) filekeys"
-                ensure_procinit(workers(wpool))
+                _init_workers(wpool)
                 progress_pmap(wpool, cycles; progress=p) do (fk, fk_ts)
                     LegendDataManagement.read_ldata(f, data, (tier, fk, fk_ts, det); kwargs...)
                 end
@@ -404,7 +419,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     lflatten(if parallel
                 # TODO: Check if wpool is connected via :master_worker if myid() != 1
                 @debug "Parallel read with $(length(workers())) workers from $(length(rsel[2])) filekeys"
-                ensure_procinit(workers(wpool))
+                _init_workers(wpool)
                 progress_pmap(wpool, rsel[2]; progress=p) do fk
                     LegendDataManagement.read_ldata(f, data, (rsel[1], fk, rsel[3]); kwargs...)
                 end
@@ -495,7 +510,7 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     lflatten(if parallel
                 # TODO: Check if wpool is connected via :master_worker if myid() != 1
                 @debug "Parallel read with $(length(workers())) workers from $(length(rsel[3])) runs"
-                ensure_procinit(workers(wpool))
+                _init_workers(wpool)
                 progress_pmap(wpool, rsel[3]; progress=p) do r
                     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], r.period, r.run, rsel[4]); parallel, wpool, kwargs...)
                 end
@@ -522,7 +537,9 @@ LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{
 # that depends on the columns of a real tier still compiles on first use, the rest does not.
 @setup_workload begin
     dir = mktempdir()
-    write(joinpath(dir, "config.json"), """{"setups": {"l200": {"paths": {"tier": "$dir/tier"}}}}""")
+    # the backslashes of a Windows path are escaped for JSON; the path itself stays native, as
+    # a drive letter's colon is only kept by LEGEND_DATA_CONFIG when a backslash follows it
+    write(joinpath(dir, "config.json"), """{"setups": {"l200": {"paths": {"tier": "$(replace(joinpath(dir, "tier"), '\\' => "\\\\"))"}}}}""")
     @compile_workload withenv("LEGEND_DATA_CONFIG" => joinpath(dir, "config.json")) do
         data = LegendData(:l200)
         fks = [FileKey("l200-p00-r000-cal-20200101T000000Z"), FileKey("l200-p00-r000-cal-20200101T010000Z")]
