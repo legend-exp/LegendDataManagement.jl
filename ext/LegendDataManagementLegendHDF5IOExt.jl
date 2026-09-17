@@ -537,7 +537,9 @@ LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{
 # that depends on the columns of a real tier still compiles on first use, the rest does not.
 @setup_workload begin
     dir = mktempdir()
-    write(joinpath(dir, "config.json"), """{"setups": {"l200": {"paths": {"tier": "$dir/tier"}}}}""")
+    # the backslashes of a Windows path are escaped for JSON; the path itself stays native, as
+    # a drive letter's colon is only kept by LEGEND_DATA_CONFIG when a backslash follows it
+    write(joinpath(dir, "config.json"), """{"setups": {"l200": {"paths": {"tier": "$(replace(joinpath(dir, "tier"), '\\' => "\\\\"))"}}}}""")
     @compile_workload withenv("LEGEND_DATA_CONFIG" => joinpath(dir, "config.json")) do
         data = LegendData(:l200)
         fks = [FileKey("l200-p00-r000-cal-20200101T000000Z"), FileKey("l200-p00-r000-cal-20200101T010000Z")]
