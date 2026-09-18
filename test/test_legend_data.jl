@@ -65,14 +65,8 @@ include("testing_utils.jl")
     l200_lh5 = LegendData(:l200)
 
     @testset "search_disk" begin
-        # `search_disk` walks the runs of `runinfo`, which reads the DAQ cycle keys of a run from
-        # the metadata `datasets/filekeys`. LegendTestData holds neither those nor data in the
-        # tiers to find. TODO: drop the guard once the test data holds them.
-        if !haskey(l200.metadata.datasets, :filekeys)
-            @test_broken search_disk(DataSet, l200) isa DataSet
-        else
-            @test_broken !(isempty(search_disk(DataSet, l200)))
-        end
+        # LegendTestData holds no files in the tiers of `l200` to find.
+        @test_broken !(isempty(search_disk(DataSet, l200)))
         # check search_disk
         @test search_disk(DataTier, l200_lh5.tier[]) isa Vector{DataTier}
         @test search_disk(DataCategory, l200_lh5.tier[:dsp]) isa Vector{DataCategory}

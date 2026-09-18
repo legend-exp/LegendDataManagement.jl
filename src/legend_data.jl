@@ -301,7 +301,9 @@ function find_filekey end
 export find_filekey
 
 function find_filekey(ds::DataSet, ts::TimestampLike)
-    ds.keys[searchsortedlast(ds.keys, Timestamp(ts); by = Timestamp)]
+    i = searchsortedlast(ds.keys, Timestamp(ts); by = Timestamp)
+    i < firstindex(ds.keys) && throw(ArgumentError("Timestamp $(Timestamp(ts)) is before the first DAQ cycle key of the data set"))
+    ds.keys[i]
 end
 
 const _cached_runinfo_dataset = LRU{UInt, DataSet}(maxsize = 300)
