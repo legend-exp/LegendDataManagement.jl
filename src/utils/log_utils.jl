@@ -8,7 +8,7 @@ Get the `rreport` folder for the log files for a given period, run and category.
 """
 function get_rreportfolder end
 export get_rreportfolder
-get_rreportfolder(data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike) = mkpath(joinpath(data.tier[:jlreport], "rreport", string(category), string(period), string(run)))
+get_rreportfolder(data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike) = mkpath(joinpath(data.tier[:jlrep], "rreport", string(category), string(period), string(run)))
 get_rreportfolder(data::LegendData, filekey::FileKey) = get_rreportfolder(data, filekey.period, filekey.run, filekey.category)
 
 
@@ -18,7 +18,7 @@ Get the `preport` folder for the log files for a given period and category.
 """
 function get_preportfolder end
 export get_preportfolder
-get_preportfolder(data::LegendData, period::DataPeriodLike, category::DataCategoryLike) = mkpath(joinpath(data.tier[:jlreport], "preport", string(period), string(category)))
+get_preportfolder(data::LegendData, period::DataPeriodLike, category::DataCategoryLike) = mkpath(joinpath(data.tier[:jlrep], "preport", string(period), string(category)))
 
 """
     get_rreportfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, process::Symbol)
