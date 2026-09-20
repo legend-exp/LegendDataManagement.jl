@@ -37,7 +37,7 @@ include("testing_utils.jl")
         @test DataSet(l200, DataPeriod(2)) == sort(reduce(vcat, runinfo(l200, DataPeriod(2)).keys), by = Timestamp)
         @test find_filekey(ri.keys, first(ri.keys).time) == first(ri.keys)
         @test find_filekey(l200, last(ri.keys).time) == last(ri.keys)
-        @test find_filekey(l200, Timestamp((ri.keys[1].time.unixtime + ri.keys[2].time.unixtime) ÷ 2)) == ri.keys[1]   # between two cycles -> the earlier one
+        @test find_filekey(l200, Timestamp(ri.keys[1].time.unixtime + (ri.keys[2].time.unixtime - ri.keys[1].time.unixtime) ÷ 2)) == ri.keys[1]   # between two cycles -> the earlier one
         @test_throws "before the first DAQ cycle" find_filekey(ri.keys, Timestamp(first(ri.keys).time.unixtime - 1))
         @test_throws "before the first DAQ cycle" find_filekey(DataSet(FileKey[]), first(ri.keys).time)
         @test_nowarn empty!(LegendDataManagement._cached_runinfo)
