@@ -332,9 +332,14 @@ is `:default`.
 - `data::LegendData`: The dataset to query run information from.
 
 # Returns
-A table of run information with one named tuple per category (e.g. `:cal`, `:phy`), each containing `startkey`, `livetime`, `is_analysis_run` and `keys` (a `DataSet` of all DAQ cycle keys of that category),
-plus `keys` with the cycle keys of all categories sorted by time. A category's `keys` is sorted by time
-and starts at that category's `startkey`, and every set is named after `data.dataset`.
+A table of run information with one named tuple per category (e.g. `:cal`, `:phy`), each containing
+`startkey`, `endkey`, `livetime`, `is_analysis_run` and `keys` (a `DataSet` of all DAQ cycle keys of
+that category), plus `keys` with the cycle keys of all categories sorted by time. A category's `keys`
+is sorted by time, starts at that category's `startkey` and ends at its `endkey` (`missing` if the
+metadata records no end of the run), and every set is named after `data.dataset`.
+
+Every category of a run in the metadata `datasets/runinfo` must have a non-empty list of DAQ cycle
+keys in `datasets/filekeys`.
 
 # Example
 runinfo(data)                                   # full table of valid runs
@@ -347,6 +352,7 @@ function runinfo(data::LegendData)
     get!(_cached_runinfo, objectid(data)) do
         rinfo = PropDict(data.metadata.datasets.runinfo)
         fkdb = data.metadata.datasets.filekeys
+        fkdb isa NoSuchPropsDBEntry && throw(ArgumentError("No DAQ cycle key lists found in metadata datasets/filekeys"))
 
         # Detect categories dynamically (as Symbols)
         categories = unique(Symbol.(reduce(vcat, (collect(keys(ri)) for (_, runs) in rinfo for (_, ri) in runs))))
@@ -356,28 +362,26 @@ function runinfo(data::LegendData)
             @warn "Ignoring $(join(invalid, ", ")) in datasets/runinfo: not a valid data category name"
             categories = setdiff(categories, invalid)
         end
-        nttype = @NamedTuple{startkey::MaybeFileKey, livetime::typeof(1.0u"s"), is_analysis_run::Bool, keys::DataSet}
+        nttype = @NamedTuple{startkey::MaybeFileKey, endkey::MaybeFileKey, livetime::typeof(1.0u"s"), is_analysis_run::Bool, keys::DataSet}
 
         function make_row(p, r, ri)
             period, run = DataPeriod(p), DataRun(r)
             fkeys = fkdb[period, run]
             function get_cat_entry(cat)
                 if haskey(ri, cat)
-                    fk = ifelse(haskey(ri[cat], :start_key), FileKey(data.name, period, run, cat, Timestamp(get(ri[cat], :start_key, 1))), missing)
+                    runkey(k) = haskey(ri[cat], k) ? FileKey(data.name, period, run, cat, Timestamp(ri[cat][k])) : missing
+                    startkey, endkey = runkey(:start_key), runkey(:end_key)
                     livetime = get(ri[cat], :livetime_in_s, NaN) * u"s"
-                    is_ana_run::Bool = !ismissing(fk) && (!(cat in (:phy, :cal)) || any(row.period == period && row.run == run for row in analysis_runs(data, cat)))
-                    fkeys[cat] isa AbstractVector || throw(ArgumentError("No file keys found for period $period run $run category $cat in metadata datasets/filekeys"))
+                    is_ana_run::Bool = !ismissing(startkey) && (!(cat in (:phy, :cal)) || any(row.period == period && row.run == run for row in analysis_runs(data, cat)))
+                    fkeys[cat] isa AbstractVector && !isempty(fkeys[cat]) || throw(ArgumentError("No DAQ cycle keys listed for period $period run $run category $cat in metadata datasets/filekeys"))
                     cat_keys = DataSet(sort(FileKey[FileKey(data.name, period, run, cat, Timestamp(ts)) for ts in fkeys[cat]]; by = Timestamp), data.dataset)
-                    # The run starts at its first DAQ cycle, so both metadata sources name the same key.
-                    if !ismissing(fk)
-                        first_key = isempty(cat_keys) ? nothing : first(cat_keys)
-                        # TODO: throw again once the file key lists in datasets/filekeys are fixed.
-                        # first_key == fk || throw(ArgumentError("Start key $fk in datasets/runinfo is not the first file key $first_key in datasets/filekeys"))
-                        first_key == fk || @warn "Start key $fk in datasets/runinfo is not the first file key $first_key in datasets/filekeys"
-                    end
-                    nttype((fk, livetime, is_ana_run, cat_keys))
+                    # A run spans its DAQ cycles, so both metadata sources name the same first and last key.
+                    # TODO: throw once the key lists in datasets/filekeys agree with datasets/runinfo everywhere.
+                    ismissing(startkey) || first(cat_keys) == startkey || @warn "Start key $startkey in datasets/runinfo is not the first DAQ cycle key $(first(cat_keys)) in datasets/filekeys"
+                    ismissing(endkey) || last(cat_keys) == endkey || @warn "End key $endkey in datasets/runinfo is not the last DAQ cycle key $(last(cat_keys)) in datasets/filekeys"
+                    nttype((startkey, endkey, livetime, is_ana_run, cat_keys))
                 else
-                    nttype((missing, NaN*u"s", false, DataSet(FileKey[], data.dataset)))
+                    nttype((missing, missing, NaN*u"s", false, DataSet(FileKey[], data.dataset)))
                 end
             end
             cats = NamedTuple{Tuple(categories)}(Tuple(get_cat_entry(cat) for cat in categories))
