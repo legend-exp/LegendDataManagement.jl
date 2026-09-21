@@ -3,9 +3,11 @@
 using LegendDataManagement
 using Test
 
+using ArraysOfArrays
 using LegendHDF5IO
 using LegendTestData
 using PropertyFunctions
+using StructArrays
 using TypedTables
 
 using HDF5
@@ -135,5 +137,43 @@ using HDF5
                 isfile(test_filename_str) && rm(test_filename_str)
             end
         end # tmpdir
+    end
+
+    @testset "_load_all_keys" begin
+        Ext = Base.get_extension(LegendDataManagement, :LegendDataManagementLegendHDF5IOExt)
+        mktempdir() do dir
+            fn = joinpath(dir, "load_all_keys.lh5")
+            n = 200
+            a = rand(Float32, n)
+            wf = VectorOfVectors([rand(Float32, 8) for _ in 1:n])
+            lh5open(fn, "w") do h
+                h["tbl"] = StructArray((a = a, wf = wf))
+            end
+            lh5open(fn, "r") do h
+                tbl = h["tbl"]
+
+                full = Ext._load_all_keys(tbl)
+                @test full.a isa Vector{Float32}
+                @test full.a == a
+                @test full.wf == wf
+                @test Ext._load_all_keys(tbl, 10 * n).a == a
+
+                sample = Ext._load_all_keys(tbl, 7)
+                @test length(sample) == 7
+                @test all(in(a), sample.a)
+                @test all(in(wf), sample.wf)
+
+                col_sample = Ext._load_all_keys(tbl.a, 5)
+                @test col_sample isa Vector{Float32}
+                @test length(col_sample) == 5
+
+                nt = Ext._load_all_keys((x = tbl.a, y = tbl.wf))
+                @test nt.x == a
+                @test nt.y == wf
+                @test Ext._load_all_keys((x = tbl.a,)) == a
+
+                @test Ext._load_all_keys("not an array") == "not an array"
+            end
+        end
     end
 end

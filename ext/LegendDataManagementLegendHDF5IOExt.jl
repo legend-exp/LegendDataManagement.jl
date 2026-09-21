@@ -176,8 +176,7 @@ _propfunc_src_columnnames(f::PropSelFunction{src_paths}) where src_paths = map(P
 _propfunc_trg_columnnames(f::PropSelFunction{src_paths, trg_cols}) where {src_paths, trg_cols} = trg_cols
 
 _load_all_keys(nt::NamedTuple, n_evts::Int=-1) = if length(nt) == 1 _load_all_keys(nt[first(keys(nt))], n_evts) else NamedTuple{keys(nt)}(map(x -> _load_all_keys(nt[x], n_evts), keys(nt))) end
-_load_all_keys(arr::AbstractArray, n_evts::Int=-1) = arr[:][if (n_evts < 1 || n_evts > length(arr)) 1:length(arr) else rand(1:length(arr), n_evts) end]
-_load_all_keys(t::Table, n_evts::Int=-1) = t[:][if (n_evts < 1 || n_evts > length(t)) 1:length(t) else rand(1:length(t), n_evts) end]
+_load_all_keys(arr::AbstractArray, n_evts::Int=-1) = arr[if (n_evts < 1 || n_evts > length(arr)) 1:length(arr) else rand(1:length(arr), n_evts) end]
 _load_all_keys(x, n_evts::Int=-1) = x
 
 const _evt_tiers = DataTier.([:jlevt, :jlskm])
