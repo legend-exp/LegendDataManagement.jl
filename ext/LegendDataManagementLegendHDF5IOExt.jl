@@ -177,6 +177,10 @@ _propfunc_trg_columnnames(f::PropSelFunction{src_paths, trg_cols}) where {src_pa
 
 _load_all_keys(nt::NamedTuple, n_evts::Int=-1) = if length(nt) == 1 _load_all_keys(nt[first(keys(nt))], n_evts) else NamedTuple{keys(nt)}(map(x -> _load_all_keys(nt[x], n_evts), keys(nt))) end
 _load_all_keys(arr::AbstractArray, n_evts::Int=-1) = arr[if (n_evts < 1 || n_evts > length(arr)) 1:length(arr) else rand(1:length(arr), n_evts) end]
+# A table read from an LH5 file opens its columns on demand, and loading all
+# keys means opening all of them:
+_load_all_keys(tbl::LegendHDF5IO.LH5LazyTable, n_evts::Int=-1) =
+    _load_all_keys(StructArray(tbl), n_evts)
 _load_all_keys(x, n_evts::Int=-1) = x
 
 const _evt_tiers = DataTier.([:jlevt, :jlskm])
