@@ -348,10 +348,12 @@ const _channelinfo_status_ranking = (;
 """
     channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, extended::Bool = false)
     channelinfo(data::LegendData, sel::RunCategorySelLike; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, extended::Bool = false)
+    channelinfo(data::LegendData, sel::RunSelLike; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, extended::Bool = false)
     channelinfo(data::LegendData, sel::PeriodSelLike; only_analysis_runs::Bool = true, kwargs...)
+    channelinfo(data::LegendData, period::DataPeriodLike; only_analysis_runs::Bool = true, kwargs...)
 
 Get all channel information for the given [`LegendData`](@ref) and
-[`ValiditySelection`](@ref).
+[`ValiditySelection`](@ref). A selection that names no category uses `:cal`.
 
 For a period selection `(period, category)` the channel information of all
 runs of that category in the period (only the analysis runs if
@@ -360,11 +362,16 @@ runs of that category in the period (only the analysis runs if
 `*_status` columns take the best value over the runs, all other columns must
 be identical in every run.
 """
-function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, PeriodSelLike}; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, sort_by::Symbol=:detector, extended::Bool = false, verbose::Bool = true, only_analysis_runs::Bool = true)
-    sel = sel isa PeriodSelLike ? (DataPeriod(sel[1]), DataCategory(sel[2])) : sel
+function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunSelLike, PeriodSelLike}; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, sort_by::Symbol=:detector, extended::Bool = false, verbose::Bool = true, only_analysis_runs::Bool = true)
+    if sel isa Tuple
+        # Both two-element selections are a pair of symbols or strings, so the run and
+        # category names tell `(period, run)` and `(period, category)` apart.
+        _can_convert_to(DataRun, sel[2]) && return channelinfo(data, (sel[1], sel[2], :cal); system, only_processable, only_usability, sort_by, extended, verbose)
+        sel = (DataPeriod(sel[1]), DataCategory(sel[2]))
+    end
     key = (objectid(data), sel, extended, only_analysis_runs)
     chinfo = get!(_cached_channelinfo, key) do
-        if sel isa PeriodSelLike
+        if sel isa Tuple
             period, category = sel
             rinfo = runinfo(data, period)
             hasproperty(rinfo, Symbol(category)) || throw(ArgumentError("No runs of category $category in the run information of $(data.name)"))
@@ -507,6 +514,7 @@ export channelinfo
 function channelinfo(data::LegendData, sel::RunCategorySelLike; kwargs...)
     channelinfo(data, start_filekey(data, sel); kwargs...)
 end
+channelinfo(data::LegendData, period::DataPeriodLike; kwargs...) = channelinfo(data, (DataPeriod(period), DataCategory(:cal)); kwargs...)
 function channelinfo(data::LegendData, sel::Vararg{Any,N}; kwargs...) where {N}
     N == 1 && throw(MethodError(channelinfo, (data, sel[1])))
     channelinfo(data, sel; kwargs...)
@@ -526,7 +534,7 @@ Get channel information validitiy selection and [`DetectorId`](@ref) resp.
 [`ChannelId`](@ref).
 """
 # function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, channel::Union{ChannelIdLike, DetectorIdLike}; kwargs...)
-function channelinfo(data::LegendData, sel::Tuple{Union{AnyValiditySelection, RunCategorySelLike, PeriodSelLike}, Union{ChannelIdLike, DetectorIdLike}}; kwargs...)
+function channelinfo(data::LegendData, sel::Tuple{Union{AnyValiditySelection, RunSelLike, PeriodSelLike, RunCategorySelLike}, Union{ChannelIdLike, DetectorIdLike}}; kwargs...)
     sel, channel = sel[1], sel[2]
     key = (objectid(data), sel, Symbol(channel))
     chinfo = channelinfo(data, sel; kwargs...)

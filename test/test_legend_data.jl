@@ -47,12 +47,17 @@ include("testing_utils.jl")
         @test !any(iszero.(uncertainty.(extended.fccd)))
         @test !any(iszero.(uncertainty.(extended.active_volume)))
 
+        # A selection without a category uses :cal
+        @test channelinfo(l200, filekey.period, filekey.run) == channelinfo(l200, (filekey.period, filekey.run, :cal))
+        @test channelinfo(l200, (filekey.period, filekey.run)) == channelinfo(l200, (filekey.period, filekey.run, :cal))
+        @test channelinfo(l200, ((filekey.period, filekey.run), :B99000A)).usability == :off
+
         # Check error handling for invalid input
-        @test_throws MethodError channelinfo(l200, filekey.period, filekey.run)
-        @test_throws MethodError channelinfo(l200, filekey.period)
+        @test_throws ArgumentError channelinfo(l200, "not a period")
 
         # Period channel info merges the channel info of all runs of a category
         period_chinfo = channelinfo(l200, filekey.period, :cal)
+        @test channelinfo(l200, filekey.period) == period_chinfo
         @test period_chinfo isa TypedTables.Table
         @test channelinfo(l200, (filekey.period, :cal)) == period_chinfo
         @test channelinfo(l200, ("p02", "cal")) == period_chinfo
