@@ -47,9 +47,34 @@ include("testing_utils.jl")
         @test !any(iszero.(uncertainty.(extended.fccd)))
         @test !any(iszero.(uncertainty.(extended.active_volume)))
 
+        # A selection without a category uses :cal
+        @test channelinfo(l200, filekey.period, filekey.run) == channelinfo(l200, (filekey.period, filekey.run, :cal))
+        @test channelinfo(l200, (filekey.period, filekey.run)) == channelinfo(l200, (filekey.period, filekey.run, :cal))
+        @test channelinfo(l200, ((filekey.period, filekey.run), :B99000A)).usability == :off
+
         # Check error handling for invalid input
-        @test_throws MethodError channelinfo(l200, filekey.period, filekey.run)
-        @test_throws MethodError channelinfo(l200, filekey.period)
+        @test_throws ArgumentError channelinfo(l200, "not a period")
+
+        # Period channel info merges the channel info of all runs of a category
+        period_chinfo = channelinfo(l200, filekey.period, :cal)
+        @test channelinfo(l200, filekey.period) == period_chinfo
+        @test period_chinfo isa TypedTables.Table
+        @test channelinfo(l200, (filekey.period, :cal)) == period_chinfo
+        @test channelinfo(l200, ("p02", "cal")) == period_chinfo
+        @test columnnames(period_chinfo) == columnnames(chinfo)
+        @test period_chinfo.detector == chinfo.detector
+        # Detector B99000A is usable in run r000 only: the period takes the best status over its runs
+        @test only(filterby(@pf $detector == DetectorId(:B99000A))(chinfo).usability) == :off
+        @test only(filterby(@pf $detector == DetectorId(:B99000A))(period_chinfo).usability) == :on
+        @test channelinfo(l200, ((filekey.period, :cal), :B99000A)).usability == :on
+        @test all(filterby(@pf $system == :geds)(period_chinfo).usability .== :on)
+        @test channelinfo(l200, filekey.period, :cal; system = :geds, only_usability = :on).detector == filterby(@pf $system == :geds)(chinfo).detector
+        @test isempty(channelinfo(l200, filekey.period, :cal; only_usability = :off))
+        @test all(in(columnnames(channelinfo(l200, filekey.period, :cal; extended = true))), extended_keywords)
+        # every run of p02 is an analysis run
+        @test channelinfo(l200, filekey.period, :cal; only_analysis_runs = false) == period_chinfo
+        @test_throws ArgumentError channelinfo(l200, :p99, :cal)
+        @test_throws ArgumentError channelinfo(l200, filekey.period, :xtc)
 
         # ToDo: Make type-stable:
         # @test #=@inferred=#(channel_info(l200, filekey)) isa StructArray
