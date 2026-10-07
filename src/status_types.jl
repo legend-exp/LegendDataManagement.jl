@@ -3,10 +3,10 @@
 """
     @enum ProcessStatus
 
-May be `succeeded`, `pending`, or `failed`.
+May be `succeeded`, `warning`, or `failed`.
 """
-@enum ProcessStatus process_succeeded=1 process_failed=0 process_pending=-1 
-export ProcessStatus, process_succeeded, process_failed, process_pending
+@enum ProcessStatus process_succeeded=1 process_failed=0 process_warning=-1
+export ProcessStatus, process_succeeded, process_failed, process_warning
 
 
 function Base.show(io::IO, ::MIME"text/plain", status::ProcessStatus)
@@ -14,8 +14,8 @@ function Base.show(io::IO, ::MIME"text/plain", status::ProcessStatus)
         print(io, "Success")
     elseif status == process_failed
         print(io, "Failure")
-    elseif status == process_pending
-        print(io, "Pending")
+    elseif status == process_warning
+        print(io, "Warning")
     else
         @assert false
     end
@@ -32,9 +32,9 @@ function Base.show(io::IO, ::MIME"text/markdown", status::ProcessStatus)
     elseif status == process_failed
         print(io, """<span style="color:red">Failure</span>""")
         #print(io, "\$\${\\color{red}Failure}\$\$")
-    elseif status == process_pending
-        print(io, """<span style="color:yellow">Pending</span>""")
-        #print(io, "\$\${\\color{yellow}Pending}\$\$")
+    elseif status == process_warning
+        print(io, """<span style="color:yellow">Warning</span>""")
+        #print(io, "\$\${\\color{yellow}Warning}\$\$")
     else
         @assert false
     end
@@ -46,8 +46,8 @@ function Base.show(io::IO, ::MIME"text/html", status::ProcessStatus)
         print(io, """<span style="color:green">Success</span>""")
     elseif status == process_failed
         print(io, """<span style="color:red">Failure</span>""")
-    elseif status == process_pending
-        print(io, """<span style="color:yellow">Pending</span>""")
+    elseif status == process_warning
+        print(io, """<span style="color:yellow">Warning</span>""")
     else
         @assert false
     end
