@@ -14,7 +14,6 @@ Struct to describe the environment of a HPGe detector which are not set in metad
 
 * `HPGeEnvironment()`.
 """
-
 struct HPGeEnvironment{T<:Unitful.Temperature{<:Number}}
     medium::AbstractString
     temperature::T
