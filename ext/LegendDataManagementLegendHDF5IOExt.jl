@@ -190,6 +190,8 @@ end
 _load_all_keys(nt::NamedTuple, sel=(:)) = length(nt) == 1 ? _load_all_keys(nt[first(keys(nt))], sel) :
     NamedTuple{keys(nt)}(map(k -> _load_all_keys(nt[k], sel), keys(nt)))
 _load_all_keys(x::Union{AbstractArray, Table}, sel=(:)) = sel === (:) ? x[:] : x[:][sel]
+# A table read from an LH5 file opens its columns on demand; loading it opens all of them.
+_load_all_keys(tbl::LegendHDF5IO.LH5LazyTable, sel=(:)) = _load_all_keys(StructArray(tbl), sel)
 # Rows named by index are read range by range, as an `LH5Array` reads ranges. Every read of a
 # column costs tens of microseconds however few rows it takes, so rows of scalars are read
 # along with gaps of up to `_bridged_rows` between them rather than one range per row; rows
