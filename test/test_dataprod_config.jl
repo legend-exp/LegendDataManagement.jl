@@ -7,7 +7,7 @@ using TypedTables
 using Unitful
 import YAML
 
-include("testing_utils.jl")
+ENV["LEGEND_DATA_CONFIG"] = julia_config
 
 @testset "dataprod_config" begin
     l200 = LegendData(:l200)

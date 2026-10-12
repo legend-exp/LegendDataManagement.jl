@@ -8,7 +8,7 @@ using SolidStateDetectors: ConstantImpurityDensity
 using Unitful
 using LegendHDF5IO
 
-include("testing_utils.jl")
+ENV["LEGEND_DATA_CONFIG"] = julia_config
 
 @testset "test_ext_ssd" begin
     l200 = LegendData(:l200)

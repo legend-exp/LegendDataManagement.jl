@@ -526,6 +526,7 @@ end
 # TODO: Fix LRU cache and make work with channelinfo and channelname
 const _cached_channelinfo_detector_idx = LRU{Tuple{UInt, AnyValiditySelection, Symbol}, Int}(maxsize = 10^3)
 
+# function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, channel::Union{ChannelIdLike, DetectorIdLike}; kwargs...)
 """
     channelinfo(data::LegendData, sel::AnyValiditySelection, channel::Union{ChannelIdLike, DetectorIdLike})
     channelinfo(data::LegendData, sel::AnyValiditySelection, detector::DetectorIdLike)
@@ -533,7 +534,6 @@ const _cached_channelinfo_detector_idx = LRU{Tuple{UInt, AnyValiditySelection, S
 Get channel information validitiy selection and [`DetectorId`](@ref) resp.
 [`ChannelId`](@ref).
 """
-# function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, channel::Union{ChannelIdLike, DetectorIdLike}; kwargs...)
 function channelinfo(data::LegendData, sel::Tuple{Union{AnyValiditySelection, RunSelLike, PeriodSelLike, RunCategorySelLike}, Union{ChannelIdLike, DetectorIdLike}}; kwargs...)
     sel, channel = sel[1], sel[2]
     key = (objectid(data), sel, Symbol(channel))

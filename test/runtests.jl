@@ -2,6 +2,8 @@
 
 import Test
 
+include("testing_utils.jl")
+
 Test.@testset "Package LegendDataManagement" begin
     # include("test_aqua.jl")
 

@@ -3,7 +3,7 @@
 using LegendDataManagement
 using Test
 
-include("testing_utils.jl")
+ENV["LEGEND_DATA_CONFIG"] = julia_config
 
 @testset "data_config" begin
     dconfig = LegendDataConfig()

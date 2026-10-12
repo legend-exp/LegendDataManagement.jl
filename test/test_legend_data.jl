@@ -6,7 +6,7 @@ using Test
 using StructArrays, PropertyFunctions, TypedTables
 using Measurements: uncertainty
 
-include("testing_utils.jl")
+ENV["LEGEND_DATA_CONFIG"] = julia_config
 
 @testset "legend_data" begin
     l200 = LegendData(:l200)

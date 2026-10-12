@@ -11,7 +11,7 @@ using Unitful, Measurements
 
 using LegendDataManagement: PropsDB, AnyProps, ValiditySelection
 
-include("testing_utils.jl")
+ENV["LEGEND_DATA_CONFIG"] = julia_config
 
 @testset "lprops" begin
     a = """

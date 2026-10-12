@@ -40,7 +40,6 @@ methods above. Uses LEGEND defaults, such as ADLChargeDriftModel2016.
 * `save_ssd_config::Bool`: Whether to save the SSD configuration to a YAML file. Default is `false`.
 * `allow_cylindrical_asymmetry::Bool`: Whether to allow geometry features that break the cylindrical (azimuthal) symmetry of the detector, such as a `crack` defined in the metadata `geometry.extra`. When `true` (default) and such a feature is present, the affected volume is cut from the semiconductor and contacts and the simulation grid is switched to a full 3D azimuthal range (`phi` from `0` to `360`). When `false`, these features are ignored and the simulation remains 2D (azimuthally symmetric).
 """
-
 function SolidStateDetectors.SolidStateDetector(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); kwargs...)
     SolidStateDetector{_SSDDefaultNumtype}(data, detector, env; kwargs...)
 end

@@ -8,7 +8,7 @@ using PropDicts
 
 using LegendDataManagement: PropsDB, AnyProps, ValiditySelection
 
-include("testing_utils.jl")
+ENV["LEGEND_DATA_CONFIG"] = julia_config
 
 @testset "props_db" begin
     props_base_path = data_path(LegendDataConfig().setups.l200, "metadata")
