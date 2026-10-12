@@ -4,7 +4,7 @@ using Test
 using LegendDataManagement
 using Unitful
 
-include("testing_utils.jl")
+ENV["LEGEND_DATA_CONFIG"] = julia_config
 
 l200 = LegendData(:l200)
 

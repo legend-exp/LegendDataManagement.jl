@@ -10,7 +10,7 @@ using PropDicts: PropDict
 using Serialization
 using Unitful
 
-include("testing_utils.jl")
+ENV["LEGEND_DATA_CONFIG"] = julia_config
 
 @testset "legend_expressions" begin
     data = StructArray([
