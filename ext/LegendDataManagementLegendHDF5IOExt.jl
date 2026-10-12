@@ -24,17 +24,6 @@ const RSelLike = Union{AbstractDataSelectorLike, FileKey, AbstractVector, Nothin
 const PossibleDataSelectors = [DataTier, DataCategory, DataPeriod, DataRun, DataPartition, DetectorId]
 
 
-const dataselector_bytypes = Dict{Type, String}()
-
-LegendHDF5IO.datatype_to_string(::Type{<:T}) where {T <: LegendDataManagement.DataSelector} = 
-    dataselector_bytypes[T]
-
-function LegendHDF5IO._array_type(::Type{Array{T, N}}
-    ) where {T <: LegendDataManagement.DataSelector, N}
-    
-    AbstractArray{T, N}
-end
-
 # write LegendDataManagement.DataSelector
 function LegendHDF5IO.create_entry(parent::LHDataStore, name::AbstractString, 
     data::T; kwargs...) where {T <:LegendDataManagement.DataSelector}
@@ -130,23 +119,14 @@ function _init_workers(wpool::WorkerPool)
 end
 
 function __init__()
-    function extend_datatype_dict(::Type{T}, key::String
-        ) where {T <: LegendDataManagement.DataSelector}
-
-        LegendHDF5IO._datatype_dict[key] = T
-        dataselector_bytypes[T] = key
+    for (name, T) in (
+        "expsetup" => ExpSetup, "datatier" => DataTier, "datarun" => DataRun,
+        "dataperiod" => DataPeriod, "datacategory" => DataCategory, "timestamp" => Timestamp,
+        "filekey" => FileKey, "channelid" => ChannelId, "detectorid" => DetectorId,
+        "datapartition" => DataPartition,
+    )
+        LegendHDF5IO.register_datatype!(name, T)
     end
-
-    (@isdefined ExpSetup) && extend_datatype_dict(ExpSetup, "expsetup")
-    (@isdefined DataTier) && extend_datatype_dict(DataTier, "datatier")
-    (@isdefined DataRun) && extend_datatype_dict(DataRun, "datarun")
-    (@isdefined DataPeriod) && extend_datatype_dict(DataPeriod, "dataperiod")
-    (@isdefined DataCategory) && extend_datatype_dict(DataCategory, "datacategory")
-    (@isdefined Timestamp) && extend_datatype_dict(Timestamp, "timestamp")
-    (@isdefined FileKey) && extend_datatype_dict(FileKey, "filekey")
-    (@isdefined ChannelId) && extend_datatype_dict(ChannelId, "channelid")
-    (@isdefined DetectorId) && extend_datatype_dict(DetectorId, "detectorid")
-    (@isdefined DataPartition) && extend_datatype_dict(DataPartition, "datapartition")
 end
 
 # Paths are resolved and stat'ed one at a time: file metadata lookups are expensive on
