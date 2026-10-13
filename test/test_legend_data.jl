@@ -2,6 +2,7 @@
 
 using LegendDataManagement
 using Test
+import ParallelProcessingTools as PPT
 
 using StructArrays, PropertyFunctions, TypedTables
 using Measurements: uncertainty
@@ -27,6 +28,19 @@ include("testing_utils.jl")
 
         @test l200.dataset == :default
         @test LegendData(:l200; dataset = :valid).dataset == :valid
+    end
+
+    @testset "cache" begin
+        previous = PPT.default_cache_dir()
+        try
+            data = LegendData(SetupConfig([["cache"] => previous * "-test"], "valid"), :l200, :default)
+            @test PPT.default_cache_dir() == previous * "-test"
+            PPT.default_cache_dir!(previous)
+            @test data_path(data, "cache") == previous * "-test"
+            @test PPT.default_cache_dir() == previous * "-test"
+        finally
+            PPT.default_cache_dir!(previous)
+        end
     end
 
     @testset "channelinfo" begin

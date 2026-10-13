@@ -31,6 +31,10 @@ or simply (if `\$$_data_config_envvar_name` is set):
 l200 = LegendData(:l200)
 ```
 
+Optional `paths.cache` sets the process-wide ParallelProcessingTools cache on
+construction and path access, including on workers. The latest configured path
+wins; omitting it preserves the default. Explicit `cache_dir` overrides it.
+
 `LegendData` has the (virtual) properties `metadata` and `tier`.
 
 The full path to "tier" data files can be retrieved using
@@ -58,10 +62,23 @@ struct LegendData <: AbstractSetupData
     _config::SetupConfig
     _name::Symbol
     _dataset::Symbol
+
+    function LegendData(config::SetupConfig, name::Symbol, dataset::Symbol)
+        data = new(config, name, dataset)
+        get_setup_config(data)
+        return data
+    end
 end
 export LegendData
 
-get_setup_config(data::LegendData) = getfield(data, :_config)
+function get_setup_config(data::LegendData)
+    config = getfield(data, :_config)
+    cache_idx = findfirst(p -> first(p) == ["cache"], config.paths)
+    if !isnothing(cache_idx)
+        ParallelProcessingTools.default_cache_dir!(last(config.paths[cache_idx]))
+    end
+    return config
+end
 get_setup_name(data::LegendData) = getfield(data, :_name)
 
 @inline function Base.getproperty(d::LegendData, s::Symbol)
