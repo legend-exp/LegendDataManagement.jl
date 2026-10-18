@@ -7,6 +7,7 @@ using LegendHDF5IO
 using LegendTestData
 using ArraysOfArrays
 using PropertyFunctions
+using RadiationDetectorSignals
 using StructArrays
 using TypedTables
 using Unitful
@@ -537,9 +538,11 @@ using Distributed
             n = 200
             a = rand(Float32, n)
             wf = VectorOfVectors([rand(Float32, 8) for _ in 1:n])
+            wfs = ArrayOfRDWaveforms((fill(range(0.0u"μs", 1.0u"μs"; length = 8), n), VectorOfSimilarVectors(rand(Float32, 8, n))))
             lh5open(fn, "w") do h
                 h["tbl"] = StructArray((a = a, wf = wf))
                 h["nested"] = StructArray((t = a, sub = StructArray((a = a, wf = wf))))
+                h["tbl_rdwf"] = StructArray((a = a, wf = wfs))
             end
             lh5open(fn, "r") do h
                 tbl = h["tbl"]
@@ -565,6 +568,14 @@ using Distributed
                 col = Ext._load_all_keys(tbl.a, rows)
                 @test col isa Vector{Float32}
                 @test col == a[rows]
+
+                # rows of a table with waveform columns are usable as rows
+                tbl_rdwf = h["tbl_rdwf"]
+                rows_wf = Ext._load_all_keys(tbl_rdwf, rows)
+                @test rows_wf.a == a[rows]
+                @test rows_wf[1].wf == wfs[rows[1]]
+                @test Ext._load_all_keys(tbl_rdwf)[1].wf == wfs[1]
+                @test Ext._load_all_keys(tbl_rdwf, mask)[1].wf == wfs[findfirst(mask)]
 
                 # a table nested in a table is loaded along with it
                 nested = Ext._load_all_keys(h["nested"])

@@ -202,20 +202,26 @@ function _nest(paths, vals)
 end
 
 # Every column of a group keeps the rows `sel` selects; a single column is unwrapped.
-# TODO: pass a mask to the read once `LH5Array` supports `AbstractVector{Bool}` indices.
 _load_all_keys(nt::NamedTuple, sel=(:)) = length(nt) == 1 ? _load_all_keys(nt[first(keys(nt))], sel) :
     NamedTuple{keys(nt)}(map(k -> _load_all_keys(nt[k], sel), keys(nt)))
-_load_all_keys(x::Union{AbstractArray, Table}, sel=(:)) = sel === (:) ? x[:] : x[:][sel]
+_load_all_keys(x::Union{AbstractArray, Table}, sel=(:)) = x[sel]
 # A table read from an LH5 file opens its columns on demand; loading it opens all of them.
-_load_all_keys(tbl::LegendHDF5IO.LH5LazyTable, sel=(:)) = _load_all_keys(StructArray(tbl), sel)
+# Rows are read through the table itself, which derives their type from what it reads,
+# while its StructArray conversion would keep the disk-backed row type:
+_load_all_keys(tbl::LegendHDF5IO.LH5LazyTable, sel=(:)) = tbl[sel]
+_load_all_keys(tbl::LegendHDF5IO.LH5LazyTable, sel::AbstractVector{Int}) =
+    _load_rows(tbl, sel, isbitstype(eltype(StructArray(tbl))))
 # Rows named by index are read range by range, as an `LH5Array` reads ranges. Every read of a
 # column costs tens of microseconds however few rows it takes, so rows of scalars are read
 # along with gaps of up to `_bridged_rows` between them rather than one range per row; rows
 # holding arrays -- waveforms -- cost their bytes and are read in ranges of adjacent rows.
 const _bridged_rows = 256
-function _load_all_keys(x::Union{AbstractArray, Table}, sel::AbstractVector{Int})
+_load_all_keys(x::Union{AbstractArray, Table}, sel::AbstractVector{Int}) =
+    _load_rows(x, sel, isbitstype(eltype(x)))
+
+function _load_rows(x, sel::AbstractVector{Int}, scalar_rows::Bool)
     isempty(sel) && return x[1:0]
-    maxgap = isbitstype(eltype(x)) ? _bridged_rows : 0
+    maxgap = scalar_rows ? _bridged_rows : 0
     rows = sort(unique(sel))
     ranges = [rows[1]:rows[1]]
     for r in rows[2:end]
