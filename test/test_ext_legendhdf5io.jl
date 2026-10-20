@@ -560,6 +560,11 @@ using Distributed
                 @test byrow.a == a[rows]
                 @test byrow.wf == wf[rows]
 
+                # tables concatenated lazily load like the tables they are made of
+                twice = vcat(tbl, tbl)
+                @test Ext._load_all_keys(twice, [3, n + 7, 2]).a == a[[3, 7, 2]]
+                @test Ext._load_all_keys(twice).wf == vcat(wf, wf)
+
                 mask = a .> 0.5f0
                 bymask = Ext._load_all_keys(tbl, mask)
                 @test bymask.a == a[mask]

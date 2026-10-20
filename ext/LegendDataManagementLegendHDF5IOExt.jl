@@ -207,7 +207,7 @@ _load_all_keys(nt::NamedTuple, sel=(:)) = length(nt) == 1 ? _load_all_keys(nt[fi
 _load_all_keys(x::Union{AbstractArray, Table}, sel=(:)) = x[sel]
 # A table read from an LH5 file opens its columns on demand; loading it opens all of them.
 # Its rows are scalars when every column holds bits types:
-_load_all_keys(tbl::LegendHDF5IO.LH5LazyTable, sel::AbstractVector{Int}) =
+_load_all_keys(tbl::LegendHDF5IO.AbstractLH5Table, sel::AbstractVector{Int}) =
     _load_rows(tbl, sel, all(col -> isbitstype(eltype(col)), values(TypedTables.Tables.columns(tbl))))
 # Rows named by index are read range by range, as an `LH5Array` reads ranges. Every read of a
 # column costs tens of microseconds however few rows it takes, so rows of scalars are read
