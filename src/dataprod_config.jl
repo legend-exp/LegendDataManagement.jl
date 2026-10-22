@@ -502,12 +502,16 @@ is_analysis_run(data::LegendData, selectors...) = is_analysis_run(data, selector
 const _cached_bad_filekeys = LRU{Tuple{UInt, Vector{Symbol}}, Set{FileKey}}(maxsize = 10^3)
 
 """
-    bad_filekeys(data::LegendData, load_key::Symbol=:all)
+    bad_filekeys(data::LegendData; load_key::Symbol=:all)
 
-Get the list of filekeys to ignore for `data`.
+Get the list of filekeys to ignore for `data`: those listed under `load_key` in `datasets/ignored_daq_cycles`,
+or under any of its keys for `:all`.
 """
 function bad_filekeys(data::LegendData; load_key::Symbol=:all)
-    load_keys = load_key == :all ? Symbol.(keys(PropDict(data.metadata.datasets.ignored_daq_cycles))) : [load_key]
+    ignored_keys = Symbol.(keys(PropDict(data.metadata.datasets.ignored_daq_cycles)))
+    load_key == :all || load_key in ignored_keys ||
+        throw(ArgumentError("No key $load_key in datasets/ignored_daq_cycles, which has $(join(ignored_keys, ", "))"))
+    load_keys = load_key == :all ? ignored_keys : [load_key]
     get!(_cached_bad_filekeys, (objectid(data), load_keys)) do
         ignored_data = PropDict(data.metadata.datasets.ignored_daq_cycles)
         Set(vcat([FileKey.(ignored_data[k]) for k in load_keys]...))

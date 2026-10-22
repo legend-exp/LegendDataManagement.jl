@@ -20,11 +20,30 @@ using Distributed
 
     l200_lh5 = LegendData(:l200)
 
+    # The test production has no metadata: a run read takes its filekeys from a metadata
+    # written here, listing `run_keys` for cal p18 r000 and `ignored` as ignored DAQ cycles.
+    function l200_with_metadata(run_keys::AbstractVector{FileKey}, ignored::AbstractDict)
+        dir = mktempdir()
+        datasets = joinpath(dir, "metadata", "datasets")
+        mkpath(joinpath(datasets, "filekeys", "p18"))
+        ts = [string(Timestamp(k)) for k in run_keys]
+        YAML.write_file(joinpath(datasets, "runinfo.yaml"),
+            Dict("p18" => Dict("r000" => Dict("cal" => Dict("start_key" => first(ts), "end_key" => last(ts))))))
+        YAML.write_file(joinpath(datasets, "runlists.yaml"), Dict("valid" => Dict("cal" => Dict("p18" => "r000"))))
+        YAML.write_file(joinpath(datasets, "filekeys", "p18", "r000.yaml"), Dict("cal" => ts))
+        YAML.write_file(joinpath(datasets, "ignored_daq_cycles.yaml"),
+            Dict(string(k) => string.(v) for (k, v) in ignored))
+        config = joinpath(dir, "config.yaml")
+        YAML.write_file(config, Dict("setups" => Dict("l200" => Dict("paths" => Dict(
+            "tier" => joinpath(lh5testdata_dir, "generated", "tier"), "metadata" => joinpath(dir, "metadata"))))))
+        withenv(() -> LegendData(:l200), "LEGEND_DATA_CONFIG" => config)
+    end
+
     @testset "read_ldata" begin
-        l200 = l200_lh5
         cat, period, run = DataCategory(:cal), DataPeriod(18), DataRun(0)
         tier, filter_tier = DataTier(:jldsp), DataTier(:raw)
-        fks = search_disk(FileKey, l200.tier[tier, cat, period, run])
+        fks = search_disk(FileKey, l200_lh5.tier[tier, cat, period, run])
+        l200 = l200_with_metadata(fks, Dict(:removed => [FileKey("l200-p18-r001-cal-20251108T000000Z")]))
         fk = first(fks)
         # PULS93 is recorded in the raw tier but not processed into jldsp
         dets = DetectorId.(["B93099C", "V97061A"])
@@ -103,6 +122,48 @@ using Distributed
         # multi-run read over a run table
         rinfo = Table([(period = period, run = run)])
         @test read_ldata(l200, tier, cat, rinfo, det).timestamp == all_ts
+
+        @testset "filekeys of a run" begin
+            # The metadata lists a cycle that is not on disk, ignored as unprocessable, and
+            # the second cycle on disk, ignored as removed.
+            not_on_disk = FileKey("l200-p18-r000-cal-20251107T000000Z")
+            l200_ign = l200_with_metadata([not_on_disk; fks], Dict(:unprocessable => [not_on_disk], :removed => [fks[2]]))
+            ts_fk1 = tbl(tier, fks[1], det).timestamp
+            rd(; kw...) = read_ldata(:timestamp, l200_ign, tier, cat, period, run, det; kw...).timestamp
+
+            # every ignored cycle is dropped by default
+            @test rd() == ts_fk1
+            @test rd(ignore_keys = :all) == ts_fk1
+            # only the cycles of the key given are dropped
+            @test rd(ignore_keys = :unprocessable) == all_ts
+            @test_throws "$(not_on_disk)-tier_jldsp.lh5 nor" rd(ignore_keys = :removed)
+            # a cycle listed in the metadata but missing on disk is an error
+            @test_throws "$(not_on_disk)-tier_jldsp.lh5 nor" rd(ignore_keys = :none)
+            # the cycles on disk instead of those in the metadata
+            @test rd(search_disk = true) == ts_fk1
+            @test rd(search_disk = true, ignore_keys = :none) == all_ts
+            @test rd(search_disk = true, ignore_keys = :unprocessable) == all_ts
+            @test_throws "No key nonexistent in datasets/ignored_daq_cycles" rd(ignore_keys = :nonexistent)
+
+            # the kwargs reach the runs of a run table, a period, and a parallel read
+            @test read_ldata(:timestamp, l200_ign, tier, cat, rinfo, det).timestamp == ts_fk1
+            @test read_ldata(:timestamp, l200_ign, tier, cat, rinfo, det; ignore_keys = :unprocessable).timestamp == all_ts
+            @test read_ldata(:timestamp, l200_ign, tier, cat, period, det; search_disk = true, ignore_keys = :none).timestamp == all_ts
+            @test rd(ignore_keys = :unprocessable, parallel = true) == all_ts
+
+            # a run whose cycles are all ignored is an error
+            l200_all_ign = l200_with_metadata(fks, Dict(:removed => fks))
+            @test_throws "All 2 filekeys of cal p18 r000 are ignored" read_ldata(l200_all_ign, tier, cat, period, run, det)
+            @test read_ldata(:timestamp, l200_all_ign, tier, cat, period, run, det; ignore_keys = :none).timestamp == all_ts
+            # a run without a directory on disk is an error
+            @test_throws "no such file or directory" read_ldata(l200_all_ign, DataTier(:jlskm), cat, period, run, det; search_disk = true)
+
+            # a detector's per-run file holds the whole run, and is read once
+            hit_det = DetectorId("V97061A")
+            @test isfile(l200.tier[DataTier(:jlhit), cat, period, run, hit_det])
+            @test read_ldata(:qc, l200_ign, DataTier(:jlhit), cat, period, run, hit_det; ignore_keys = :none) ==
+                read_ldata(:qc, l200_ign, DataTier(:jlhit), fks[1], hit_det)
+        end
 
         # a per-detector file of a tier that holds a level below the detector
         pls_det = DetectorId("PULS93")
@@ -344,7 +405,8 @@ using Distributed
                         r[r.timestamp .> ts1[2]]
                     n = length(data_fk)
                     @test read_ldata((@pf $waveform_presummed), l200_tmp, filter_tier, sel, det) ==
-                        read_ldata((@pf $waveform_presummed), l200_tmp, filter_tier, cat, period, run, det)[[2, 5, n + 1, n + 3, n + 7]]
+                        read_ldata((@pf $waveform_presummed), l200_tmp, filter_tier, cat, period, run, det;
+                            search_disk = true, ignore_keys = :none)[[2, 5, n + 1, n + 3, n + 7]]
                     nodet = read_ldata(:timestamp, l200_tmp, tier, sel; ignore_missing = true)
                     @test keys(nodet) == (Symbol(det),) && nodet[Symbol(det)].timestamp == sort(sel)
                     @test_throws "No row with timestamp" read_ldata(l200_tmp, tier, sel)
