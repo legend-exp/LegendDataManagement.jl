@@ -489,16 +489,17 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], runinfo(data, rsel[3]), rsel[4]); kwargs...)
 end
 
-function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPeriod, DataRun, DetectorSel}; kwargs...)
-    fks = search_disk(FileKey, data.tier[rsel[1], rsel[2], rsel[3], rsel[4]])
-    det = rsel[5]
-    if isempty(fks) && !isnothing(det) && isfile(data.tier[rsel[1:4]..., det])
-        LegendDataManagement.read_ldata(f, data, (rsel[1], start_filekey(data, (rsel[3], rsel[4], rsel[2])), det); kwargs...)
-    elseif !isempty(fks)
-        LegendDataManagement.read_ldata(f, data, (rsel[1], fks, det); kwargs...)
-    else
-        throw(ArgumentError("No filekeys found for $(rsel[2]) $(rsel[3]) $(rsel[4])"))
-    end
+# A per-run file of a detector holds the whole run: reading it once per filekey would repeat its rows.
+function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPeriod, DataRun, DetectorSel};
+    search_disk::Bool=false, ignore_keys::Symbol=:all, kwargs...)
+    tier, cat, period, run, det = rsel
+    !isnothing(det) && isfile(data.tier[tier, cat, period, run, det]) &&
+        return LegendDataManagement.read_ldata(f, data, (tier, start_filekey(data, (period, run, cat)), det); kwargs...)
+    all_fks = search_disk ? LegendDataManagement.search_disk(FileKey, data.tier[tier, cat, period, run]) : only(runinfo(data, (period, run, cat)).keys)
+    isempty(all_fks) && throw(ArgumentError("No filekeys found for $cat $period $run"))
+    fks = ignore_keys == :none ? all_fks : filter(!in(bad_filekeys(data; load_key = ignore_keys)), all_fks)
+    isempty(fks) && throw(ArgumentError("All $(length(all_fks)) filekeys of $cat $period $run are ignored DAQ cycles for `ignore_keys = :$ignore_keys`"))
+    LegendDataManagement.read_ldata(f, data, (tier, fks, det); kwargs...)
 end
 
 

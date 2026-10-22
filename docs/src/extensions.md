@@ -95,6 +95,11 @@ It is also possible to load whole a `DataPartition` or `DataPeriod` for a given 
 dsp = read_ldata(l200, :jldsp, :cal, DataPartition(1), det)
 dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), det)
 ```
+The filekeys of a run are those listed in the metadata, `only(runinfo(l200, (:p03, :r000, :cal)).keys)`, without the DAQ cycles in `datasets/ignored_daq_cycles`. With `search_disk = true`, the filekeys found on disk are read instead. `ignore_keys` names the key of `datasets/ignored_daq_cycles` whose cycles are dropped; the default `:all` drops the cycles under every key, and `:none` keeps every filekey:
+```julia
+dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, det; search_disk = true)
+dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, det; ignore_keys = :none)
+```
 Omitting the detector loads every detector of a file into a `NamedTuple` keyed by detector, with a column selection or filter applied to each detector's table:
 ```julia
 dsp = read_ldata(l200, :jldsp, first(filekeys))
