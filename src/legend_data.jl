@@ -349,8 +349,8 @@ const _channelinfo_status_ranking = (;
     channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, extended::Bool = false)
     channelinfo(data::LegendData, sel::RunCategorySelLike; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, extended::Bool = false)
     channelinfo(data::LegendData, sel::RunSelLike; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, extended::Bool = false)
-    channelinfo(data::LegendData, sel::PeriodSelLike; only_analysis_runs::Bool = true, kwargs...)
-    channelinfo(data::LegendData, period::DataPeriodLike; only_analysis_runs::Bool = true, kwargs...)
+    channelinfo(data::LegendData, sel::PeriodSelLike; only_analysis_runs::Bool = true, explode_partitions::Bool = false, kwargs...)
+    channelinfo(data::LegendData, period::DataPeriodLike; only_analysis_runs::Bool = true, explode_partitions::Bool = false, kwargs...)
 
 Get all channel information for the given [`LegendData`](@ref) and
 [`ValiditySelection`](@ref). A selection that names no category uses `:cal`.
@@ -361,12 +361,21 @@ runs of that category in the period (only the analysis runs if
 `processable`, `usability`, `is_blinded`, `psd_usability` and the PSD
 `*_status` columns take the best value over the runs, all other columns must
 be identical in every run.
+
+If the metadata has groupings of the category (`datasets/<category>_groupings`),
+the table of a period selection has the column `partition`: the sorted
+[`DataPartition`](@ref)s of each detector that contain the period (see
+[`partitioninfo`](@ref)), empty for a detector in no partition. With
+`explode_partitions = true` the table has one row per detector and partition,
+with a single `DataPartition` in `partition`; detectors in no partition are
+left out. `explode_partitions` throws an `ArgumentError` for other selections
+and for a category without groupings.
 """
-function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunSelLike, PeriodSelLike}; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, sort_by::Symbol=:detector, extended::Bool = false, verbose::Bool = true, only_analysis_runs::Bool = true)
+function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunSelLike, PeriodSelLike}; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, sort_by::Symbol=:detector, extended::Bool = false, verbose::Bool = true, only_analysis_runs::Bool = true, explode_partitions::Bool = false)
     if sel isa Tuple
         # Both two-element selections are a pair of symbols or strings, so the run and
         # category names tell `(period, run)` and `(period, category)` apart.
-        _can_convert_to(DataRun, sel[2]) && return channelinfo(data, (sel[1], sel[2], :cal); system, only_processable, only_usability, sort_by, extended, verbose)
+        _can_convert_to(DataRun, sel[2]) && return channelinfo(data, (sel[1], sel[2], :cal); system, only_processable, only_usability, sort_by, extended, verbose, explode_partitions)
         sel = (DataPeriod(sel[1]), DataCategory(sel[2]))
     end
     key = (objectid(data), sel, extended, only_analysis_runs)
@@ -390,7 +399,9 @@ function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunSelLi
                     first(vals)
                 end
             end
-            return StructVector([NamedTuple{cols}(map(col -> merge_column(col, det), cols)) for det in unique(run_rows.detector)])
+            merged = Table(StructVector([NamedTuple{cols}(map(col -> merge_column(col, det), cols)) for det in unique(run_rows.detector)]))
+            haskey(data.metadata.datasets, Symbol("$(category)_groupings")) || return StructVector(columns(merged))
+            return StructVector(columns(_with_partitions(data, merged, period, category)))
         end
         chmap = data.metadata(sel).hardware.configuration.channelmaps
         diodmap = data.metadata.hardware.detectors.germanium.diodes
@@ -507,11 +518,33 @@ function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunSelLi
     elseif hasproperty(chinfo, sort_by)
         chinfo = chinfo |> sortby(ljl_propfunc("string($sort_by)"))
     end
+    if explode_partitions
+        sel isa Tuple || throw(ArgumentError("explode_partitions needs a period selection (period, category), got $sel"))
+        hasproperty(chinfo, :partition) || throw(ArgumentError("explode_partitions: no groupings of category $(sel[2]) in the metadata of $(data.name)"))
+        return _explode_partitions(Table(chinfo))
+    end
     return Table(chinfo)
 end
 export channelinfo
 
+# The channel information `chinfo` with the column `partition`: the sorted data partitions of
+# category `category` of each detector that contain the period `period`.
+function _with_partitions(data::LegendData, chinfo::Table, period::DataPeriod, category::DataCategory)
+    partition = Vector{DataPartition}[partitioninfo(data, det, category, period) for det in chinfo.detector]
+    Table(merge(columns(chinfo), (; partition)))
+end
+
+# The channel information `chinfo` with a column `partition` of partition vectors as one row
+# per detector and partition, in the order of the detectors and of their partitions.
+function _explode_partitions(chinfo::Table)
+    rows = Int[i for (i, parts) in pairs(chinfo.partition) for _ in parts]
+    partition = DataPartition[p for parts in chinfo.partition for p in parts]
+    Table(merge(columns(chinfo[rows]), (; partition)))
+end
+
 function channelinfo(data::LegendData, sel::RunCategorySelLike; kwargs...)
+    # `(period, category, channel)` has the same element types as `(period, run, category)`
+    _can_convert_to(DataRun, sel[2]) || return channelinfo(data, ((sel[1], sel[2]), sel[3]); kwargs...)
     channelinfo(data, start_filekey(data, sel); kwargs...)
 end
 channelinfo(data::LegendData, period::DataPeriodLike; kwargs...) = channelinfo(data, (DataPeriod(period), DataCategory(:cal)); kwargs...)
@@ -519,25 +552,18 @@ function channelinfo(data::LegendData, sel::Vararg{Any,N}; kwargs...) where {N}
     N == 1 && throw(MethodError(channelinfo, (data, sel[1])))
     channelinfo(data, sel; kwargs...)
 end
-function channelinfo(data::LegendData, sel::Tuple{<:DataPeriodLike, <:DataRunLike, <:DataCategoryLike, Union{ChannelIdLike, DetectorIdLike}}; kwargs...)
+function channelinfo(data::LegendData, sel::Tuple{<:DataPeriodLike, <:DataCategoryLike, AbstractVector}; kwargs...)
+    channelinfo(data, ((sel[1], sel[2]), sel[3]); kwargs...)
+end
+function channelinfo(data::LegendData, sel::Tuple{<:DataPeriodLike, <:DataRunLike, <:DataCategoryLike, Union{ChannelIdLike, DetectorIdLike, AbstractVector}}; kwargs...)
     channelinfo(data, ((sel[1:3]), sel[4]); kwargs...)
 end
 
 # TODO: Fix LRU cache and make work with channelinfo and channelname
 const _cached_channelinfo_detector_idx = LRU{Tuple{UInt, AnyValiditySelection, Symbol}, Int}(maxsize = 10^3)
 
-"""
-    channelinfo(data::LegendData, sel::AnyValiditySelection, channel::Union{ChannelIdLike, DetectorIdLike})
-    channelinfo(data::LegendData, sel::AnyValiditySelection, detector::DetectorIdLike)
-
-Get channel information validitiy selection and [`DetectorId`](@ref) resp.
-[`ChannelId`](@ref).
-"""
-# function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, channel::Union{ChannelIdLike, DetectorIdLike}; kwargs...)
-function channelinfo(data::LegendData, sel::Tuple{Union{AnyValiditySelection, RunSelLike, PeriodSelLike, RunCategorySelLike}, Union{ChannelIdLike, DetectorIdLike}}; kwargs...)
-    sel, channel = sel[1], sel[2]
-    key = (objectid(data), sel, Symbol(channel))
-    chinfo = channelinfo(data, sel; kwargs...)
+# Indices of the rows of `channel` (a channel or a detector) in the channel information `chinfo`.
+function _channelinfo_rows(chinfo, channel)
     idxs = if _can_convert_to(ChannelId, channel)
         findall(x -> ChannelId(x) == ChannelId(channel), chinfo.channel)
     elseif _can_convert_to(DetectorId, channel)
@@ -545,12 +571,40 @@ function channelinfo(data::LegendData, sel::Tuple{Union{AnyValiditySelection, Ru
     else
         throw(ArgumentError("Invalid channel: $channel"))
     end
-    if isempty(idxs)
-        throw(ArgumentError("No channel information found for $channel"))
-    elseif length(idxs) > 1
-        throw(ArgumentError("Multiple channel information entries for $channel"))
-    end
+    isempty(idxs) && throw(ArgumentError("No channel information found for $channel"))
+    return idxs
+end
+
+"""
+    channelinfo(data::LegendData, sel, channel::Union{ChannelIdLike, DetectorIdLike}; kwargs...)
+    channelinfo(data::LegendData, sel, channels::AbstractVector; kwargs...)
+
+Get the channel information of the selection `sel` (see above, e.g. a validity selection,
+`(period, run, category)` or `(period, category)`) for one [`ChannelId`](@ref) or
+[`DetectorId`](@ref), or for a vector of them. One channel gives its row, or with
+`explode_partitions = true` a table of its rows, one per partition. A vector gives a table
+with the rows of the channels in the given order. The selection and the channel can also be
+passed as separate arguments, e.g. `channelinfo(data, period, category, detector)`.
+"""
+function channelinfo(data::LegendData, sel::Tuple{Union{AnyValiditySelection, RunSelLike, PeriodSelLike, RunCategorySelLike}, Union{ChannelIdLike, DetectorIdLike}}; explode_partitions::Bool = false, kwargs...)
+    sel, channel = sel[1], sel[2]
+    chinfo = channelinfo(data, sel; explode_partitions, kwargs...)
+    idxs = _channelinfo_rows(chinfo, channel)
+    explode_partitions && return chinfo[idxs]
+    length(idxs) > 1 && throw(ArgumentError("Multiple channel information entries for $channel"))
     chinfo[only(idxs)]
+end
+
+function channelinfo(data::LegendData, sel::Tuple{Union{AnyValiditySelection, RunSelLike, PeriodSelLike, RunCategorySelLike}, AbstractVector}; explode_partitions::Bool = false, kwargs...)
+    sel, channels = sel[1], sel[2]
+    chinfo = channelinfo(data, sel; explode_partitions, kwargs...)
+    idxs = Int[]
+    for channel in channels
+        rows = _channelinfo_rows(chinfo, channel)
+        !explode_partitions && length(rows) > 1 && throw(ArgumentError("Multiple channel information entries for $channel"))
+        append!(idxs, rows)
+    end
+    chinfo[idxs]
 end
 
 function channel_info(data::LegendData, sel::AnyValiditySelection)

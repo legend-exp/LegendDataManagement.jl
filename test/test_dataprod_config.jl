@@ -86,6 +86,27 @@ include("testing_utils.jl")
         @test partinfo isa IdDict
         @test partinfo[DataPartition(1)] isa TypedTables.Table
         @test_nowarn empty!(LegendDataManagement._cached_partitioninfo)
+
+        # a dataset without the runs of a partition: the partition has an empty table of the
+        # same type and contains no period
+        meta = joinpath(mktempdir(), "metadata")
+        cp(joinpath(testdata_dir, "metadata"), meta)
+        chmod(meta, 0o755; recursive = true)
+        open(io -> write(io, "p03only:\n  cal:\n    p03: r000..r005\n"),
+            joinpath(meta, "datasets", "runlists.yaml"), "a")
+        override = joinpath(dirname(meta), "override.yaml")
+        write(override, "setups:\n  l200:\n    paths:\n      metadata: '$meta'\n")
+        withenv("LEGEND_DATA_CONFIG" => "$override:$julia_config") do
+            p03only = LegendData(:l200; dataset = :p03only)
+            parts = partitioninfo(p03only, :V99000A, :cal)
+            @test isempty(only(values(parts)))
+            @test eltype(only(values(parts))) == eltype(partinfo[DataPartition(1)])
+            @test isempty(partitioninfo(p03only, :V99000A, :cal, DataPeriod(3)))
+            chinfo = channelinfo(p03only, DataPeriod(3), :cal; system = :geds)
+            @test all(isempty, chinfo.partition)
+            exploded = channelinfo(p03only, DataPeriod(3), :cal; system = :geds, explode_partitions = true)
+            @test isempty(exploded) && exploded.partition isa Vector{DataPartition}
+        end
     end
 
     @testset "utils" begin

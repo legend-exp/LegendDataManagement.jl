@@ -49,17 +49,9 @@ get_mltrainfilename(data::LegendData, filekey::FileKey) = get_mltrainfilename(da
 
 
 function get_partition_channelinfo(data::LegendData, chinfo::Table, period::DataPeriodLike, category::DataCategoryLike; unfold_partitions::Bool=false)
-    # get partition information for given period
-    period = DataPeriod(period)
-    # get partition information for given period and channels
-    parts = partitioninfo.(data, chinfo.detector, period, category)
-    t = StructArray(merge((partition = parts, ), columns(chinfo)))
-    if unfold_partitions
-        t_unfold = t |> filterby(@pf length($partition) > 1)
-        t = t |> filterby(@pf length($partition) == 1)
-        t = StructArray(merge(columns(t), (partition = only.(t.partition), )))
-        append!(t, [merge(t_ch, (partition = p, )) for t_ch in t_unfold for p in t_ch.partition])
-    end
-    return Table(t)
+    Base.depwarn("`get_partition_channelinfo(data, chinfo, period, category; unfold_partitions)` is deprecated, " *
+        "use `channelinfo(data, period, category; explode_partitions)` instead.", :get_partition_channelinfo)
+    t = _with_partitions(data, chinfo, DataPeriod(period), DataCategory(category))
+    return unfold_partitions ? _explode_partitions(t) : t
 end
 export get_partition_channelinfo

@@ -126,10 +126,13 @@ function _get_partitions(data::LegendData, label::Symbol, category::DataCategory
         end
     end
 
-    # Keep only period, run, and the selected category
+    # Keep only period, run, and the selected category. The runs are selected first, so that a
+    # partition without analysis runs in the run information (e.g. of a dataset) gets an empty
+    # table of the same type.
     IdDict(DataPartition.(keys(pd)) .=> [
-        Table(NamedTuple{(:period, :run, category)}((row.period, row.run, getproperty(row, category)))
-            for row in rinfo if (row.period, row.run) in pr && getproperty(row, category).is_analysis_run)
+        let sel = filter(row -> (row.period, row.run) in pr && getproperty(row, category).is_analysis_run, rinfo)
+            Table(NamedTuple{(:period, :run, category)}((sel.period, sel.run, getproperty(sel, category))))
+        end
         for pr in values(pd)
     ])
 end

@@ -61,7 +61,7 @@ include("testing_utils.jl")
         @test period_chinfo isa TypedTables.Table
         @test channelinfo(l200, (filekey.period, :cal)) == period_chinfo
         @test channelinfo(l200, ("p02", "cal")) == period_chinfo
-        @test columnnames(period_chinfo) == columnnames(chinfo)
+        @test columnnames(period_chinfo) == (columnnames(chinfo)..., :partition)
         @test period_chinfo.detector == chinfo.detector
         # Detector B99000A is usable in run r000 only: the period takes the best status over its runs
         @test only(filterby(@pf $detector == DetectorId(:B99000A))(chinfo).usability) == :off
@@ -75,6 +75,27 @@ include("testing_utils.jl")
         @test channelinfo(l200, filekey.period, :cal; only_analysis_runs = false) == period_chinfo
         @test_throws ArgumentError channelinfo(l200, :p99, :cal)
         @test_throws ArgumentError channelinfo(l200, filekey.period, :xtc)
+
+        # the partitions of each detector that contain the period
+        geds = channelinfo(l200, filekey.period, :cal; system = :geds)
+        @test geds.partition isa Vector{Vector{DataPartition}}
+        @test all(==([DataPartition(:calpartition001a)]), geds.partition)
+        @test geds.partition == partitioninfo.(l200, geds.detector, filekey.period, :cal)
+        exploded = channelinfo(l200, filekey.period, :cal; system = :geds, explode_partitions = true)
+        @test exploded.partition isa Vector{DataPartition}
+        @test exploded.detector == geds.detector && all(==(DataPartition(:calpartition001a)), exploded.partition)
+        @test_throws "explode_partitions needs a period selection" channelinfo(l200, filekey; explode_partitions = true)
+        # no partitions of the run-level channel info
+        @test !(:partition in columnnames(chinfo))
+
+        # detectors and channels as arguments, one or a vector
+        @test channelinfo(l200, filekey.period, :cal, :V99000A).partition == [DataPartition(:calpartition001a)]
+        @test channelinfo(l200, filekey.period, :cal, [:B99000A, :V99000A]).detector == DetectorId.([:B99000A, :V99000A])
+        @test channelinfo(l200, filekey.period, :cal, [:V99000A]; explode_partitions = true).partition == [DataPartition(:calpartition001a)]
+        @test channelinfo(l200, filekey.period, :cal, :V99000A; explode_partitions = true) isa TypedTables.Table
+        @test channelinfo(l200, filekey.period, filekey.run, :cal, [:V99000A]).detector == [DetectorId(:V99000A)]
+        @test channelinfo(l200, filekey, [:V99000A, :B99000A]).detector == DetectorId.([:V99000A, :B99000A])
+        @test_throws "No channel information found for V09999A" channelinfo(l200, filekey.period, :cal, [:V99000A, :V09999A])
 
         # ToDo: Make type-stable:
         # @test #=@inferred=#(channel_info(l200, filekey)) isa StructArray
