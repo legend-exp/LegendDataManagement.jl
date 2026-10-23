@@ -5,8 +5,23 @@ const _cached_pyparsed = LRU{String, LJlExprLike}(maxsize = 10^4)
 """
     parse_lpyexpr(expr_string::AbstractString)::LJlExprLike
 
-Parse an expression compatible with the LEGEND Python software and return a
+Parses an expression compatible with the LEGEND Python software and returns a
 Julia syntax tree.
+
+Supported are numbers, variable names and calls of `~` (not), `!=`, `+`, `-`,
+`*`, `/`, `<`, `>`, `>=`, `<=` and `abs`, as well as `|` and `&`, which are
+converted to `||` and `&&`. An `ArgumentError` is thrown for other syntax. The
+result is a valid LEGEND Julia expression (see [`parse_ljlexpr`](@ref)).
+The parsed expressions are cached.
+
+## Examples
+```julia
+using LegendDataManagement
+
+parse_lpyexpr("~(is_saturated) & (e_cusp > 100.0)")
+```
+
+See also [`lpy_propfunc`](@ref).
 """
 function parse_lpyexpr(@nospecialize(expr_string::AbstractString))
     get!(_cached_pyparsed, expr_string) do
@@ -70,7 +85,8 @@ end
 """
     lpy_propfunc(expr_string::AbstractString)::PropertyFunctions.PropertyFunction
 
-Generate a `PropertyFunctions.PropertyFunction` from a LEGEND Python expression.
+Generates a `PropertyFunctions.PropertyFunction` from a LEGEND Python
+expression, with the syntax described in [`parse_lpyexpr`](@ref).
 
 See also [`parse_lpyexpr`](@ref) and [`ljl_propfunc`](@ref).
 """

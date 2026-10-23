@@ -3,10 +3,14 @@
 """
     abstract type DataSelector
 
-Abstract type for data selectors like
-[`ExpSetup`](@ref), [`DataTier`](@ref), [`DataPeriod`](@ref),
-[`DataRun`](@ref), [`DataCategory`](@ref), [`Timestamp`](@ref) and
-[`FileKey`](@ref).
+Supertype of the types that select data: [`ExpSetup`](@ref),
+[`DataTier`](@ref), [`DataPeriod`](@ref), [`DataRun`](@ref),
+[`DataCategory`](@ref), [`DataPartition`](@ref), [`Timestamp`](@ref),
+[`FileKey`](@ref), [`ChannelId`](@ref) and [`DetectorId`](@ref).
+
+Selectors are broadcast as scalars, can be used as keys of a `PropDict`
+through their `Symbol` form, and are converted from strings or symbols by
+their constructors.
 """
 abstract type DataSelector end
 
@@ -26,11 +30,18 @@ lreport!(rpt::LegendReport, @nospecialize(sel::DataSelector)) = lreport!(rpt, st
 """
     struct ExpSetup <: DataSelector
 
-Represents a LEGEND experimental setup like "l200".
+Represents a LEGEND experimental setup like `l200`.
 
-Example:
+A setup label consists of 3 to 8 lowercase letters and digits and starts with
+a letter.
 
+## Fields
+* `label::Symbol`: Label of the setup.
+
+## Examples
 ```julia
+using LegendDataManagement
+
 setup = ExpSetup(:l200)
 setup.label == :l200
 string(setup) == "l200"
@@ -74,6 +85,8 @@ Base.print(io::IO, category::ExpSetup) = print(io, category.label)
 
 Anything that can represent a setup label, like `ExpSetup(:l200)`, `:l200` or
 `"l200"`.
+
+See also [`ExpSetup`](@ref).
 """
 const ExpSetupLike = Union{ExpSetup, Symbol, AbstractString}
 export ExpSetupLike
@@ -83,11 +96,18 @@ export ExpSetupLike
 """
     struct DataTier <: DataSelector
 
-Represents a LEGEND data tier like "raw, "dsp", etc.
+Represents a LEGEND data tier like `raw` or `dsp`.
 
-Example:
+A tier label consists of three lowercase letters, optionally prefixed by `jl`
+(e.g. `jldsp`).
 
+## Fields
+* `label::Symbol`: Label of the tier.
+
+## Examples
 ```julia
+using LegendDataManagement
+
 tier = DataTier(:raw)
 tier.label == :raw
 string(tier) == "raw"
@@ -130,6 +150,8 @@ Base.print(io::IO, tier::DataTier) = print(io, tier.label)
 
 Anything that can represent a data tier, like `DataTier(:raw)`, `:raw` or
 `"raw"`.
+
+See also [`DataTier`](@ref).
 """
 const DataTierLike = Union{DataTier, Symbol, AbstractString}
 export DataTierLike
@@ -141,9 +163,15 @@ export DataTierLike
 
 Represents a LEGEND data-taking period.
 
-Example:
+Periods are numbered from 0 to 99 and written with two digits, e.g. `p02`.
 
+## Fields
+* `no::Int`: Number of the period.
+
+## Examples
 ```julia
+using LegendDataManagement
+
 period = DataPeriod(2)
 period.no == 2
 string(period) == "p02"
@@ -196,7 +224,10 @@ Base.convert(::Type{DataPeriod}, s::Symbol) = DataPeriod(string(s))
 """
     DataPeriodLike = Union{DataPeriod, Symbol, AbstractString}
 
-Anything that can represent a data period, like `DataPeriod(2)` or "p02".
+Anything that can represent a data period, like `DataPeriod(2)`, `:p02` or
+`"p02"`.
+
+See also [`DataPeriod`](@ref).
 """
 const DataPeriodLike = Union{DataPeriod, Symbol, AbstractString}
 export DataPeriodLike
@@ -208,9 +239,15 @@ export DataPeriodLike
 
 Represents a LEGEND data-taking run.
 
-Example:
+Runs are numbered from 0 to 999 and written with three digits, e.g. `r006`.
 
+## Fields
+* `no::Int`: Number of the run.
+
+## Examples
 ```julia
+using LegendDataManagement
+
 r = DataRun(6)
 r.no == 6
 string(r) == "r006"
@@ -262,7 +299,10 @@ Base.convert(::Type{DataRun}, s::Symbol) = DataRun(string(s))
 """
     DataRunLike = Union{DataRun, Symbol, AbstractString}
 
-Anything that can represent a data run, like `DataRun(6)` or "r006".
+Anything that can represent a data run, like `DataRun(6)`, `:r006` or
+`"r006"`.
+
+See also [`DataRun`](@ref).
 """
 DataRunLike = Union{DataRun, Symbol, AbstractString}
 export DataRunLike
@@ -271,11 +311,17 @@ export DataRunLike
     struct DataCategory <: DataSelector
 
 Represents a LEGEND data category (related to a DAQ/measuring mode) like
-"cal" or "phy".
+`cal` or `phy`.
 
-Example:
+A category label consists of three lowercase letters.
 
+## Fields
+* `label::Symbol`: Label of the category.
+
+## Examples
 ```julia
+using LegendDataManagement
+
 category = DataCategory(:cal)
 category.label == :cal
 string(category) == "cal"
@@ -318,29 +364,33 @@ Base.print(io::IO, category::DataCategory) = print(io, category.label)
 
 Anything that can represent a data category, like `DataCategory(:cal)`,
 `:cal` or `"cal"`.
+
+See also [`DataCategory`](@ref).
 """
 const DataCategoryLike = Union{DataCategory, Symbol, AbstractString}
 export DataCategoryLike
 
 
 """
-    struct RunSelLike = Tuple{<:DataPeriodLike, <:DataRunLike}  
+    RunSelLike = Tuple{<:DataPeriodLike, <:DataRunLike}
 
-Represents a LEGEND run selection.
+Tuple `(period, run)` that selects a LEGEND run, like `(:p03, :r000)`.
 """
 const RunSelLike = Tuple{<:DataPeriodLike, <:DataRunLike}
 
 """
-    struct PeriodSelLike = Tuple{<:DataPeriodLike, <:DataCategoryLike}
+    PeriodSelLike = Tuple{<:DataPeriodLike, <:DataCategoryLike}
 
-Represents a LEGEND period selection for a specific `category`.
+Tuple `(period, category)` that selects a LEGEND period for a specific
+`category`, like `(:p03, :cal)`.
 """
 const PeriodSelLike = Tuple{<:DataPeriodLike, <:DataCategoryLike}
 
 """
-    struct RunCategorySelLike = Tuple{<:DataPeriodLike, <:DataRunLike}  
+    RunCategorySelLike = Tuple{<:DataPeriodLike, <:DataRunLike, <:DataCategoryLike}
 
-Represents a LEGEND run selection for a specific `category`.
+Tuple `(period, run, category)` that selects a LEGEND run for a specific
+`category`, like `(:p03, :r000, :cal)`.
 """
 const RunCategorySelLike = Tuple{<:DataPeriodLike, <:DataRunLike, <:DataCategoryLike}
 
@@ -348,15 +398,26 @@ const RunCategorySelLike = Tuple{<:DataPeriodLike, <:DataRunLike, <:DataCategory
 """
     struct DataPartition <: DataSelector
 
-Represents a LEGEND data-taking partition. If only a number is given, the struct uses category `:cal` and set `:a` as default.  
+Represents a LEGEND data-taking partition, i.e. a group of runs that are
+analyzed together.
 
-The struct can also be constructed from strings in various formats, such as `"calgroup001a"`, `"calpartition001a"`, `"calpart001a"`, or the short form `"part001"`.
+If only a number is given, the category defaults to `:cal` and the set to
+`:a`. A partition can also be constructed from strings or symbols in various
+formats, such as `"calgroup001a"`, `"calpartition001a"`, `"calpart001a"`, or
+the short form `"part001"`. A missing category defaults to `:cal` and a
+missing set to `:a`. Partitions are ordered by number and set.
 
-Example:
+## Fields
+* `no::Int`: Number of the partition (0 to 999).
+* `set::Symbol`: Set of the partition, a lowercase letter.
+* `cat::DataCategory`: Category of the partition.
 
+## Examples
 ```julia
+using LegendDataManagement
+
 partition = DataPartition(1)
-partition.cat == :cal
+partition.cat == DataCategory(:cal)
 partition.no == 1
 partition.set == :a
 string(partition) == "calpartition001a"
@@ -417,7 +478,10 @@ Base.convert(::Type{DataPartition}, s::Symbol) = DataPartition(string(s))
 """
     DataPartitionLike = Union{DataPartition, Symbol, AbstractString}
 
-Anything that can represent a data partition, like `DataPartition(:calgroup001a)` or "part02".
+Anything that can represent a data partition, like
+`DataPartition(:calgroup001a)` or `"part02"`.
+
+See also [`DataPartition`](@ref).
 """
 const DataPartitionLike = Union{DataPartition, Symbol, AbstractString}
 export DataPartitionLike
@@ -426,15 +490,23 @@ export DataPartitionLike
 """
     struct Timestamp <: DataSelector
 
-Represents a LEGEND timestamp.
+Represents a LEGEND timestamp, stored as Unix time in seconds.
 
-Example:
+A timestamp can be created from a Unix time in seconds, a `Dates.DateTime`, a
+time with units from Unitful.jl, a string like `"20221226T200846Z"` or a
+string that is a file key. Times are in UTC.
 
+## Fields
+* `unixtime::Int`: Unix time in seconds.
+
+## Examples
 ```julia
+using LegendDataManagement
+
 timestamp = Timestamp("20221226T200846Z")
 timestamp.unixtime == 1672085326
 string(timestamp) == "20221226T200846Z"
-````
+```
 """
 struct Timestamp <: DataSelector
     unixtime::Int
@@ -490,10 +562,13 @@ _timestamp_from_string(s::AbstractString) = DateTime(Timestamp(s))
 
 
 """
-    TimestampLike = Union{Timestamp, AbstractString, Integer}
+    TimestampLike = Union{Timestamp, AbstractString, Integer, Unitful.Time{<:Real}, Dates.DateTime}
 
-Anything that can represent a timestamp, like `Timestamp("20221226T200846Z")`
-or "20221226T200846Z".
+Anything that can represent a timestamp, like `Timestamp("20221226T200846Z")`,
+`"20221226T200846Z"`, a Unix time in seconds, a time with units like
+`1.6e9u"s"` or a `Dates.DateTime`.
+
+See also [`Timestamp`](@ref).
 """
 const TimestampLike = Union{Timestamp, AbstractString, Integer, Unitful.Time{<:Real}, Dates.DateTime}
 export TimestampLike
@@ -503,12 +578,29 @@ export TimestampLike
 """
     struct FileKey <: DataSelector
 
-Represents a LEGEND file key.
+Represents a LEGEND file key, which identifies the data of one DAQ cycle.
 
-Example:
+A file key can be created from its five fields or from a string whose last
+path component starts with a file key, e.g. a file name like
+`"l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5"`. The selectors of a file
+key can be obtained by converting it, e.g. `DataPeriod(filekey)` or
+`Timestamp(filekey)`. File keys are ordered by setup, period, run, category
+and time.
 
+## Fields
+* `setup::ExpSetup`: Experimental setup.
+* `period::DataPeriod`: Data-taking period.
+* `run::DataRun`: Data-taking run.
+* `category::DataCategory`: Data category.
+* `time::Timestamp`: Start time of the DAQ cycle.
+
+## Examples
 ```julia
+using LegendDataManagement
+
 filekey = FileKey("l200-p02-r006-cal-20221226T200846Z")
+filekey.period == DataPeriod(2)
+string(filekey) == "l200-p02-r006-cal-20221226T200846Z"
 ```
 
 See also [`read_filekeys`](@ref) and [`write_filekeys`](@ref).
@@ -607,17 +699,21 @@ Dates.DateTime(key::FileKey) = DateTime(Timestamp(key))
 Anything that can represent a file key, like
 `FileKey("l200-p02-r006-cal-20221226T200846Z")` or
 `"l200-p02-r006-cal-20221226T200846Z"`.
+
+See also [`FileKey`](@ref).
 """
 const FileKeyLike = Union{FileKey, AbstractString}
 export FileKeyLike
 
 
 """
-    read_filekeys(filename::AbstractString)::AbstractVector{FileKey}
+    read_filekeys(filename::AbstractString)::Vector{FileKey}
 
-Reads a list of [`FileKey`](@ref) from a text file, one file key per line.
+Reads a list of [`FileKey`](@ref)s from a text file, one file key per line.
 
 Ignores empty lines. `#` may be used to start a comment in the file.
+
+See also [`write_filekeys`](@ref).
 """
 function read_filekeys(filename::AbstractString)
     lines = filter(!isempty, [strip(first(split(l, '#'))) for l in readlines(filename)])
@@ -630,7 +726,9 @@ export read_filekeys
 """
     write_filekeys(filename::AbstractString, filekeys::AbstractVector{<:FileKey})
 
-Writes a list of [`FileKey`](@ref) to a text file, one file key per line.
+Writes a list of [`FileKey`](@ref)s to a text file, one file key per line.
+
+See also [`read_filekeys`](@ref).
 """
 function write_filekeys(filename::AbstractString, filekeys::AbstractVector{<:FileKey})
     open(filename, "w") do io
@@ -648,9 +746,16 @@ export write_filekeys
 
 Represents a LEGEND data channel.
 
-Example:
+Channel numbers below 1000 are written with three digits, larger ones with
+seven digits (the first two digits are not both zero), e.g. `ch1083204`.
 
+## Fields
+* `no::Int`: Number of the channel.
+
+## Examples
 ```julia
+using LegendDataManagement
+
 ch = ChannelId(1083204)
 # ch = ChannelId(98) # with old channel numbering
 ch.no == 1083204
@@ -707,10 +812,12 @@ Base.convert(::Type{Int}, ch::ChannelId) = ch.no
 
 
 """
-    ChannelIdLike = Union{ChannelId, Integer, AbstractString}
+    ChannelIdLike = Union{ChannelId, Int, AbstractString}
 
-Anything that can represent a data channel, like `ChannelId(1083204)` or
-"ch1083204".
+Anything that can represent a data channel, like `ChannelId(1083204)`,
+`1083204` or `"ch1083204"`.
+
+See also [`ChannelId`](@ref).
 """
 ChannelIdLike = Union{ChannelId, Int, AbstractString}
 export ChannelIdLike
@@ -720,25 +827,30 @@ export ChannelIdLike
 """
     struct DetectorId <: DataSelector
 
-Represents a LEGEND detector id.
+Represents a LEGEND detector ID.
 
-Detector IDs are stored encoded as an `UInt32` internally.
+Detector IDs are stored encoded as an `UInt32` internally. They can be created
+from their string or `Symbol` representation or from the encoded integer.
 
-Example:
+## Fields
+* `_encoded::UInt32`: Binary encoding of the detector ID.
 
+## Examples
 ```julia
+using LegendDataManagement
+
 detector = DetectorId(:V99000A)
 string(detector) == "V99000A"
 DetectorId("V99000A") == detector
 UInt32(detector)  # returns the binary encoding
 ```
 
-# Implementation
+## Encoding
 
 The following 32-bit unsigned integer encoding is used for LEGEND detector
-IDs:
+IDs.
 
-## Binary encoding
+### Binary encoding
 
 Encoding length: 4-byte unsigned integer value, stored as a 32-bit or 64-bit
 integer.
@@ -758,9 +870,9 @@ Format (nibbles): RT XX XX XY
     * 0x6: reserved
     * 0x7: reserved
     * 0x8: reserved
-	* 0x9: S (SiPM)
+    * 0x9: S (SiPM)
     * 0xa: PMT (PMT)
-	* 0xb: PULS
+    * 0xb: PULS
     * 0xc: AUX
     * 0xd: DUMMY
     * 0xe: BSLN
@@ -776,9 +888,9 @@ Format (nibbles): RT XX XX XY
     * For Pulser: 0 = PULSnn, 1 = PULSnnANA
     * For Dummy: always 0
 
-## String representation
+### String representation
 
-* [B|C|P|V]nnnnn[A|B|C|D|M]: represent serial number with five digits in string
+* [B|C|P|V]nnnnn[A-P]: represent serial number with five digits in string, followed by the slice letter
 * Snnn: represent serial number with three digits in string
 * PMTnnn:  represent serial number with three digits in string
 * PULSnn, PULSnnANA: represent serial number with two digits in string
@@ -787,7 +899,7 @@ Format (nibbles): RT XX XX XY
 * BSLNnn: represent serial number with two digits in string
 * MUONnn: represent serial number with two digits in string
 
-## Special cases:
+### Special cases
 
 * C00ANGn: Encode as R[C][f100n][0]
 * C000RGn: Encode as R[C][f200n][0]
@@ -1015,7 +1127,8 @@ Base.show(io::IO, detector::DetectorId) = print(io, "DetectorId(\"", _detid_to_s
 """
     DetectorIdLike = Union{DetectorId, Symbol, AbstractString, Integer}
 
-Anything that can represent a detector id.
+Anything that can represent a detector ID, like `DetectorId(:V99000A)`,
+`:V99000A`, `"V99000A"` or the encoded integer (see [`DetectorId`](@ref)).
 """
 const DetectorIdLike = Union{DetectorId, Symbol, AbstractString, Integer}
 export DetectorIdLike

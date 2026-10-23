@@ -1,6 +1,11 @@
 """
-    create_pars(pd::PropDict, result::Dict{ChannelInfo, ChannelResult}) -> PropDict
-Create a PropDict from a result of the parallel processing
+    create_pars(pd::PropDict, result) -> PropDict
+
+Creates a `PropDict` of parameters from a result of the parallel processing.
+
+`result` is a collection of pairs `(chinfo, res)`. For each entry that has
+the property `res.result` and was processed, the content of `res.result` is
+merged into `pd[chinfo.detector]`. Returns `pd`, which is modified.
 """
 function create_pars(pd::PropDict, result)
     for (chinfo_ch, res_ch) in result
@@ -31,29 +36,28 @@ function nt2pd(pd::PropDict, nt::Union{NamedTuple, Dict, PropDict})
 end
 
 """
-    writevalidity(props_db::LegendDataManagement.PropsDB, filekey::FileKey,
-                  apply::Union{String,Vector{String}}; category::Symbol = :all, mode::String = "reset")
+    writevalidity(props_db::LegendDataManagement.MaybePropsDB, filekey::FileKey, apply::Union{String, Vector{String}}; category::DataCategoryLike = :all, mode::AbstractString = "reset")
+    writevalidity(props_db::LegendDataManagement.MaybePropsDB, filekey::FileKey, rsel::Tuple{DataPeriod, DataRun}; category::DataCategoryLike = :all, mode::AbstractString = "reset")
+    writevalidity(props_db::LegendDataManagement.MaybePropsDB, filekey::FileKey, part::DataPartition; category::DataCategoryLike = :all, mode::AbstractString = "reset")
+    writevalidity(props_db::LegendDataManagement.MaybePropsDB, validity_with_flag::NamedTuple{(:result, :skipped)}; category::DataCategoryLike = :all, impl::Symbol = :full)
 
-    writevalidity(props_db::LegendDataManagement.PropsDB, filekey::FileKey,
-                  rsel::Tuple{DataPeriod,DataRun}; category::Symbol = :all)
+Writes validity information into the file `validity.yaml` in the directory of
+`props_db`.
 
-    writevalidity(props_db::LegendDataManagement.PropsDB, filekey::FileKey,
-                  part::DataPartitionLike; category::Symbol = :all)
+The file is created if it does not exist. An entry with the time of `filekey`
+is added; an existing entry with the same time and mode is replaced. All
+entries are sorted by time.
 
-    writevalidity(props_db::LegendDataManagement.PropsDB,
-                  validity_with_flag::NamedTuple{(:result, :skipped)}; category::Symbol = :all, impl::Symbol = :full)
+* With `apply` (a file name or a vector of file names), the entry applies these files with the given `mode` (`"reset"`, `"append"`, `"remove"` or `"replace"`; `"replace"` needs a pair of the file to remove and the file to add).
+* A `(DataPeriod, DataRun)` is converted to the file name `<period>/<run>.yaml` and a `DataPartition` to `<partition>.yaml`.
+* With a `NamedTuple` `(result, skipped)`, as returned by [`create_validity`](@ref), a sequence of entries is written for the detectors and partitions in `result`. The implementation `impl = :full` resets the validity at the earliest first partition (`a`) of the detectors and replaces, or removes and appends, the later partitions of each detector. The implementation `impl = :diff` writes the differences of the validity entries between consecutive times as `append`, `remove` or `replace` entries, and a `reset` if more than ten entries change. If `skipped` is `true` the first entry is appended instead of reset. Other values of `impl` throw an `ArgumentError`.
 
-Write validity information into `validity.yaml`.
+## Keywords
+* `category::DataCategoryLike = :all`: Data category the entry is valid for.
+* `mode::AbstractString = "reset"`: How `apply` changes the files that are valid. Not available with `(result, skipped)`.
+* `impl::Symbol = :full`: Implementation for `(result, skipped)`, `:full` or `:diff`.
 
-- With `apply` (string or vector), one or more validity files are written
-  using the given `mode` (`"reset"`, `"append"`, `"remove"`, or `"replace"`).
-- A `(DataPeriod, DataRun)` or `DataPartition` is automatically converted
-  into the corresponding validity string.
-- With a `NamedTuple(:result, :skipped)`, process a sequence of validity
-  updates across detectors and partitions, using either the `:full` or
-  `:diff` implementation.
-
-All entries are merged chronologically into `validity.yaml`.
+See also [`create_validity`](@ref).
 """
 function writevalidity end
 export writevalidity
@@ -274,8 +278,15 @@ function writevalidity_diff(
 end
 
 """
-    create_validity(result) -> StructArray
-Create a StructArray from a result of the parallel processing
+    create_validity(result) -> NamedTuple{(:result, :skipped)}
+
+Creates validity information from a result of the parallel processing.
+
+`result` is a collection of pairs `(chinfo, res)`. Returns a `NamedTuple` with
+the `StructArray` `result` of the entries `(period, run, filekey, validity)`
+that are the `res.validity` of all entries that were not skipped, and
+`skipped`, which is `true` if any entry has `res.skipped == true`. The result
+can be passed to [`writevalidity`](@ref).
 """
 function create_validity(result)
     validity_all = Vector{@NamedTuple{period::DataPeriod, run::DataRun, filekey::FileKey, validity::String}}()
@@ -291,9 +302,17 @@ end
 export create_validity
 
 """
-    get_partitionvalidity(data::LegendData, part::DataPartitionLike) -> Vector{@NamedTuple{period::DataPeriod, run::DataRun, validity::String}}
+    get_partitionvalidity(data::LegendData, det::DetectorIdLike, part::DataPartitionLike) -> Vector{@NamedTuple{period::DataPeriod, run::DataRun, filekey::FileKey, validity::String}}
+    get_partitionvalidity(data::LegendData, ch::ChannelIdLike, det::DetectorIdLike, part::DataPartitionLike, cat::DataCategoryLike = :cal)
 
-Get partition validity for a given channel and partition.
+Returns the validity entries of a partition for a detector.
+
+The result has one entry for each run of the partition, with the start file
+key of the run and the validity file name `<det>/<partition>.yaml`. The method
+with the additional channel and category arguments is deprecated; use the
+method with `det` and `part`.
+
+See also [`writevalidity`](@ref).
 """
 function get_partitionvalidity(data::LegendData, det::DetectorIdLike, part::DataPartitionLike)
     # unpack
@@ -307,14 +326,15 @@ export get_partitionvalidity
 @deprecate get_partitionvalidity(data::LegendData, ch::ChannelIdLike, det::DetectorIdLike, part::DataPartitionLike, cat::DataCategoryLike=:cal) get_partitionvalidity(data, det, part)
 
 """
-    detector2channel(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, detector::DetectorIdLike)
-Get the ChannelId for a given detectorId 
-input: 
-* `data`, e.g. `LegendData(:l200)``
-* `runsel`: runselection, e.g. `(DataPeriod(3), DataRun(0), :cal)`
-* `detector`: DetectorID e.g. `DetectorId(:P00573A)`` OR ChannelID e.g. `ChannelId(1080005)``
-output:
-* `ChannelId` of corresponding detector
+    detector2channel(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike}, detector::DetectorIdLike)
+
+Returns the [`ChannelId`](@ref) of a detector for the given selection.
+
+`runsel` is a validity selection, a file key or a run `(period, run, category)`,
+e.g. `(DataPeriod(3), DataRun(0), :cal)`. The channel is taken from
+[`channelinfo`](@ref).
+
+See also [`channel2detector`](@ref).
 """
 function detector2channel(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike}, detector::DetectorIdLike)
     return channelinfo(data, runsel, detector).channel
@@ -322,14 +342,15 @@ end
 export detector2channel
 
 """
-    channel2detector(data::LegendData, sel::Union{AnyValiditySelection, RunCategorySelLike}, channel::ChannelIdLike)
-Get the DetectorId for a given ChannelId
-input: 
-* `data`, e.g. `LegendData(:l200)``
-* `runsel`: runselection, e.g. `(DataPeriod(3), DataRun(0), :cal)`
-* `channel`: ChannelId e.g. `ChannelId(1080005)``
-output:
-* `DetectorId` of corresponding channel
+    channel2detector(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike}, channel::ChannelIdLike)
+
+Returns the [`DetectorId`](@ref) of a channel for the given selection.
+
+`runsel` is a validity selection, a file key or a run `(period, run, category)`,
+e.g. `(DataPeriod(3), DataRun(0), :cal)`. The detector is taken from
+[`channelinfo`](@ref).
+
+See also [`detector2channel`](@ref).
 """
 function channel2detector(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike}, channel::ChannelIdLike)
     return channelinfo(data, runsel, channel).detector
@@ -337,8 +358,12 @@ end
 export channel2detector
 
 """
-    get_det_type(data::LegendData, det::DetectorIdLike)
-Looks up the detector type for a given DetectorID.
+    detector_type(data::LegendData, det::DetectorIdLike)
+
+Returns the type of a germanium detector, e.g. `:icpc`, as a `Symbol`.
+
+The type is read from the diode metadata of `det` in
+`data.metadata.hardware.detectors.germanium.diodes`.
 """
 function detector_type(data::LegendData, det::DetectorIdLike)
     det_type = Symbol(data.metadata.hardware.detectors.germanium.diodes[det].type)
@@ -348,10 +373,12 @@ export detector_type
 
 """
     data_starttime(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike})
-Extract startime as DateTime from file for a given run selection
-    Input:
-    * data: LegendData, e.g. LegendData(:l200)
-    * runsel: runselection, e.g. (DataPeriod(3), DataRun(0), :cal)
+
+Returns the start time of a run as a `DateTime`.
+
+`runsel` is a file key or a run `(period, run, category)`, e.g.
+`(DataPeriod(3), DataRun(0), :cal)`. The time is that of the start file
+key of the run (see [`start_filekey`](@ref)).
 """
 function data_starttime(data::LegendData, runsel::Union{AnyValiditySelection, RunCategorySelLike})
     filekey = start_filekey(data, runsel)
