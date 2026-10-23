@@ -93,6 +93,8 @@ include("testing_utils.jl")
         @test run_chinfo.partition == [only(partitioninfo(l200, det, :cal, filekey.period, filekey.run)) for det in run_chinfo.detector]
         @test all(==(DataPartition(:calpartition001a)), run_chinfo.partition)
         @test channelinfo(l200, filekey.period, filekey.run, :cal; system = :geds, explode_partitions = true).partition == DataPartition.(fill(:calpartition001a, length(run_chinfo)))
+        # the deprecated partition channelinfo still unfolds the partitions
+        @test (@test_deprecated LegendDataManagement.LDMUtils.get_partition_channelinfo(l200, geds, filekey.period, :cal; unfold_partitions = true)).partition == exploded.partition
 
         # detectors and channels as arguments, one or a vector
         @test channelinfo(l200, filekey.period, :cal, :V99000A).partition == [DataPartition(:calpartition001a)]
