@@ -4,6 +4,7 @@ using ..LegendDataManagement
 using ..LegendDataManagement: RunCategorySelLike
 using ..LegendDataManagement: DataSelector
 using ..LegendDataManagement: RunSelLike, RunCategorySelLike
+using ..LegendDataManagement: _explode_partitions
 
 using PropDicts
 using PropertyDicts
