@@ -15,32 +15,48 @@ const DEFAULT_N_THICKNESS_IN_MM = 1.0
 const DEFAULT_P_THICKNESS_IN_MM = 0.1
 
 """
-    SolidStateDetector{T<:AbstractFloat}(data::LegendData, detector::DetectorIdLike; kwargs...)
-    SolidStateDetector{T<:AbstractFloat}(::Type{LegendData}, diode_filename::String; kwargs...)
-    SolidStateDetector{T<:AbstractFloat}(::Type{LegendData}, diode_filename::String, xtal_filename::String; kwargs...)
-    SolidStateDetector{T<:AbstractFloat}(::Type{LegendData}, diode_meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}; kwargs...)
+    SolidStateDetector(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); kwargs...)
+    SolidStateDetector{T}(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); kwargs...)
+    SolidStateDetector{T}(::Type{LegendData}, diode_filename::String, env::HPGeEnvironment = HPGeEnvironment(); kwargs...)
+    SolidStateDetector{T}(::Type{LegendData}, diode_filename::String, xtal_filename::String, env::HPGeEnvironment = HPGeEnvironment(); kwargs...)
+    SolidStateDetector{T}(::Type{LegendData}, diode_meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(); kwargs...)
 
-LegendDataManagement provides an extension for SolidStateDetectors, a
-`SolidStateDetector` can be constructed from LEGEND metadata using the
-methods above. Uses LEGEND defaults, such as ADLChargeDriftModel2016.
+Creates a `SolidStateDetector` from LEGEND metadata.
+
+The detector is built from the diode metadata and, if available, the crystal
+metadata, with the LEGEND defaults, such as the `ADLChargeDriftModel2016`. `T`
+is the floating-point type, `Float32` if it is not given. The extension is
+loaded together with SolidStateDetectors.jl.
 
 ## Arguments
 * `data::LegendData`: LEGEND data structure containing metadata.
-* `detector::DetectorIdLike`: Identifier for the detector, in the form of a symbol.
+* `detector::DetectorIdLike`: Identifier of the detector. The crystal metadata is taken from the crystal named after the detector without its last character.
 * `diode_filename::String`: Path to the diode metadata file.
 * `xtal_filename::String`: Path to the crystal metadata file.
 * `diode_meta::PropDict`: Diode metadata as a `PropDict`.
-* `xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}`: Crystal metadata as a `PropDict` or `NoSuchPropsDBEntry` if not available.
-* `env::HPGeEnvironment`: Environment configuration for the detector. Default is `HPGeEnvironment()`: Vacuum and 77 K.
+* `xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}`: Crystal metadata as a `PropDict`, or `NoSuchPropsDBEntry` if not available. Without crystal metadata a warning is printed and a constant impurity density of zero is used.
+* `env::HPGeEnvironment = HPGeEnvironment()`: Environment of the detector, by default a vacuum cryostat at 78 K (see [`HPGeEnvironment`](@ref)).
 
 ## Keywords
-* `operational_voltage::Number`: Operational voltage for the n+ contact. Accepts units, if non are given will interpret as `V`. If not provided, it will be taken from the metadata if available or defaulted.
-* `n_thickness::Number`: Thickness of the n+ contact in mm. Accepts units, if non are given will interpret as `mm`. If not provided, it will be taken from the metadata if available or defaulted.
-* `verbose::Bool`: Whether to print detailed information during the creation process. Default is `true`.
-* `save_ssd_config::Bool`: Whether to save the SSD configuration to a YAML file. Default is `false`.
-* `allow_cylindrical_asymmetry::Bool`: Whether to allow geometry features that break the cylindrical (azimuthal) symmetry of the detector, such as a `crack` defined in the metadata `geometry.extra`. When `true` (default) and such a feature is present, the affected volume is cut from the semiconductor and contacts and the simulation grid is switched to a full 3D azimuthal range (`phi` from `0` to `360`). When `false`, these features are ignored and the simulation remains 2D (azimuthally symmetric).
-"""
+* `operational_voltage::Number`: Operating voltage of the n+ contact in V. Accepts units; a number without units is interpreted as `V`. If not provided, the recommended voltage of the L200 characterization or of the manufacturer from the metadata is used, otherwise 5000 V.
+* `n_thickness::Number`: Thickness of the n+ contact in mm. Accepts units; a number without units is interpreted as `mm`. If not provided, the FCCD of the 0νββ analysis or the manufacturer's value from the metadata is used, otherwise 1 mm.
+* `use_impurity_corrections::Bool = true`: Apply the corrections (`scale`, `offset`) of the impurity curve of the crystal metadata.
+* `allow_cylindrical_asymmetry::Bool = true`: Whether to allow geometry features that break the cylindrical (azimuthal) symmetry of the detector, such as a `crack` defined in the metadata `geometry.extra`. When `true` and such a feature is present, the affected volume is cut from the semiconductor and contacts and the simulation grid is switched to a full 3D azimuthal range (`phi` from `0` to `360`). When `false`, these features are ignored and the simulation remains 2D (azimuthally symmetric).
+* `verbose::Bool = true`: Print the values that are used for the thickness, voltage and impurity density, and whether they are defaults.
+* `ssd_config_filename::Union{Missing, AbstractString} = missing`: If given, write the SSD configuration to this YAML file.
+* `dicttype = OrderedDict{String,Any}`: Dictionary type of the SSD configuration.
 
+## Examples
+```julia
+using LegendDataManagement, SolidStateDetectors
+
+l200 = LegendData(:l200)
+det = SolidStateDetector(l200, :V99000A)
+det = SolidStateDetector{Float64}(l200, :V99000A; operational_voltage = 4500, n_thickness = 1.2)
+```
+
+See also [`HPGeEnvironment`](@ref).
+"""
 function SolidStateDetectors.SolidStateDetector(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); kwargs...)
     SolidStateDetector{_SSDDefaultNumtype}(data, detector, env; kwargs...)
 end
@@ -71,30 +87,47 @@ function SolidStateDetectors.SolidStateDetector{T}(::Type{LegendData}, diode_met
 end
 
 """
-    Simulation{T<:AbstractFloat}(data::LegendData, detector::DetectorIdLike; kwargs...)
-    Simulation{T<:AbstractFloat}(::Type{LegendData}, diode_filename::String; kwargs...)
-    Simulation{T<:AbstractFloat}(::Type{LegendData}, diode_filename::String, xtal_filename::String; kwargs...)
-    Simulation{T<:AbstractFloat}(::Type{LegendData}, diode_meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}; kwargs...)
+    Simulation(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); kwargs...)
+    Simulation{T}(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); kwargs...)
+    Simulation{T}(::Type{LegendData}, diode_filename::String, env::HPGeEnvironment = HPGeEnvironment(); kwargs...)
+    Simulation{T}(::Type{LegendData}, diode_filename::String, xtal_filename::String, env::HPGeEnvironment = HPGeEnvironment(); kwargs...)
+    Simulation{T}(::Type{LegendData}, diode_meta::PropDict, xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}, env::HPGeEnvironment = HPGeEnvironment(); kwargs...)
 
-LegendDataManagement provides an extension for SolidStateDetectors, a
-`Simulation` can be constructed from LEGEND metadata using the
-methods above. Uses LEGEND defaults, such as ADLChargeDriftModel2016.
+Creates a `Simulation` from LEGEND metadata.
+
+The simulation is built from the diode metadata and, if available, the
+crystal metadata, with the LEGEND defaults, such as the
+`ADLChargeDriftModel2016`. `T` is the floating-point type, `Float32` if it is
+not given. The extension is loaded together with SolidStateDetectors.jl.
 
 ## Arguments
 * `data::LegendData`: LEGEND data structure containing metadata.
-* `detector::DetectorIdLike`: Identifier for the detector, in the form of a symbol.
+* `detector::DetectorIdLike`: Identifier of the detector. The crystal metadata is taken from the crystal named after the detector without its last character.
 * `diode_filename::String`: Path to the diode metadata file.
 * `xtal_filename::String`: Path to the crystal metadata file.
 * `diode_meta::PropDict`: Diode metadata as a `PropDict`.
-* `xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}`: Crystal metadata as a `PropDict` or `NoSuchPropsDBEntry` if not available.
-* `env::HPGeEnvironment`: Environment configuration for the detector. Default is `HPGeEnvironment()`: Vacuum and 77 K.
+* `xtal_meta::Union{PropDict, LegendDataManagement.NoSuchPropsDBEntry}`: Crystal metadata as a `PropDict`, or `NoSuchPropsDBEntry` if not available. Without crystal metadata a warning is printed and a constant impurity density of zero is used.
+* `env::HPGeEnvironment = HPGeEnvironment()`: Environment of the detector, by default a vacuum cryostat at 78 K (see [`HPGeEnvironment`](@ref)).
 
 ## Keywords
-* `operational_voltage::Number`: Operational voltage for the n+ contact. Accepts units, if non are given will interpret as `V`. If not provided, it will be taken from the metadata if available or defaulted.
-* `n_thickness::Number`: Thickness of the n+ contact in mm. Accepts units, if non are given will interpret as `mm`. If not provided, it will be taken from the metadata if available or defaulted.
-* `verbose::Bool`: Whether to print detailed information during the creation process. Default is `true`.
-* `allow_cylindrical_asymmetry::Bool`: Whether to allow geometry features that break the cylindrical (azimuthal) symmetry of the detector, such as a `crack` defined in the metadata `geometry.extra`. When `true` (default) and such a feature is present, the affected volume is cut from the semiconductor and contacts and the simulation grid is switched to a full 3D azimuthal range (`phi` from `0` to `360`). When `false`, these features are ignored and the simulation remains 2D (azimuthally symmetric).
+* `operational_voltage::Number`: Operating voltage of the n+ contact in V. Accepts units; a number without units is interpreted as `V`. If not provided, the recommended voltage of the L200 characterization or of the manufacturer from the metadata is used, otherwise 5000 V.
+* `n_thickness::Number`: Thickness of the n+ contact in mm. Accepts units; a number without units is interpreted as `mm`. If not provided, the FCCD of the 0νββ analysis or the manufacturer's value from the metadata is used, otherwise 1 mm.
+* `use_impurity_corrections::Bool = true`: Apply the corrections (`scale`, `offset`) of the impurity curve of the crystal metadata.
+* `allow_cylindrical_asymmetry::Bool = true`: Whether to allow geometry features that break the cylindrical (azimuthal) symmetry of the detector, such as a `crack` defined in the metadata `geometry.extra`. When `true` and such a feature is present, the affected volume is cut from the semiconductor and contacts and the simulation grid is switched to a full 3D azimuthal range (`phi` from `0` to `360`). When `false`, these features are ignored and the simulation remains 2D (azimuthally symmetric).
+* `verbose::Bool = true`: Print the values that are used for the thickness, voltage and impurity density, and whether they are defaults.
+* `ssd_config_filename::Union{Missing, AbstractString} = missing`: If given, write the SSD configuration to this YAML file.
+* `dicttype = OrderedDict{String,Any}`: Dictionary type of the SSD configuration.
 
+## Examples
+```julia
+using LegendDataManagement, SolidStateDetectors
+
+l200 = LegendData(:l200)
+sim = Simulation(l200, :V99000A)
+calculate_electric_potential!(sim)
+```
+
+See also [`HPGeEnvironment`](@ref).
 """
 function SolidStateDetectors.Simulation(data::LegendData, detector::DetectorIdLike, env::HPGeEnvironment = HPGeEnvironment(); kwargs...)
     Simulation{_SSDDefaultNumtype}(data, detector, env; kwargs...)

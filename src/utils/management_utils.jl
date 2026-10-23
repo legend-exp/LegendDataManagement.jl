@@ -1,7 +1,9 @@
 """
     get_peaksfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike)
-    get_peaksfilename(data::LegendData, filekey::FileKey, ch::ChannelIdLike) 
-Get the filename for the peaks data for a given channel.
+    get_peaksfilename(data::LegendData, filekey::FileKey, ch::ChannelIdLike)
+
+Deprecated. Returns the file name of the `peaks` tier data of a channel; use
+`data.tier[:peaks, category, period, run, ch]` instead.
 """
 function get_peaksfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike)
     Base.depwarn(
@@ -17,7 +19,9 @@ get_peaksfilename(data::LegendData, filekey::FileKey, ch::ChannelIdLike) = get_p
 """
     get_hitchfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike)
     get_hitchfilename(data::LegendData, filekey::FileKey, ch::ChannelIdLike)
-Get the filename for the hitch data for a given channel.
+
+Deprecated. Returns the file name of the `jlhit` tier data of a channel; use
+`data.tier[:jlhit, category, period, run, ch]` instead.
 """
 function get_hitchfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike)
     Base.depwarn(
@@ -35,7 +39,13 @@ get_hitchfilename(data::LegendData, filekey::FileKey, ch::ChannelIdLike) = get_h
 """
     get_mltrainfilename(data::LegendData, period::DataPeriodLike, category::DataCategoryLike)
     get_mltrainfilename(data::LegendData, filekey::FileKey)
-Get the filename for the machine learning training data.
+
+Returns the file name of the machine learning training data.
+
+The name is `data.tier[:jlqml, filekey]`, where `filekey` is the start file key
+of `category` in `period` and in the run whose number is that of the first
+analysis run of period `p03`. For a `FileKey` the period and the category of
+the file key are used.
 """
 function get_mltrainfilename end
 export get_mltrainfilename
@@ -48,6 +58,12 @@ get_mltrainfilename(data::LegendData, filekey::FileKey) = get_mltrainfilename(da
 
 
 
+"""
+    get_partition_channelinfo(data::LegendData, chinfo::Table, period::DataPeriodLike, category::DataCategoryLike; unfold_partitions::Bool = false)
+
+Deprecated. Use `channelinfo(data, period, category; explode_partitions)`
+instead.
+"""
 function get_partition_channelinfo(data::LegendData, chinfo::Table, period::DataPeriodLike, category::DataCategoryLike; unfold_partitions::Bool=false)
     Base.depwarn("`get_partition_channelinfo(data, chinfo, period, category; unfold_partitions)` is deprecated, " *
         "use `channelinfo(data, period, category; explode_partitions)` instead.", :get_partition_channelinfo)

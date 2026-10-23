@@ -7,19 +7,30 @@ const _data_config_envvar_name = "LEGEND_DATA_CONFIG"
 """
     struct SetupConfig
 
-Data configuration for an experimental setup.
+Data configuration for one experimental setup: a mapping from path prefixes to
+directories on disk.
 
-Supports
+Can be created from a `PropDict` with the entries `paths` and (optional)
+`dataset`, or by [`LegendDataConfig`](@ref) from a configuration file. Use
+[`data_path`](@ref) to resolve paths.
 
+## Fields
+* `paths::Vector{Pair{Vector{String}, String}}`: Pairs of a path prefix, split
+    into its components (e.g. `["tier", "raw"]`), and the directory the prefix
+    maps to. Sorted by prefix; the last matching prefix is used.
+* `dataset::String`: Name of the dataset that is used for the setup. Defaults
+    to `"valid"` if the configuration does not contain a `dataset` entry.
+
+## Examples
 ```julia
-data_path(setup, path_components)
-```
+using LegendDataManagement
 
-Examples:
-
-```julia
+config = LegendDataConfig("/path/to/config.json")
+setup = config.setups.l200
 data_path(setup, "tier", "raw", "cal", "p02", "r006", "l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5")
 ```
+
+See also [`LegendDataConfig`](@ref).
 """
 struct SetupConfig
     paths::Vector{Pair{Vector{String}, String}}
@@ -59,17 +70,35 @@ end
 """
     data_path(setup::SetupConfig, path_components::AbstractString...)
 
-Get the full absolute path for the given `path_components` as configured for
-`setup`.
+Returns the full absolute path for the given `path_components` as configured
+for `setup`.
 
-Converts between "/" and "\\" inside of path_components if necessary (for
-Windows compatibility).
+The path components are split at `"/"`. The directory configured for the last
+matching path prefix is used; an `ArgumentError` is thrown if no prefix
+matches.
+
+## Examples
+```julia
+using LegendDataManagement
+
+config = LegendDataConfig("/path/to/config.json")
+data_path(config.setups.l200, "tier", "raw", "cal", "p02", "r006")
+```
+
+See also [`SetupConfig`](@ref).
 """
 function data_path end
 export data_path
 
 Base.@deprecate setup_data_path(setup::SetupConfig, args...) data_path(setup, args...)
 export setup_data_path
+
+"""
+    setup_data_path(setup, path_components...)
+
+Deprecated. Use [`data_path`](@ref) instead.
+"""
+setup_data_path
 
 
 function data_path(setup::SetupConfig, path_components::AbstractString...)
@@ -89,7 +118,10 @@ Base.@deprecate data_path(setup::SetupConfig, path_components::AbstractVector{<:
 """
     abstract type AbstractSetupData
 
-Subtypes wrap SetupConfig for specific experiments.
+Supertype of types that wrap a [`SetupConfig`](@ref) for a specific
+experiment, e.g. [`LegendData`](@ref).
+
+Subtypes have to implement `LegendDataManagement.get_setup_config`.
 """
 abstract type AbstractSetupData end
 
@@ -97,7 +129,9 @@ abstract type AbstractSetupData end
 """
     LegendDataManagement.get_setup_config(data::AbstractSetupData)::SetupConfig
 
-Must be specialized for each subtype of [`AbstractSetupData`](@ref).
+Returns the [`SetupConfig`](@ref) of `data`.
+
+Has to be specialized for each subtype of [`AbstractSetupData`](@ref).
 """
 function get_setup_config end
 
@@ -105,7 +139,16 @@ function get_setup_config end
 """
     data_path(setup::AbstractSetupData, path_components::AbstractString...)
 
-Get the full absolute path for the given `path_components` as configured for `setup`.
+Returns the full absolute path for the given `path_components` as configured
+for `setup`, using the [`SetupConfig`](@ref) of `setup`.
+
+## Examples
+```julia
+using LegendDataManagement
+
+l200 = LegendData(:l200)
+data_path(l200, "tier", "raw", "cal", "p02", "r006")
+```
 """
 data_path(data::AbstractSetupData, path_components::AbstractString...) = data_path(get_setup_config(data), path_components...)
 Base.@deprecate data_path(data::AbstractSetupData, path_components::AbstractVector{<:AbstractString}) data_path(data, path_components...)
@@ -117,19 +160,26 @@ Base.@deprecate setup_data_path(setup::AbstractSetupData, args...) data_path(set
 """
     struct LegendDataConfig
 
-Data configuration multiple experimental setups.
+    LegendDataConfig()
+    LegendDataConfig(config_filename::AbstractString)
+    LegendDataConfig(config_filenames::AbstractArray{<:AbstractString})
+    LegendDataConfig(p::PropDict)
+
+Data configuration for multiple experimental setups.
 
 Contains a single field `setups::PropertyDict{Symbol,SetupConfig}`.
 
 Can be read from a config file via `LegendDataConfig(config_filename[s])`, or
 simply `LegendDataConfig()` if the environment variable
-`\$$_data_config_envvar_name` is set. `\$$_data_config_envvar_name` may
-be a list of colon-separated config filenames, which are applied/merged in
-reverse order (analog to the order of prioritiy in `\$PATH` and similar).
+`\$$_data_config_envvar_name` is set; an `ErrorException` is thrown if it is
+not set. `\$$_data_config_envvar_name` may be a list of colon-separated config
+filenames, which are applied/merged in reverse order (analogous to the order
+of priority in `\$PATH` and similar).
 
-Example:
-
+## Examples
 ```julia
+using LegendDataManagement
+
 config = LegendDataConfig("/path/to/config.json")
 setup = config.setups.l200
 data_path(setup, "tier", "raw", "cal", "p02", "r006", "l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5")

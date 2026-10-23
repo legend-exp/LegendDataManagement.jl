@@ -4,9 +4,12 @@
 """
     struct LegendReport
 
-Represents a LEGEND report.
+Content of a LEGEND report, e.g. of a data processing report, that can be
+shown as plain text, Markdown or HTML.
 
-Don't instantiate directly, use [`lreport()`](@ref)
+Do not instantiate directly, use [`lreport`](@ref).
+
+See also [`lreport!`](@ref), [`writelreport`](@ref).
 """
 struct LegendReport
     _contents::AbstractVector
@@ -80,12 +83,14 @@ end
     lreport()
     lreport(contents...)
 
-Generate a LEGEND report, e.g. a data processing report.
+Generates a LEGEND report, e.g. a data processing report, from the given
+`contents`.
 
-Use [`lreport!(rpt, contents...)`](@ref) to add more content to a report.
+The contents can be strings (Markdown), tables, plots and other objects. Use
+[`lreport!`](@ref) to add more content to a report and
+[`writelreport`](@ref) to write it to a file.
 
-Example:
-
+## Examples
 ```julia
 using LegendDataManagement, StructArrays, IntervalSets, Plots
 
@@ -132,7 +137,9 @@ end
 """
     lreport!(rpt::LegendReport, contents...)
 
-Add more content to report `rpt`. See [`lreport`](@ref) for an example.
+Adds more content to the report `rpt` and returns `rpt`.
+
+See [`lreport`](@ref) for an example.
 """
 function lreport! end
 export lreport!
@@ -175,7 +182,7 @@ lreport!(rpt::LegendReport, @nospecialize(number::Quantity{<:Real})) = lreport!(
 """
     LegendDataManagement.lreport_for_show!(rpt::LegendReport, mime::MIME, content)
 
-Add the contents of `content` to `rpt` in a way that is optimized for being
+Adds the contents of `content` to `rpt` in a way that is optimized for being
 displayed (e.g. via `show`) with the given `mime` type.
 
 `show(output, mime, rpt)` first transforms `rpt` by converting all contents of
@@ -185,7 +192,7 @@ Defaults to `lreport!(rpt, content)`, except for tables
 (`Tables.istable(content) == true`), which are converted to Markdown tables
 by default for uniform appearance.
 
-`lreport_for_show!` is not inteded to be called by users, but to be
+`lreport_for_show!` is not intended to be called by users, but to be
 specialized for specific types of content `content`. Content types not already
 supported will primarily require specialization of
 
@@ -193,7 +200,7 @@ supported will primarily require specialization of
 lreport_for_show!(rpt::LegendReport, ::MIME"text/markdown", content::SomeType)
 ```
 
-In some cases it may be desireable to specialize `lreport_for_show!` for
+In some cases it may be desirable to specialize `lreport_for_show!` for
 MIME types like `MIME"text/html"` and `MIME"text/plain"` as well.
 """
 function lreport_for_show! end
@@ -244,7 +251,13 @@ end
     writelreport(filename::AbstractString, rpt::LegendReport)
     writelreport(filename::AbstractString, mime::MIME, rpt::LegendReport)
 
-Write lreport `rpt` to file `filename`.
+Writes the report `rpt` to the file `filename`.
+
+The format is given by `mime`. Without `mime` it is determined from the
+extension of `filename`, e.g. `.md` for Markdown, `.html` for HTML and `.txt`
+for plain text.
+
+See [`lreport`](@ref) for an example.
 """
 function writelreport end
 export writelreport

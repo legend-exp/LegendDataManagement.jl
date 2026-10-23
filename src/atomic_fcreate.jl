@@ -26,9 +26,9 @@ _rand_fname_tag() = String(rand(b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJ
 
 
 """
-    function atomic_fcreate(
+    atomic_fcreate(
         body, filenames::AbstractString...;
-        create_dirs::Bool = true, overwrite::Bool = true, delete_on_error::Bool=true
+        create_dirs::Bool = true, overwrite::Bool = true, delete_on_error::Bool = true
     )
 
 Creates `filenames` in an atomic fashion.
@@ -49,9 +49,15 @@ Throws an error if only some of the files exist and `overwrite` is `false`.
 
 Returns `nothing`.
 
-Example:
+## Keywords
+* `create_dirs::Bool = true`: Create missing directories of `filenames`.
+* `overwrite::Bool = true`: Replace files that already exist.
+* `delete_on_error::Bool = true`: Delete the temporary files if `body` throws.
 
+## Examples
 ```julia
+using LegendDataManagement
+
 atomic_fcreate("foo.txt", "bar.txt") do foo, bar
     write(foo, "Hello")
     write(bar, "World")
