@@ -109,6 +109,13 @@ A pair `tier => property function` evaluates the function on another tier and ap
 raw = read_ldata(l200, :raw, filekey, det; filterby = :jlhit => @pf($is_valid_hit))
 ```
 
+A tuple of such pairs keeps only the rows that pass every one of them. Without a detector, each detector of the file is filtered by its own rows in the filter tiers.
+
+```julia
+raw = read_ldata(l200, :raw, :cal, :p03, :r000, det;
+                 filterby = (:jlhit => @pf($e_cusp > 100), :jldsp => @pf($blmean > 1000)))
+```
+
 With a vector of timestamps (`Unitful.Time`) after the `FileKey`, only the rows with these times are read, in the order of the timestamps. The time of a row is its `timestamp` column, or `tstart` in an event tier. A timestamp without a row throws an `ArgumentError`, or is skipped with `ignore_missing = true`.
 
 ```@example ldm
@@ -172,10 +179,14 @@ dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), det)
 
 ## Parallel Reading
 
-For several DAQ cycles, runs or timestamp groups, `parallel = true` reads the files on the workers of the worker pool `wpool` (default `Distributed.default_worker_pool()`). The workers load LegendDataManagement and LegendHDF5IO before the first read.
+For several DAQ cycles, runs or timestamp groups, `parallel = true` reads the files on the workers of the worker pool `wpool` (default `Distributed.default_worker_pool()`). The workers have to be added beforehand; they load LegendDataManagement and LegendHDF5IO before the first read.
 
 ```julia
-dsp = read_ldata(l200, :jldsp, :cal, :p03, :r000, det; parallel = true)
+using Distributed
+addprocs(4)
+
+dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), det; parallel = true)
+dsp = read_ldata(l200, :jldsp, :cal, DataPeriod(3), det; parallel = true, wpool = WorkerPool(workers()[1:2]))
 ```
 
 ## Files in the Python Layout
