@@ -397,7 +397,7 @@ function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunSelLi
                     all(in(ranking), vals) || throw(ArgumentError("Unknown $col $(setdiff(vals, ranking)) of detector $det: expected one of $ranking"))
                     ranking[minimum(v -> findfirst(==(v), ranking), vals)]
                 else
-                    allequal(vals) || throw(ArgumentError("$col of detector $det differs between the runs of period $period: $(unique(vals))"))
+                    all(isequal(first(vals)), vals) || throw(ArgumentError("$col of detector $det differs between the runs of period $period: $(unique(vals))"))
                     first(vals)
                 end
             end
@@ -412,6 +412,8 @@ function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunSelLi
         chmap = data.metadata(sel).hardware.configuration.channelmaps
         diodmap = data.metadata.hardware.detectors.germanium.diodes
         dpcfg = data.metadata(sel).datasets.statuses
+        geometry = data.metadata.hardware.geometry
+        geomap = if extended && !isa(geometry, NoSuchPropsDBEntry) merge(geometry.hpge(sel), geometry.spms(sel)) else PropDict() end
         
         channel_keys = filter(s -> isnothing(match(_bf862_expr, string(s))), keys(chmap))
 
@@ -501,7 +503,15 @@ function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunSelLi
                     measurement(fccds.fccd_in_mm.value, maximum(values(fccds.fccd_in_mm.uncertainty))) * u"mm"
                 end
                 active_volume::Unitful.Volume{<:Measurement{Float64}} = if haskey(diodmap, k) get_active_volume(diodmap[k], ustrip(u"mm", fccd)) else measurement(NaN, NaN) * u"cm^3" end
-                c = merge(c, (; cc4, cc4ch, daqcrate, daqcard, hvcard, hvch, enrichment, mass, total_volume, active_volume, fccd))
+
+                coordinates = get(get(geomap, k, PropDict()), :coordinates, PropDict())
+                x::Unitful.Length{Float64} = get(coordinates, :x, NaN * u"mm")
+                y::Unitful.Length{Float64} = get(coordinates, :y, NaN * u"mm")
+                z::Unitful.Length{Float64} = get(coordinates, :z, NaN * u"mm")
+                radius::Unitful.Length{Float64} = get(coordinates, :radius, NaN * u"mm")
+                angle::typeof(1.0u"°") = get(coordinates, :angle, NaN * u"°")
+                barrel::Symbol = Symbol(get(get(geomap, k, PropDict()), :barrel, ""))
+                c = merge(c, (; cc4, cc4ch, daqcrate, daqcard, hvcard, hvch, enrichment, mass, total_volume, active_volume, fccd, x, y, z, radius, angle, barrel))
             end
             c
         end
