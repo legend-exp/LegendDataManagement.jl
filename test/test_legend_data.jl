@@ -62,7 +62,7 @@ include("testing_utils.jl")
         @test channelinfo(l200, (filekey.period, :cal)) == period_chinfo
         @test channelinfo(l200, ("p02", "cal")) == period_chinfo
         i = findfirst(==(:is_bb_like), columnnames(chinfo))
-        @test columnnames(period_chinfo) == (columnnames(chinfo)[1:i]..., :partition, columnnames(chinfo)[i+1:end]...)
+        @test columnnames(period_chinfo) == columnnames(chinfo) && i + 1 == findfirst(==(:partition), columnnames(chinfo))
         @test period_chinfo.detector == chinfo.detector
         # Detector B99000A is usable in run r000 only: the period takes the best status over its runs
         @test only(filterby(@pf $detector == DetectorId(:B99000A))(chinfo).usability) == :off
@@ -85,9 +85,14 @@ include("testing_utils.jl")
         exploded = channelinfo(l200, filekey.period, :cal; system = :geds, explode_partitions = true)
         @test exploded.partition isa Vector{DataPartition}
         @test exploded.detector == geds.detector && all(==(DataPartition(:calpartition001a)), exploded.partition)
-        @test_throws "explode_partitions needs a period selection" channelinfo(l200, filekey; explode_partitions = true)
-        # no partitions of the run-level channel info
-        @test !(:partition in columnnames(chinfo))
+        # the partition of each detector that contains the run
+        @test isequal(chinfo.partition, channelinfo(l200, ValiditySelection(filekey)).partition)
+        run_chinfo = channelinfo(l200, filekey.period, filekey.run, :cal; system = :geds)
+        @test isequal(run_chinfo, filterby(@pf $system == :geds)(chinfo))
+        @test columnnames(run_chinfo) == columnnames(geds)
+        @test run_chinfo.partition == [only(partitioninfo(l200, det, :cal, filekey.period, filekey.run)) for det in run_chinfo.detector]
+        @test all(==(DataPartition(:calpartition001a)), run_chinfo.partition)
+        @test channelinfo(l200, filekey.period, filekey.run, :cal; system = :geds, explode_partitions = true).partition == DataPartition.(fill(:calpartition001a, length(run_chinfo)))
 
         # detectors and channels as arguments, one or a vector
         @test channelinfo(l200, filekey.period, :cal, :V99000A).partition == [DataPartition(:calpartition001a)]

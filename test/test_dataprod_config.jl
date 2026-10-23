@@ -106,6 +106,16 @@ include("testing_utils.jl")
             @test all(isempty, chinfo.partition)
             exploded = channelinfo(p03only, DataPeriod(3), :cal; system = :geds, explode_partitions = true)
             @test isempty(exploded) && exploded.partition isa Vector{DataPartition}
+            @test all(ismissing, channelinfo(p03only, DataPeriod(3), DataRun(0), :cal; system = :geds).partition)
+        end
+
+        # a category without groupings: the partitions are all missing
+        rm(joinpath(meta, "datasets", "cal_groupings.yaml"))
+        withenv("LEGEND_DATA_CONFIG" => "$override:$julia_config") do
+            nogroupings = LegendData(:l200)
+            @test all(ismissing, channelinfo(nogroupings, (DataPeriod(2), DataRun(6), :cal)).partition)
+            @test all(ismissing, channelinfo(nogroupings, DataPeriod(2), :cal).partition)
+            @test isempty(channelinfo(nogroupings, DataPeriod(2), :cal; explode_partitions = true))
         end
     end
 

@@ -362,12 +362,16 @@ runs of that category in the period (only the analysis runs if
 `*_status` columns take the best value over the runs, all other columns must
 be identical in every run.
 
-The table of a period selection has the column `partition`: the sorted
-[`DataPartition`](@ref)s of each detector that contain the period, from
-[`partitioninfo`](@ref); empty for a detector in no partition. With
-`explode_partitions = true` the table has one row per detector and partition,
-with a single `DataPartition` in `partition`; detectors in no partition are
-left out. `explode_partitions` throws an `ArgumentError` for other selections.
+The table has the column `partition` after `is_bb_like`, from
+[`partitioninfo`](@ref). For a period selection `(period, category)` it holds
+the sorted [`DataPartition`](@ref)s of each detector that contain the period,
+empty for a detector in no partition. For every other selection it holds the
+one `DataPartition` of each detector that contains the run, `missing` for a
+detector in no partition. If the metadata has no groupings of the category
+(`datasets/<category>_groupings`), `partition` is `missing` for every
+detector. With `explode_partitions = true` the table has one row per detector
+and partition, with a single `DataPartition` in `partition`; detectors in no
+partition are left out.
 """
 function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunSelLike, PeriodSelLike}; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, sort_by::Symbol=:detector, extended::Bool = false, verbose::Bool = true, only_analysis_runs::Bool = true, explode_partitions::Bool = false)
     if sel isa Tuple
@@ -385,7 +389,7 @@ function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunSelLi
             fks = [r.startkey for r in getproperty(rinfo, Symbol(category)) if !ismissing(r.startkey) && (!only_analysis_runs || r.is_analysis_run)]
             isempty(fks) && throw(ArgumentError("No $(only_analysis_runs ? "analysis " : "")runs of category $category in period $period"))
             run_rows = reduce(vcat, [channelinfo(data, fk; extended, verbose) for fk in fks])
-            cols = propertynames(run_rows)
+            cols = filter(!=(:partition), propertynames(run_rows))
             function merge_column(col::Symbol, det::DetectorId)
                 vals = getproperty(run_rows, col)[run_rows.detector .== det]
                 if haskey(_channelinfo_status_ranking, col)
@@ -398,9 +402,12 @@ function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunSelLi
                 end
             end
             merged = Table(StructVector([NamedTuple{cols}(map(col -> merge_column(col, det), cols)) for det in unique(run_rows.detector)]))
-            partition = Vector{DataPartition}[partitioninfo(data, det, category, period) for det in merged.detector]
-            i = findfirst(==(:is_bb_like), cols)
-            return StructVector(merge(columns(merged)[cols[1:i]], (; partition), columns(merged)[cols[i+1:end]]))
+            partition = if _has_groupings(data, category)
+                Vector{DataPartition}[partitioninfo(data, det, category, period) for det in merged.detector]
+            else
+                fill(missing, length(merged))
+            end
+            return StructVector(columns(_with_partitions(merged, partition)))
         end
         chmap = data.metadata(sel).hardware.configuration.channelmaps
         diodmap = data.metadata.hardware.detectors.germanium.diodes
@@ -499,7 +506,14 @@ function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunSelLi
             c
         end
 
-        StructVector(make_row.(channel_keys))
+        rows = Table(StructVector(make_row.(channel_keys)))
+        fk = sel isa FileKey ? sel : find_filekey(data, sel.timestamp)
+        partition = if _has_groupings(data, sel.category)
+            Union{Missing, DataPartition}[_run_partition(data, det, DataCategory(sel.category), fk.period, fk.run) for det in rows.detector]
+        else
+            fill(missing, length(rows))
+        end
+        StructVector(columns(_with_partitions(rows, partition)))
     end
     # apply filters and masks
     if !(system == :all)
@@ -518,18 +532,36 @@ function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunSelLi
         chinfo = chinfo |> sortby(ljl_propfunc("string($sort_by)"))
     end
     if explode_partitions
-        sel isa Tuple || throw(ArgumentError("explode_partitions needs a period selection (period, category), got $sel"))
-        return _explode_partitions(Table(chinfo))
+        sel isa Tuple && return _explode_partitions(Table(chinfo))
+        rows = findall(!ismissing, chinfo.partition)
+        return Table(merge(columns(Table(chinfo)[rows]), (; partition = DataPartition[p for p in chinfo.partition[rows]])))
     end
     return Table(chinfo)
 end
 export channelinfo
 
+_has_groupings(data::LegendData, category::DataCategoryLike) = haskey(data.metadata.datasets, Symbol("$(DataCategory(category))_groupings"))
+
+# The data partition of category `category` of detector `det` that contains the run, `missing`
+# if none does.
+function _run_partition(data::LegendData, det::DetectorIdLike, category::DataCategory, period::DataPeriod, run::DataRun)
+    parts = partitioninfo(data, det, category, period, run)
+    length(parts) <= 1 || throw(ArgumentError("Run $run of period $period is in more than one $category partition of detector $det: $parts"))
+    isempty(parts) ? missing : only(parts)
+end
+
+# The channel information `chinfo` with the column `partition` after `is_bb_like`.
+function _with_partitions(chinfo::Table, partition::AbstractVector)
+    cols = columnnames(chinfo)
+    i = findfirst(==(:is_bb_like), cols)
+    Table(merge(columns(chinfo)[cols[1:i]], (; partition), columns(chinfo)[cols[i+1:end]]))
+end
+
 # The channel information `chinfo` with a column `partition` of partition vectors as one row
 # per detector and partition, in the order of the detectors and of their partitions.
 function _explode_partitions(chinfo::Table)
-    rows = Int[i for (i, parts) in pairs(chinfo.partition) for _ in parts]
-    partition = DataPartition[p for parts in chinfo.partition for p in parts]
+    rows = Int[i for (i, parts) in pairs(chinfo.partition) if !ismissing(parts) for _ in parts]
+    partition = DataPartition[p for parts in chinfo.partition if !ismissing(parts) for p in parts]
     Table(merge(columns(chinfo[rows]), (; partition)))
 end
 
