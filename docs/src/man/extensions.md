@@ -159,3 +159,34 @@ plot(l200, filekey, ts, ch)        # with a given file key `filekey`
 
 * For a channel, the waveform properties `plot_waveform` (default `[:waveform_presummed]`) are drawn. If the file key is not given, it is found with [`find_filekey`](@ref). The keyword `show_unixtime = true` shows the Unix time in the title.
 * Without a channel, the recipe looks the event up in the data. For a `cal` event, the waveform of the HPGe channel that triggered is drawn, and an error is thrown if that channel is not an HPGe channel, or not processable with `only_processable = true` (default). For a `phy` event, the waveforms of all channels of each system in `system` are drawn, one subplot per system. `system` maps system names to the waveform properties; the default is `Dict(:geds => [:waveform_presummed], :spms => [:waveform_bit_drop])`.
+
+## Makie Plots with LegendMakie
+
+[LegendMakie.jl](https://github.com/legend-exp/LegendMakie.jl) has its own extension for LegendDataManagement, which is loaded together with LegendMakie and a Makie backend. It provides the same two kinds of plots through `lplot`. These methods are defined and documented in LegendMakie.jl.
+
+```julia
+using LegendDataManagement, LegendHDF5IO
+using LegendMakie, CairoMakie
+
+l200 = LegendData(:l200)
+filekey = FileKey("l200-p03-r000-cal-20230311T235840Z")
+
+pars = l200.par.ppars.ecal(filekey)
+chinfo = channelinfo(l200, filekey; system = :geds, only_processable = true)
+
+fig = lplot(chinfo, pars, [:e_cusp_ctc, :fwhm])
+```
+
+`lplot(chinfo, pars, properties)` takes the same arguments as the parameter overview recipe above: the channel table `chinfo` with the detectors on the x axis, a `PropDict` `pars` with the detector IDs as keys, and the property path `properties` (empty if `pars[detector]` is the value itself).
+
+```julia
+using Unitful
+
+ts = 1.6785791257987175e9u"s"
+
+fig = lplot(l200, ts)                       # event display; the channels are found from the data
+fig = lplot(l200, ts, DetectorId(:V99000A)) # waveforms of one detector
+```
+
+* With a detector (a [`DetectorId`](@ref) or a detector name), the waveform properties `plot_waveform` (default `[:waveform_presummed]`) of the tier `plot_tier` (default `DataTier(:raw)`) are drawn.
+* Without a detector, the event is looked up in the data as for the Plots recipe. For a `cal` event, the triggered HPGe detector is drawn (it has to be processable with `only_processable = true`, the default); for a `phy` event, all channels of the systems in `system` (default `[:geds, :spms]`) are drawn.
