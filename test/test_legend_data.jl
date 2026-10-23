@@ -61,7 +61,8 @@ include("testing_utils.jl")
         @test period_chinfo isa TypedTables.Table
         @test channelinfo(l200, (filekey.period, :cal)) == period_chinfo
         @test channelinfo(l200, ("p02", "cal")) == period_chinfo
-        @test columnnames(period_chinfo) == (columnnames(chinfo)..., :partition)
+        i = findfirst(==(:is_bb_like), columnnames(chinfo))
+        @test columnnames(period_chinfo) == (columnnames(chinfo)[1:i]..., :partition, columnnames(chinfo)[i+1:end]...)
         @test period_chinfo.detector == chinfo.detector
         # Detector B99000A is usable in run r000 only: the period takes the best status over its runs
         @test only(filterby(@pf $detector == DetectorId(:B99000A))(chinfo).usability) == :off

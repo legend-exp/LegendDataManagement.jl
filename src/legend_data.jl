@@ -362,14 +362,12 @@ runs of that category in the period (only the analysis runs if
 `*_status` columns take the best value over the runs, all other columns must
 be identical in every run.
 
-If the metadata has groupings of the category (`datasets/<category>_groupings`),
-the table of a period selection has the column `partition`: the sorted
-[`DataPartition`](@ref)s of each detector that contain the period (see
-[`partitioninfo`](@ref)), empty for a detector in no partition. With
+The table of a period selection has the column `partition`: the sorted
+[`DataPartition`](@ref)s of each detector that contain the period, from
+[`partitioninfo`](@ref); empty for a detector in no partition. With
 `explode_partitions = true` the table has one row per detector and partition,
 with a single `DataPartition` in `partition`; detectors in no partition are
-left out. `explode_partitions` throws an `ArgumentError` for other selections
-and for a category without groupings.
+left out. `explode_partitions` throws an `ArgumentError` for other selections.
 """
 function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunSelLike, PeriodSelLike}; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, sort_by::Symbol=:detector, extended::Bool = false, verbose::Bool = true, only_analysis_runs::Bool = true, explode_partitions::Bool = false)
     if sel isa Tuple
@@ -400,8 +398,9 @@ function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunSelLi
                 end
             end
             merged = Table(StructVector([NamedTuple{cols}(map(col -> merge_column(col, det), cols)) for det in unique(run_rows.detector)]))
-            haskey(data.metadata.datasets, Symbol("$(category)_groupings")) || return StructVector(columns(merged))
-            return StructVector(columns(_with_partitions(data, merged, period, category)))
+            partition = Vector{DataPartition}[partitioninfo(data, det, category, period) for det in merged.detector]
+            i = findfirst(==(:is_bb_like), cols)
+            return StructVector(merge(columns(merged)[cols[1:i]], (; partition), columns(merged)[cols[i+1:end]]))
         end
         chmap = data.metadata(sel).hardware.configuration.channelmaps
         diodmap = data.metadata.hardware.detectors.germanium.diodes
@@ -520,19 +519,11 @@ function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunSelLi
     end
     if explode_partitions
         sel isa Tuple || throw(ArgumentError("explode_partitions needs a period selection (period, category), got $sel"))
-        hasproperty(chinfo, :partition) || throw(ArgumentError("explode_partitions: no groupings of category $(sel[2]) in the metadata of $(data.name)"))
         return _explode_partitions(Table(chinfo))
     end
     return Table(chinfo)
 end
 export channelinfo
-
-# The channel information `chinfo` with the column `partition`: the sorted data partitions of
-# category `category` of each detector that contain the period `period`.
-function _with_partitions(data::LegendData, chinfo::Table, period::DataPeriod, category::DataCategory)
-    partition = Vector{DataPartition}[partitioninfo(data, det, category, period) for det in chinfo.detector]
-    Table(merge(columns(chinfo), (; partition)))
-end
 
 # The channel information `chinfo` with a column `partition` of partition vectors as one row
 # per detector and partition, in the order of the detectors and of their partitions.

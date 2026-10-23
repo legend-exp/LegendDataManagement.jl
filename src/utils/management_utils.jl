@@ -51,7 +51,8 @@ get_mltrainfilename(data::LegendData, filekey::FileKey) = get_mltrainfilename(da
 function get_partition_channelinfo(data::LegendData, chinfo::Table, period::DataPeriodLike, category::DataCategoryLike; unfold_partitions::Bool=false)
     Base.depwarn("`get_partition_channelinfo(data, chinfo, period, category; unfold_partitions)` is deprecated, " *
         "use `channelinfo(data, period, category; explode_partitions)` instead.", :get_partition_channelinfo)
-    t = _with_partitions(data, chinfo, DataPeriod(period), DataCategory(category))
+    partition = Vector{DataPartition}[partitioninfo(data, det, category, DataPeriod(period)) for det in chinfo.detector]
+    t = Table(merge(columns(chinfo), (; partition)))
     return unfold_partitions ? _explode_partitions(t) : t
 end
 export get_partition_channelinfo
