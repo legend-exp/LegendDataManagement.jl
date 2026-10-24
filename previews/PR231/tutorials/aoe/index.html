@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>A/E Calibration · LegendDataManagement.jl</title><meta name="title" content="A/E Calibration · LegendDataManagement.jl"/><meta property="og:title" content="A/E Calibration · LegendDataManagement.jl"/><meta property="twitter:title" content="A/E Calibration · LegendDataManagement.jl"/><meta name="description" content="Documentation for LegendDataManagement.jl."/><meta property="og:description" content="Documentation for LegendDataManagement.jl."/><meta property="twitter:description" content="Documentation for LegendDataManagement.jl."/><meta property="og:url" content="https://legend-exp.github.io/LegendDataManagement.jl/stable/tutorials/aoe/"/><meta property="twitter:url" content="https://legend-exp.github.io/LegendDataManagement.jl/stable/tutorials/aoe/"/><link rel="canonical" href="https://legend-exp.github.io/LegendDataManagement.jl/stable/tutorials/aoe/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.63.2/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">LegendDataManagement.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Manual</span><ul><li><a class="tocitem" href="../../man/legenddata/">Configuration and LegendData</a></li><li><a class="tocitem" href="../../man/identifiers/">Identifiers and FileKeys</a></li><li><a class="tocitem" href="../../man/tiers_files/">Data Tiers and Files</a></li><li><a class="tocitem" href="../../man/read_data/">Reading Data</a></li><li><a class="tocitem" href="../../man/metadata_validity/">Metadata and Validity</a></li><li><a class="tocitem" href="../../man/channel_run_info/">Channel, Run and Partition Information</a></li><li><a class="tocitem" href="../../man/exposure/">Exposure and Livetime</a></li><li><a class="tocitem" href="../../man/parameters/">Parameters and Property Files</a></li><li><a class="tocitem" href="../../man/propfuncs/">Property Functions and Expressions</a></li><li><a class="tocitem" href="../../man/reports_utils/">Reports and Utilities</a></li><li><a class="tocitem" href="../../man/extensions/">Extensions</a></li><li><a class="tocitem" href="../../man/juleana/">Use in Juleana.jl</a></li></ul></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../energy/">Energy Calibration</a></li><li class="is-active"><a class="tocitem" href>A/E Calibration</a><ul class="internal"><li><a class="tocitem" href="#Setup"><span>Setup</span></a></li><li><a class="tocitem" href="#Selecting-a-Run,-a-Detector-and-a-Partition"><span>Selecting a Run, a Detector and a Partition</span></a></li><li><a class="tocitem" href="#Reading-Data-and-Applying-the-Energy-Calibration"><span>Reading Data and Applying the Energy Calibration</span></a></li><li><a class="tocitem" href="#Configuration"><span>Configuration</span></a></li><li><a class="tocitem" href="#Raw-A/E"><span>Raw A/E</span></a></li><li><a class="tocitem" href="#Compton-Band-Fits-and-A/E-Correction"><span>Compton Band Fits and A/E Correction</span></a></li><li><a class="tocitem" href="#Charge-Trapping-Correction-of-A/E"><span>Charge-Trapping Correction of A/E</span></a></li><li><a class="tocitem" href="#Low-A/E-Cut"><span>Low A/E Cut</span></a></li><li><a class="tocitem" href="#Survival-Fractions"><span>Survival Fractions</span></a></li><li><a class="tocitem" href="#Storing-Results"><span>Storing Results</span></a></li><li><a class="tocitem" href="#Applying-the-Stored-A/E-Function-and-Cut"><span>Applying the Stored A/E Function and Cut</span></a></li></ul></li></ul></li><li><a class="tocitem" href="../../api/">API</a></li><li><a class="tocitem" href="../../LICENSE/">LICENSE</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>A/E Calibration</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>A/E Calibration</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/legend-exp/LegendDataManagement.jl" title="View the repository on GitHub"><span class="docs-icon fa-brands"></span><span class="docs-label is-hidden-touch">GitHub</span></a><a class="docs-navbar-link" href="https://github.com/legend-exp/LegendDataManagement.jl/blob/main/docs/src/tutorials/aoe_lit.jl" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="A/E-Calibration"><a class="docs-heading-anchor" href="#A/E-Calibration">A/E Calibration</a><a id="A/E-Calibration-1"></a><a class="docs-heading-anchor-permalink" href="#A/E-Calibration" title="Permalink"></a></h1><p>This tutorial calibrates and cuts the A/E pulse-shape parameter of one germanium detector from a calibration run with a Th-228 source. A/E is the ratio of the maximum current amplitude A to the energy E of a waveform. Multi-site events have a lower A/E than single-site events, so a cut on A/E separates them. The tutorial starts from the energy calibration stored by the <a href="../energy/#Energy-Calibration">Energy Calibration</a> tutorial and uses <a href="https://github.com/legend-exp/LegendSpecFits.jl">LegendSpecFits.jl</a> for the fits.</p><p>The LegendTestData files used by the live examples of this page contain only a handful of events. The steps that read data and handle parameter files run on them. The fitting steps need the statistics of a real calibration run of a LEGEND data production, so they are shown as code that is not executed here.</p><h2 id="Setup"><a class="docs-heading-anchor" href="#Setup">Setup</a><a id="Setup-1"></a><a class="docs-heading-anchor-permalink" href="#Setup" title="Permalink"></a></h2><p>The environment variable <code>LEGEND_DATA_CONFIG</code> points to the configuration files of the data production, as described in the <a href="../energy/#Energy-Calibration">Energy Calibration</a> tutorial.</p><pre><code class="language-julia hljs">ENV[&quot;LEGEND_DATA_CONFIG&quot;] = &quot;&lt;path-to-production&gt;/config.json&quot;
+
+using LegendDataManagement
+using LegendHDF5IO
+using LegendSpecFits
+using PropDicts
+using PropertyFunctions
+using TypedTables
+using Unitful
+using Measurements
+using StatsBase
+using Statistics</code></pre><p>The live examples need all of these packages except LegendSpecFits.jl, StatsBase.jl and Statistics.</p><pre><code class="language-julia hljs">using LegendDataManagement
+using LegendHDF5IO
+using PropDicts
+using PropertyFunctions
+using TypedTables
+using Unitful
+using Measurements
+
+l200 = LegendData(:l200);</code></pre><h2 id="Selecting-a-Run,-a-Detector-and-a-Partition"><a class="docs-heading-anchor" href="#Selecting-a-Run,-a-Detector-and-a-Partition">Selecting a Run, a Detector and a Partition</a><a id="Selecting-a-Run,-a-Detector-and-a-Partition-1"></a><a class="docs-heading-anchor-permalink" href="#Selecting-a-Run,-a-Detector-and-a-Partition" title="Permalink"></a></h2><p>The channel information of a detector holds its A/E status and the data partition it belongs to. We use the metadata-only toy period <code>p02</code> of the test data; <code>mfk</code> is a file key of the toy production in the test metadata (period 2, run 6, category <code>cal</code>).</p><pre><code class="language-julia hljs">det_meta = DetectorId(:V99000A)
+chinfo_det = channelinfo(l200, mfk, det_meta)
+(chinfo_det.detector, chinfo_det.low_aoe_status, chinfo_det.partition)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(DetectorId(&quot;V99000A&quot;), :valid, DataPartition(calpartition001a))</code></pre><p>A/E parameters are determined for a data partition, which groups runs of one detector. <a href="../../api/#LegendDataManagement.partitioninfo"><code>partitioninfo</code></a> lists the runs of the partition.</p><pre><code class="language-julia hljs">partinfo = partitioninfo(l200, det_meta, chinfo_det.partition)
+partinfo.run</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">8-element Vector{DataRun}:
+ DataRun(0)
+ DataRun(1)
+ DataRun(2)
+ DataRun(3)
+ DataRun(4)
+ DataRun(5)
+ DataRun(6)
+ DataRun(7)</code></pre><div class="admonition is-info" id="Metadata-and-tier-files-of-the-test-data-2ede862ef30d5974"><header class="admonition-header">Metadata and tier files of the test data<a class="admonition-anchor" href="#Metadata-and-tier-files-of-the-test-data-2ede862ef30d5974" title="Permalink"></a></header><div class="admonition-body"><p>The test data hold metadata for the toy period <code>p02</code> and tier files for period <code>p18</code>. <code>fk</code> is a file key of the test data with tier files on disk (period 18, run 0, category <code>cal</code>) and <code>det</code> a detector ID with data in these files. The following steps read the tier files with <code>fk</code> and <code>det</code>. The partition runs of the toy period only demonstrate the selection; the tutorial uses the data of the first file <code>fk</code> only.</p></div></div><p>For the calibration run of a production, the selection is the same as in the <a href="../energy/#Energy-Calibration">Energy Calibration</a> tutorial. The partition comes from the channel information. In the code below, <code>period</code>, <code>run</code>, <code>filekey</code> and <code>det</code> refer to the selected calibration run and one of its detectors, and <code>out_dir</code> is the directory that holds the files written by the energy tutorial. The code reads the data of the selected run only. The rows of <code>partinfo</code> list the other runs of the partition.</p><pre><code class="language-julia hljs">period, run = DataPeriod(&lt;period&gt;), DataRun(&lt;run&gt;)
+filekey = start_filekey(l200, (period, run, :cal))
+det = :&lt;detector&gt;
+chinfo_det = channelinfo(l200, filekey, det)
+partinfo = partitioninfo(l200, det, chinfo_det.partition)
+out_dir = joinpath(tempdir(), &quot;ldm_tutorial&quot;)</code></pre><h2 id="Reading-Data-and-Applying-the-Energy-Calibration"><a class="docs-heading-anchor" href="#Reading-Data-and-Applying-the-Energy-Calibration">Reading Data and Applying the Energy Calibration</a><a id="Reading-Data-and-Applying-the-Energy-Calibration-1"></a><a class="docs-heading-anchor-permalink" href="#Reading-Data-and-Applying-the-Energy-Calibration" title="Permalink"></a></h2><p>The energy calibration is read from the parameter file written by the energy tutorial. To keep this page self-contained, we first write a stand-in file with the same layout (detector, energy type, <code>cal.func</code>) and an arbitrary calibration function. <code>scratch_dir</code> is a temporary directory for the files that the examples write.</p><pre><code class="language-julia hljs">ecal_func = &quot;0.0037keV .* (e_cusp .- 0.0001 .* qdrift).^1&quot;
+ecal_file = joinpath(scratch_dir, &quot;ecal.yaml&quot;)
+writelprops(ecal_file, PropDict(Symbol(det) =&gt; PropDict(:e_cusp_ctc =&gt; PropDict(:cal =&gt; PropDict(:func =&gt; ecal_func)))))</code></pre><p>The A/E configuration names the energy type that the analysis uses, <code>e_cusp_ctc_cal</code>. It is the calibrated energy of the stored entry <code>e_cusp_ctc</code>. The stored function is compiled with <a href="../../api/#LegendDataManagement.ljl_propfunc"><code>ljl_propfunc</code></a>.</p><pre><code class="language-julia hljs">pars_ecal = readlprops(ecal_file)
+e_type = :e_cusp_ctc_cal
+e_type_uncal = :e_cusp_ctc
+cal_func = ljl_propfunc(pars_ecal[det][e_type_uncal].cal.func);</code></pre><p><code>read_ldata</code> also accepts a function of the event row as its first argument. Here the function adds the calibrated energy as a column in front of all DSP columns, which stay available for the A/E parameters.</p><pre><code class="language-julia hljs">hit_cal = read_ldata(row -&gt; merge(NamedTuple{(e_type,)}((cal_func(row),)), row), l200, :jldsp, fk, det)
+e_cal = getproperty(hit_cal, e_type)
+first(e_cal, 3)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{Unitful.Quantity{Float64, 𝐋^2 𝐌 𝐓^-2, Unitful.FreeUnits{(keV,), 𝐋^2 𝐌 𝐓^-2, nothing}}}:
+ 33.889011111821695 keV
+ 24.147168646579836 keV
+ 76.52052073411251 keV</code></pre><p>The events of a calibration run are selected with the quality-cut flags of the <code>jlqcs</code> tier. This step is not executed because the test data have no <code>jlqcs</code> tier.</p><pre><code class="language-julia hljs">pars_ecal = readlprops(joinpath(out_dir, &quot;ecal.yaml&quot;))
+e_type = Symbol(aoe_config_det.e_type)                      # e_cusp_ctc_cal
+e_type_uncal = Symbol(first(split(string(e_type), &quot;_cal&quot;))) # e_cusp_ctc
+cal_func = ljl_propfunc(pars_ecal[det][e_type_uncal].cal.func)
+
+qc_mask = read_ldata(@pf($is_single_pulse &amp;&amp; !$is_pulser), l200, :jlqcs, filekey, det)
+hit_cal = read_ldata(row -&gt; merge(NamedTuple{(e_type,)}((cal_func(row),)), row), l200, :jldsp, :cal, period, run, det)[qc_mask]
+e_cal = getproperty(hit_cal, e_type)
+e_unit = unit(eltype(e_cal))</code></pre><h2 id="Configuration"><a class="docs-heading-anchor" href="#Configuration">Configuration</a><a id="Configuration-1"></a><a class="docs-heading-anchor-permalink" href="#Configuration" title="Permalink"></a></h2><p>The A/E configuration is part of the PSD configuration of the data production. It has a section <code>p_default</code> for the parameters that are determined per partition and sections for individual detectors in <code>p</code>. The test metadata contain no PSD configuration, so this step is not executed.</p><pre><code class="language-julia hljs">aoe_config = dataprod_config(l200).psd(filekey).aoe
+aoe_config_det = merge(aoe_config.p_default, get(aoe_config.p, det, PropDict()))
+
+compton_bands = aoe_config_det.compton_bands
+compton_window = aoe_config_det.compton_window
+p_value_cut = aoe_config_det.p_value
+aoe_funcs = aoe_config_det.aoe_funcs
+qdrift_expression = aoe_config_det.qdrift_expression
+sigma_high_sided = aoe_config_det.sigma_high_sided
+
+aoe_type = :aoe_sg</code></pre><h2 id="Raw-A/E"><a class="docs-heading-anchor" href="#Raw-A/E">Raw A/E</a><a id="Raw-A/E-1"></a><a class="docs-heading-anchor-permalink" href="#Raw-A/E" title="Permalink"></a></h2><p><code>aoe_funcs</code> maps the name of an A/E type to a LEGEND Julia expression of the DSP columns, such as the ratio of an amplitude column to an energy column. The expression of <code>:aoe_sg</code> is evaluated with <a href="../../api/#LegendDataManagement.ljl_propfunc"><code>ljl_propfunc</code></a>. On the test data, we evaluate the ratio of the DSP columns <code>a_sg</code> and <code>e_cusp</code>, which is the expression that the configuration of a production uses for <code>:aoe_sg</code>:</p><pre><code class="language-julia hljs">aoe_raw_expression = &quot;a_sg / e_cusp&quot;
+aoe_raw = ljl_propfunc(aoe_raw_expression).(hit_cal)
+first(aoe_raw, 3)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{Float64}:
+ 0.013265791089420914
+ 0.01576197901720494
+ 0.012971117968325088</code></pre><p>The analysis normalizes A/E to the position of the peak of its distribution, so that single-site events have a value close to 1. <code>cut_single_peak</code> returns the position <code>max</code> of that peak in the distribution of the A/E values.</p><pre><code class="language-julia hljs">aoe = ljl_propfunc(aoe_funcs[aoe_type]).(hit_cal)
+cuts_aoe = cut_single_peak(aoe, 0.0, quantile(filter(isfinite, aoe), 0.99); n_bins = -1)
+aoe_expression = &quot;$(aoe_funcs[aoe_type]) / $(cuts_aoe.max)&quot;
+aoe ./= cuts_aoe.max</code></pre><h2 id="Compton-Band-Fits-and-A/E-Correction"><a class="docs-heading-anchor" href="#Compton-Band-Fits-and-A/E-Correction">Compton Band Fits and A/E Correction</a><a id="Compton-Band-Fits-and-A/E-Correction-1"></a><a class="docs-heading-anchor-permalink" href="#Compton-Band-Fits-and-A/E-Correction" title="Permalink"></a></h2><p>The mean and the width of A/E depend on the energy. <code>generate_aoe_compton_bands</code> histograms the A/E values in windows of the Compton continuum, <code>fit_aoe_compton</code> fits the distribution in every band, and <code>fit_aoe_corrections</code> models the mean and the width as functions of energy. Bands whose fit did not converge or whose p-value is below the configured value are not used for the correction.</p><pre><code class="language-julia hljs">peakhists_bands = generate_aoe_compton_bands(aoe, e_cal, compton_bands, compton_window)
+result_fit, report_fit = fit_aoe_compton(peakhists_bands.peakhists, peakhists_bands.peakstats, compton_bands; uncertainty = true)
+
+qc_compton_bands = findall(band -&gt; band in keys(result_fit) &amp;&amp;
+                                   result_fit[band].gof.converged &amp;&amp;
+                                   result_fit[band].gof.pvalue &gt;= p_value_cut, compton_bands)
+compton_bands_qc = compton_bands[qc_compton_bands]
+peakhists = peakhists_bands.peakhists[qc_compton_bands]
+peakstats = peakhists_bands.peakstats[qc_compton_bands]
+μ = [result_fit[band].μ for band in compton_bands_qc]
+σ = [result_fit[band].σ for band in compton_bands_qc]
+
+result_fit_single, report_fit_single = fit_aoe_corrections(compton_bands_qc, μ, σ;
+                                                           aoe_expression, e_expression = e_type)</code></pre><p>The configuration entry <code>use_combined_fit</code> selects a second correction that fits all bands simultaneously, starting from the result above. <code>result_correction.func</code> is the A/E correction as an expression of the DSP columns and the calibrated energy.</p><pre><code class="language-julia hljs">if aoe_config_det.use_combined_fit
+    result_fit_combined, report_fit_combined = fit_aoe_compton_combined(peakhists, peakstats, compton_bands_qc, result_fit_single;
+                                                                        e_expression = e_type, aoe_expression,
+                                                                        uncertainty = true)
+    result_correction = result_fit_combined
+else
+    result_correction = result_fit_single
+end
+aoe_corr = ljl_propfunc(result_correction.func).(hit_cal)</code></pre><h2 id="Charge-Trapping-Correction-of-A/E"><a class="docs-heading-anchor" href="#Charge-Trapping-Correction-of-A/E">Charge-Trapping Correction of A/E</a><a id="Charge-Trapping-Correction-of-A/E-1"></a><a class="docs-heading-anchor-permalink" href="#Charge-Trapping-Correction-of-A/E" title="Permalink"></a></h2><p>If <code>apply_ctc</code> is set in the configuration, <code>ctc_aoe</code> corrects the A/E from the previous step for its dependence on the expression <code>qdrift_expression</code>.</p><pre><code class="language-julia hljs">result_aoe_ctc = NamedTuple()
+if aoe_config_det.apply_ctc
+    qdrift_e = ljl_propfunc(qdrift_expression).(hit_cal)
+    result_aoe_ctc, report_aoe_ctc = LegendSpecFits.ctc_aoe(aoe_corr, e_cal, qdrift_e, compton_bands_qc;
+                                                            aoe_expression = result_correction.func, qdrift_expression)
+    aoe_corr = ljl_propfunc(result_aoe_ctc.func).(hit_cal)
+end
+aoe_func = get(result_aoe_ctc, :func, result_correction.func)</code></pre><h2 id="Low-A/E-Cut"><a class="docs-heading-anchor" href="#Low-A/E-Cut">Low A/E Cut</a><a id="Low-A/E-Cut-1"></a><a class="docs-heading-anchor-permalink" href="#Low-A/E-Cut" title="Permalink"></a></h2><p><code>get_low_aoe_cut</code> searches the cut value for which the number of events in the double-escape peak (DEP) after the cut is the fraction <code>dep_cut_search_target_sf</code> of the number before the cut. The result contains the low cut <code>lowcut</code> and the high cut <code>highcut</code>, which is set to <code>sigma_high_sided</code>.</p><pre><code class="language-julia hljs">result_cut, report_cut = get_low_aoe_cut(aoe_corr, e_cal; dep = aoe_config_det.dep, window = aoe_config_det.dep_window,
+                                         cut_search_interval = Tuple(aoe_config_det.dep_cut_search_interval),
+                                         bin_width_window = aoe_config_det.dep_bin_width_window,
+                                         rtol = aoe_config_det.dep_cut_search_rtol,
+                                         maxiters = aoe_config_det.dep_cut_search_maxiters,
+                                         dep_sf = aoe_config_det.dep_cut_search_target_sf,
+                                         fixed_position = aoe_config_det.dep_cut_search_fixed_position,
+                                         sigma_high_sided,
+                                         fit_func = Symbol(aoe_config_det.dep_cut_search_fit_func), uncertainty = true)</code></pre><h2 id="Survival-Fractions"><a class="docs-heading-anchor" href="#Survival-Fractions">Survival Fractions</a><a id="Survival-Fractions-1"></a><a class="docs-heading-anchor-permalink" href="#Survival-Fractions" title="Permalink"></a></h2><p>The survival fraction of a peak is the fraction of its events that pass the cut. <code>get_peaks_survival_fractions</code> fits the peaks listed in the configuration before and after the cut, and <code>get_continuum_survival_fraction</code> counts the events in an energy window of the continuum around the energy <code>qbb</code>. The cut can be one-sided (<code>low_cut</code>) or two-sided (<code>low_cut</code> and <code>high_cut</code>).</p><pre><code class="language-julia hljs">peak_names = Symbol.(aoe_config_det.aoe_peaks_names)
+peak_fit_funcs = Symbol.(aoe_config_det.aoe_peaks_fit_funcs)
+
+# Low cut only
+result_peaks_low, report_peaks_low = get_peaks_survival_fractions(aoe_corr, e_cal, aoe_config_det.aoe_peaks, peak_names,
+                                                                  aoe_config_det.aoe_peaks_windows_left,
+                                                                  aoe_config_det.aoe_peaks_windows_right;
+                                                                  low_cut = result_cut.lowcut,
+                                                                  bin_width_window = aoe_config_det.aoe_peaks_bin_width_window,
+                                                                  fit_funcs = peak_fit_funcs, uncertainty = true)
+qbb_result_low, _ = get_continuum_survival_fraction(aoe_corr, e_cal, aoe_config_det.qbb, aoe_config_det.qbb_window;
+                                                    low_cut = result_cut.lowcut)
+
+# Low and high cut
+result_peaks_ds, report_peaks_ds = get_peaks_survival_fractions(aoe_corr, e_cal, aoe_config_det.aoe_peaks, peak_names,
+                                                                aoe_config_det.aoe_peaks_windows_left,
+                                                                aoe_config_det.aoe_peaks_windows_right;
+                                                                low_cut = result_cut.lowcut, high_cut = result_cut.highcut,
+                                                                bin_width_window = aoe_config_det.aoe_peaks_bin_width_window,
+                                                                fit_funcs = peak_fit_funcs, uncertainty = true)
+qbb_result_ds, _ = get_continuum_survival_fraction(aoe_corr, e_cal, aoe_config_det.qbb, aoe_config_det.qbb_window;
+                                                   low_cut = result_cut.lowcut, high_cut = result_cut.highcut)</code></pre><h2 id="Storing-Results"><a class="docs-heading-anchor" href="#Storing-Results">Storing Results</a><a id="Storing-Results-1"></a><a class="docs-heading-anchor-permalink" href="#Storing-Results" title="Permalink"></a></h2><p>The A/E function and the cut values are stored in the same layout as the production parameter files: the function under the A/E type, the cut and the survival fractions under the classifier of that type.</p><pre><code class="language-julia hljs">result_aoe = (func = aoe_func, ctc = result_aoe_ctc, correction = result_correction,
+              apply_ctc = aoe_config_det.apply_ctc, use_combined_fit = aoe_config_det.use_combined_fit)
+result_cut_all = merge(result_cut, (peaks = (low = result_peaks_low, ds = result_peaks_ds),
+                                    qbb = (low = qbb_result_low, ds = qbb_result_ds)))
+pars_aoe = PropDict(det =&gt; PropDict(aoe_type =&gt; PropDict(pairs(result_aoe)),
+                                    Symbol(&quot;$(aoe_type)_classifier&quot;) =&gt; PropDict(pairs(result_cut_all))))
+writelprops(joinpath(out_dir, &quot;aoe.yaml&quot;), pars_aoe)</code></pre><p>The same calls work on the test data. We store a hand-written A/E function and an arbitrary cut value in this layout.</p><pre><code class="language-julia hljs">aoe_type = :aoe_sg
+aoe_func_string = &quot;($aoe_raw_expression) / 0.0153&quot;
+pars_aoe = PropDict(
+    Symbol(det) =&gt; PropDict(
+        aoe_type =&gt; PropDict(:func =&gt; aoe_func_string, :apply_ctc =&gt; false),
+        Symbol(&quot;$(aoe_type)_classifier&quot;) =&gt; PropDict(:lowcut =&gt; 0.9),
+    ),
+)
+aoe_file = joinpath(scratch_dir, &quot;aoe.yaml&quot;)
+writelprops(aoe_file, pars_aoe)
+print(read(aoe_file, String))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">V97061A:
+  aoe_sg_classifier:
+    lowcut: 0.9
+  aoe_sg:
+    func: &quot;(a_sg / e_cusp) / 0.0153&quot;
+    apply_ctc: false</code></pre><h2 id="Applying-the-Stored-A/E-Function-and-Cut"><a class="docs-heading-anchor" href="#Applying-the-Stored-A/E-Function-and-Cut">Applying the Stored A/E Function and Cut</a><a id="Applying-the-Stored-A/E-Function-and-Cut-1"></a><a class="docs-heading-anchor-permalink" href="#Applying-the-Stored-A/E-Function-and-Cut" title="Permalink"></a></h2><p>The stored function is applied to the events with <a href="../../api/#LegendDataManagement.ljl_propfunc"><code>ljl_propfunc</code></a>, and the cut value selects the events whose A/E is not below the low cut.</p><pre><code class="language-julia hljs">pars_aoe_read = readlprops(aoe_file)
+aoe_stored = ljl_propfunc(pars_aoe_read[det][aoe_type].func).(hit_cal)
+lowcut = pars_aoe_read[det][Symbol(&quot;$(aoe_type)_classifier&quot;)].lowcut
+pass_cut = aoe_stored .&gt;= lowcut
+(count(pass_cut), length(pass_cut))</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">(5, 10)</code></pre><hr/><p><em>This page was generated using <a href="https://github.com/fredrikekre/Literate.jl">Literate.jl</a>.</em></p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../energy/">« Energy Calibration</a><a class="docs-footer-nextpage" href="../../api/">API »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.19.0 on <span class="colophon-date" title="Friday 23 October 2026 20:43">Friday 23 October 2026</span>. Using Julia version 1.13.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
