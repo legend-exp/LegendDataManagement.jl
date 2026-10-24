@@ -62,6 +62,10 @@ using Distributed
         @test read_ldata(:timestamp, l200, tier, fk, det).timestamp == data_fk.timestamp
         @test read_ldata((:timestamp, :e_fc), l200, tier, fk, det).timestamp == data_fk.timestamp
         @test read_ldata((@pf (; twice = $e_fc * 2, )), l200, tier, fk, det).twice == data_fk.e_fc .* 2
+        # a function with unitful values returns them, not a table of their fields
+        e_kev = read_ldata((@pf $e_fc * u"keV"), l200, tier, fk, det)
+        @test eltype(e_kev) <: Unitful.Quantity
+        @test e_kev == data_fk.e_fc .* u"keV"
 
         # no detector given: one entry per detector in the file, each matching the
         # result of reading that detector on its own

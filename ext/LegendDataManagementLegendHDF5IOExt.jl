@@ -356,8 +356,11 @@ function _read_lh5_det(h, data::LegendData, tier::DataTier, filekey::FileKey, de
     else
         f == identity ? only(vals) : f.(only(vals))
     end
-    # A NamedTuple of per-detector or per-system tables stays keyed by its groups.
-    lh5_data isa NamedTuple || !TypedTables.Tables.istable(lh5_data) ? lh5_data : Table(lh5_data)
+    # A NamedTuple of per-detector or per-system tables stays keyed by its groups. Only rows
+    # that are NamedTuples become a Table: a StructArray of other structs, such as unitful
+    # values or waveforms, is a table of their fields and would lose its element type.
+    lh5_data isa NamedTuple || !(eltype(lh5_data) <: NamedTuple && TypedTables.Tables.istable(lh5_data)) ?
+        lh5_data : Table(lh5_data)
 end
 
 
