@@ -64,7 +64,7 @@ using Distributed
         @test read_ldata((@pf (; twice = $e_fc * 2, )), l200, tier, fk, det).twice == data_fk.e_fc .* 2
         # a function with unitful values returns them, not a table of their fields
         e_kev = read_ldata((@pf $e_fc * u"keV"), l200, tier, fk, det)
-        @test eltype(e_kev) <: Unitful.Quantity
+        @test e_kev isa Vector{<:Unitful.Quantity}
         @test e_kev == data_fk.e_fc .* u"keV"
 
         # no detector given: one entry per detector in the file, each matching the
@@ -348,6 +348,7 @@ using Distributed
             # a stored type is read like any column; a lone column reads adjacent rows as one
             # range and skips the gaps between the others
             wf_full = read_ldata((@pf $waveform_presummed), l200, filter_tier, fk, det)
+            @test !(wf_full isa TypedTables.Table)
             wf = read_ldata((@pf $waveform_presummed), l200, filter_tier, fk, data_fk.timestamp[rows], det)
             @test wf == wf_full[rows]
             @test read_ldata((@pf $waveform_presummed), l200, filter_tier, fk, data_fk.timestamp[[7, 2, 3, 9]], det) ==
