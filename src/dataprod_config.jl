@@ -231,14 +231,15 @@ end
 export data_partitions
 
 """
-    parse_runs(::AbstractVector{<:AbstractString})::Vector{DataRun}
+    parse_runs(::AbstractVector)::Vector{DataRun}
     parse_runs(::AbstractString})::Vector{DataRun}
 
-Parse a `String` or a `Vector{String}` of runs in the format "rXXX" (single run) or "rXXX..rYYY" (range of runs).
+Parse a `String` or a vector of strings of runs in the format "rXXX" (single run) or "rXXX..rYYY" (range of runs).
+An empty vector (an empty YAML list) gives no runs.
 """
-function parse_runs(rs::AbstractVector{<:AbstractString})::Vector{DataRun}
+function parse_runs(rs::AbstractVector)::Vector{DataRun}
     runs::Vector{DataRun} = DataRun[]
-    for r in strip.(rs)
+    for r in (strip(String(r)) for r in rs)
         m = match(r"^r(\d{3})..r(\d{3})$", r) # format "rXXX..rYYY"
         if !isnothing(m)
             append!(runs, DataRun.(range(parse.(Int, m.captures)...)))

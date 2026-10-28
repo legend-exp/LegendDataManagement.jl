@@ -129,3 +129,12 @@ include("testing_utils.jl")
         @test LegendDataManagement.is_analysis_run(l200, sel)
     end
 end
+
+@testset "parse_runs" begin
+    @test LegendDataManagement.parse_runs("r002..r004") == DataRun.(2:4)
+    @test LegendDataManagement.parse_runs(["r000", "r002..r003"]) == DataRun.([0, 2, 3])
+    # YAML lists are read as Vector{Any}; an empty list gives no runs
+    @test LegendDataManagement.parse_runs(Any["r001", "r003..r004"]) == DataRun.([1, 3, 4])
+    @test LegendDataManagement.parse_runs(Any[]) == DataRun[]
+    @test_throws ArgumentError LegendDataManagement.parse_runs(["r1"])
+end
