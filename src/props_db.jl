@@ -16,23 +16,26 @@ function _merge_validity_info!!(a::_ValidityDict, b::_ValidityDict)
             vf_a, fl_a = tf_a.valid_from, tf_a.filelist
             vf_b, fl_b = tf_b.valid_from, tf_b.filelist
             vf_new, fl_new = similar(vf_a, 0), similar(fl_a, 0)
+            # Each entry holds the files active in both lists at its time, an entry of one list keeps the other's active files:
+            active_a, active_b = String[], String[]
             ia, ib = firstindex(vf_a), firstindex(vf_b)
             while ia <= lastindex(vf_a) || ib <= lastindex(vf_b)
                 if ib > lastindex(vf_b) || ia <= lastindex(vf_a) && vf_a[ia] < vf_b[ib]
                     push!(vf_new, vf_a[ia])
-                    push!(fl_new, fl_a[ia])
+                    active_a = fl_a[ia]
                     ia += 1
                 elseif ia > lastindex(vf_a) || vf_a[ia] > vf_b[ib]
                     push!(vf_new, vf_b[ib])
-                    push!(fl_new, fl_b[ib])
+                    active_b = fl_b[ib]
                     ib += 1
                 else
                     @assert vf_a[ia] == vf_b[ib]
                     push!(vf_new, vf_a[ia])
-                    push!(fl_new, vcat(fl_a[ia], fl_b[ib]))
+                    active_a, active_b = fl_a[ia], fl_b[ib]
                     ia += 1
                     ib += 1
                 end
+                push!(fl_new, vcat(active_a, active_b))
             end
             a[k] = (valid_from = vf_new, filelist = fl_new)
         else

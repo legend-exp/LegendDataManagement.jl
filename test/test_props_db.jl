@@ -32,3 +32,14 @@ include("testing_utils.jl")
     @test LegendDataManagement._validity_sel_filelist(channelmaps, FileKey("l200-p02-r006-cal-20221226T210000Z")) == filelist
     @test LegendDataManagement._validity_sel_filelist(channelmaps, FileKey("l200-p03-r000-cal-20230311T235840Z")) == ["l200-p03-r%-T%-all-config.yaml"]
 end
+
+@testset "merge validity" begin
+    t1, t2, t3 = Timestamp.(["20230101T000000Z", "20230201T000000Z", "20230301T000000Z"])
+    cat = DataCategory(:all)
+    primary = LegendDataManagement._ValidityDict(cat => (valid_from = [t1, t3], filelist = [["a1.yaml"], ["a3.yaml"]]))
+    override = LegendDataManagement._ValidityDict(cat => (valid_from = [t2], filelist = [["o.yaml"]]))
+    merged = LegendDataManagement._merge_validity_info!!(primary, override)[cat]
+    # an override entry keeps the files of the primary list that are active at its time, and vice versa
+    @test merged.valid_from == [t1, t2, t3]
+    @test merged.filelist == [["a1.yaml"], ["a1.yaml", "o.yaml"], ["a3.yaml", "o.yaml"]]
+end
