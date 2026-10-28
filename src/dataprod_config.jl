@@ -3,14 +3,17 @@
 """
     dataprod_config(data::LegendData)
 
-Get the Julia data production configuration for `data`.
+Returns the Julia data production configuration for `data`.
 
-Use `dataprod_config(data)(valsel::AnyValiditySelection)` to also set the
+The configuration is the `config` entry of the metadata `jldataprod` (or
+`dataprod`, if the metadata has no `jldataprod`). Use
+`dataprod_config(data)(valsel::AnyValiditySelection)` to also set the
 time/category validity selection for the configuration.
 
-Examples:
-
+## Examples
 ```julia
+using LegendDataManagement
+
 l200 = LegendData(:l200)
 filekey = FileKey("l200-p02-r006-cal-20221226T200846Z")
 dataprod_config(l200)(filekey)
@@ -18,11 +21,13 @@ dataprod_config(l200)(filekey)
 
 or
 
-```
+```julia
 l200 = LegendData(:l200)
 vsel = ValiditySelection("20221226T200846Z", :cal)
 dataprod_config(l200)(vsel)
 ```
+
+See also [`pydataprod_config`](@ref).
 """
 function dataprod_config(data::LegendData)
     metadata = data.metadata
@@ -36,14 +41,17 @@ export dataprod_config
 """
     dataprod_parameters(data::LegendData)
 
-Get the Julia data production parameters `data`.
+Returns the data production parameters of `data`, i.e. `data.par`.
 
-Examples:
-
+## Examples
 ```julia
+using LegendDataManagement
+
 l200 = LegendData(:l200)
-dataprod_config(l200)
+dataprod_parameters(l200)
 ```
+
+See also [`pydataprod_parameters`](@ref).
 """
 function dataprod_parameters(data::LegendData)
     data.par
@@ -54,14 +62,17 @@ export dataprod_parameters
 """
     pydataprod_config(data::LegendData)
 
-Get the Python data production configuration for `data`.
+Returns the Python data production configuration for `data`.
 
-Use `pydataprod_config(data)(valsel::AnyValiditySelection)` to also set the
+The configuration is the `config` entry of the metadata `pydataprod` (or
+`dataprod`, if the metadata has no `pydataprod`). Use
+`pydataprod_config(data)(valsel::AnyValiditySelection)` to also set the
 time/category validity selection for the configuration.
 
-Examples:
-
+## Examples
 ```julia
+using LegendDataManagement
+
 l200 = LegendData(:l200)
 filekey = FileKey("l200-p02-r006-cal-20221226T200846Z")
 pydataprod_config(l200)(filekey)
@@ -69,11 +80,13 @@ pydataprod_config(l200)(filekey)
 
 or
 
-```
+```julia
 l200 = LegendData(:l200)
 vsel = ValiditySelection("20221226T200846Z", :cal)
 pydataprod_config(l200)(vsel)
 ```
+
+See also [`dataprod_config`](@ref).
 """
 function pydataprod_config(data::LegendData)
     metadata = data.metadata
@@ -87,14 +100,17 @@ export pydataprod_config
 """
     pydataprod_parameters(data::LegendData)
 
-Get the Julia data production parameters `data`.
+Returns the data production parameters of `data`, i.e. `data.par`.
 
-Examples:
-
+## Examples
 ```julia
+using LegendDataManagement
+
 l200 = LegendData(:l200)
-dataprod_config(l200)
+pydataprod_parameters(l200)
 ```
+
+See also [`dataprod_parameters`](@ref).
 """
 function pydataprod_parameters(data::LegendData)
     data.par
@@ -140,22 +156,45 @@ end
 
 """
     partitioninfo(data::LegendData, det::DetectorIdLike, cat::DataCategoryLike)
-    partitioninfo(data, det, part::DataPartition)
-    partitioninfo(data, det, cat, period::DataPeriod)
-    partitioninfo(data, det, cat, period, run)
+    partitioninfo(data::LegendData, det::DetectorIdLike, part::DataPartition)
+    partitioninfo(data::LegendData, det::DetectorIdLike, cat::DataCategoryLike, period::DataPeriod)
+    partitioninfo(data::LegendData, det::DetectorIdLike, cat::DataCategoryLike, period::DataPeriodLike, run::DataRunLike)
+    partitioninfo(data::LegendData, ch::ChannelId, args...)
 
-    partitioninfo(data::LegendData, ch::ChannelId, cat::DataCategoryLike = :cal)
+Returns the cross-period data partitions of a detector, as defined in the
+metadata `datasets/<category>_groupings`.
 
+The partitions of a detector are the entries of the groupings that are
+specific to the detector, merged over the `default` entries. The methods
+return
 
-Return cross-period data partitions.
+* `IdDict{DataPartition, Table}` for `(det, cat)`: a dictionary that maps each partition to a table with the columns `period`, `run` and a column named like the category that holds the run information of the category (see [`runinfo`](@ref)). Only analysis runs are included.
+* `Table` for `(det, part)`: the table of the partition `part`.
+* `Vector{DataPartition}` for `(det, cat, period)`: the sorted partitions that contain the period.
+* `Vector{DataPartition}` for `(det, cat, period, run)`: the sorted partitions that contain the run.
 
-# Arguments
-- `data::LegendData`: The LegendData object containing the data.
-- `det::DetectorIdLike`: The ID of the detector.
-- `category::DataCategoryLike`: Analysis category to select groupings, e.g. `:cal`, `:phy`.
+A [`ChannelId`](@ref) in place of the detector is converted to the detector
+of the first calibration run. A `Symbol` or `String` in place of `cat` in the
+form `(det, p, cat)` is interpreted as a partition or a period.
 
-# Returns
-- `IdDict{DataPartition, Table}`: A dictionary mapping data partitions to tables.
+## Arguments
+* `data::LegendData`: The data that holds the metadata.
+* `det::DetectorIdLike`: The detector.
+* `cat::DataCategoryLike`: Analysis category to select the groupings, e.g. `:cal` or `:phy`. An `ArgumentError` is thrown if the metadata has no groupings for the category.
+* `part::DataPartition`: Partition to select.
+* `period`, `run`: Period and run to select the partitions of.
+
+## Examples
+```julia
+using LegendDataManagement
+
+l200 = LegendData(:l200)
+partitioninfo(l200, :V00000A, :cal)
+partitioninfo(l200, :V00000A, :cal, DataPeriod(3))
+partitioninfo(l200, :V00000A, DataPartition(1))
+```
+
+See also [`get_partition_combined_periods`](@ref).
 """
 function partitioninfo end
 export partitioninfo
@@ -190,10 +229,24 @@ Base.Broadcast.broadcasted(f::typeof(partitioninfo), data::LegendData, ch::Vecto
 
 
 """
-    get_partition_combined_periods(data::LegendData, period::DataPeriodLike; chs::Vector{<:ChannelIdLike}=ChannelIdLike[])
-    get_partition_combined_periods(data::LegendData, period::DataPeriodLike; dets::Vector{<:DetectorIdLike}=DetectorIdLike[])
+    get_partition_combined_periods(data::LegendData, period::DataPeriodLike; dets::Vector{<:DetectorIdLike} = DetectorIdLike[], chs::Vector{<:ChannelIdLike} = ChannelIdLike[])
 
-Get a list periods which are combined in any partition for the given period and list of channels.
+Returns the periods that are combined with `period` in any calibration
+partition of the given detectors.
+
+## Keywords
+* `dets::Vector{<:DetectorIdLike} = DetectorIdLike[]`: Detectors to consider. All detectors of the metadata `datasets/cal_groupings` are considered if the vector is empty.
+* `chs::Vector{<:ChannelIdLike} = ChannelIdLike[]`: Channels to consider, in place of `dets`. Prints a deprecation warning and is converted to detectors with the channel information of the first calibration run of `period`. An `ArgumentError` is thrown if `dets` is not empty as well.
+
+## Examples
+```julia
+using LegendDataManagement
+
+l200 = LegendData(:l200)
+get_partition_combined_periods(l200, :p03; dets = [:V00000A])
+```
+
+See also [`partitioninfo`](@ref).
 """
 function get_partition_combined_periods(data::LegendData, period::DataPeriodLike; chs::Vector{<:ChannelIdLike}=ChannelIdLike[], dets::Vector{<:DetectorIdLike}=DetectorIdLike[])
     if !isempty(chs) && !isempty(dets) 
@@ -231,10 +284,27 @@ end
 export data_partitions
 
 """
-    parse_runs(::AbstractVector{<:AbstractString})::Vector{DataRun}
-    parse_runs(::AbstractString})::Vector{DataRun}
+    data_partitions(data::LegendData, label::Symbol = :default)
 
-Parse a `String` or a `Vector{String}` of runs in the format "rXXX" (single run) or "rXXX..rYYY" (range of runs).
+Deprecated. Use [`partitioninfo`](@ref) instead.
+"""
+data_partitions
+
+"""
+    parse_runs(runs::AbstractVector{<:AbstractString})::Vector{DataRun}
+    parse_runs(run::AbstractString)::Vector{DataRun}
+
+Parses a `String` or a `Vector{String}` of runs in the format `"rXXX"` (single
+run) or `"rXXX..rYYY"` (range of runs).
+
+Throws an `ArgumentError` for other syntax.
+
+## Examples
+```julia
+using LegendDataManagement
+
+LegendDataManagement.parse_runs(["r000", "r003..r005"])
+```
 """
 function parse_runs(rs::AbstractVector{<:AbstractString})::Vector{DataRun}
     runs::Vector{DataRun} = DataRun[]
@@ -259,9 +329,26 @@ end
 const _cached_analysis_runs = LRU{Tuple{UInt, DataCategoryLike}, StructVector{@NamedTuple{period::DataPeriod, run::DataRun}}}(maxsize = 100)
 
 """
-    analysis_runs(data::LegendData)
+    analysis_runs(data::LegendData, cat::DataCategoryLike)
 
-Return cross-period analysis runs. Picks the dataset specified in data.dataset, `:valid` for `:default`.
+Returns the analysis runs of the category `cat` across all periods as a
+`Table` with the columns `period` and `run`, sorted.
+
+The runs are those listed in the metadata `datasets/runlists` for the dataset
+`data.dataset`; the dataset `:valid` is used for `:default`. Throws an error if
+the dataset is not in the run lists. The result is cached per `data` object.
+
+`analysis_runs(data)` is deprecated, use `analysis_runs(data, :phy)`.
+
+## Examples
+```julia
+using LegendDataManagement
+
+l200 = LegendData(:l200)
+analysis_runs(l200, :cal)
+```
+
+See also [`runinfo`](@ref), [`is_analysis_run`](@ref).
 """
 function analysis_runs(data::LegendData, cat::DataCategoryLike)
     Table(sort(get!(_cached_analysis_runs, (objectid(data), cat)) do
@@ -304,7 +391,11 @@ end
 """
     phy_groupings_default(data::LegendData)
 
-Returns default phy_groupings runs.
+Returns the runs of all default groupings of the metadata
+`datasets/phy_groupings` as a sorted `Table` with the columns `period` and
+`run`.
+
+See also [`cal_groupings_default`](@ref), [`partitioninfo`](@ref).
 """
 phy_groupings_default(data::LegendData) = _groupings_runs(data, :phy)
 export phy_groupings_default
@@ -313,7 +404,11 @@ export phy_groupings_default
 """
     cal_groupings_default(data::LegendData)
 
-Returns default cal_groupings runs.
+Returns the runs of all default groupings of the metadata
+`datasets/cal_groupings` as a sorted `Table` with the columns `period` and
+`run`.
+
+See also [`phy_groupings_default`](@ref), [`partitioninfo`](@ref).
 """
 cal_groupings_default(data::LegendData) = _groupings_runs(data, :cal)
 export cal_groupings_default
@@ -324,32 +419,48 @@ const _cached_runinfo = LRU{UInt, Table}(maxsize = 300)
 
 """
     runinfo(data::LegendData)::Table
-    runinfo(data::LegendData, runsel::RunSelLike)::NamedTuple
-    runinfo(data::LegendData, filekey::FileKey)::NamedTuple
+    runinfo(data::LegendData, period::DataPeriodLike)::Table
+    runinfo(data::LegendData, runsel::RunSelLike)::Table
+    runinfo(data::LegendData, runsel::RunCategorySelLike)::Table
+    runinfo(data::LegendData, filekey::FileKey)::Table
 
-Get the run information for `data` based on various selection criteria. The table holds the runs that
-`data.dataset` lists in the metadata `datasets/runlists`, or every run the metadata has if the dataset
-is `:default`.
+Returns the run information of `data`, optionally restricted to a period, a
+run, or the data of one category of a run.
 
-# Arguments
-- `data::LegendData`: The dataset to query run information from.
+The table holds the runs that `data.dataset` lists in the metadata
+`datasets/runlists`, or every run the metadata has if the dataset is
+`:default`. The result is cached per `data` object.
 
-# Returns
-A table of run information with one named tuple per category (e.g. `:cal`, `:phy`), each containing
-`startkey`, `endkey`, `livetime`, `is_analysis_run` and `keys` (a `DataSet` of all DAQ cycle keys of
-that category), plus `keys` with the cycle keys of all categories sorted by time. A category's `keys`
-is sorted by time, starts at that category's `startkey` and ends at its `endkey` (`missing` if the
-metadata records no end of the run), and every set is named after `data.dataset`.
+`runinfo(data)` has one row per run with the columns `period`, `run`, `keys`
+and one column per category (e.g. `cal`, `phy`). `keys` is a
+[`DataSet`](@ref) with the DAQ cycle keys of all categories of the run, sorted
+by time. Each category column is a `Table` with the columns `startkey`,
+`endkey`, `livetime`, `is_analysis_run` and `keys` (a `DataSet` of all DAQ
+cycle keys of that category, sorted by time, from `datasets/filekeys`).
+`startkey` and `endkey` are `missing` if `datasets/runinfo` records none. Every
+set is named after `data.dataset`. A run that has no entry for a category has
+`missing` `startkey` and `endkey`, an empty `keys` set, a livetime of `NaN`
+seconds and `is_analysis_run = false` there.
 
-Every category of a run in the metadata `datasets/runinfo` must have a non-empty list of DAQ cycle
-keys in `datasets/filekeys`.
+Every category of a run in the metadata `datasets/runinfo` must have a
+non-empty list of DAQ cycle keys in `datasets/filekeys`.
 
-# Example
-runinfo(data)                                   # full table of valid runs
-runinfo(data, :p03)                             # all runs in period p03
-runinfo(data, (:p03, :r005))                    # single-row Table for that run
-runinfo(data, (:p03, :r005, :phy))              # only the :phy entry
-runinfo(data, fk::FileKey)                      # same as above via FileKey
+The selections return the rows of the period or run, or, with a category or a
+`FileKey`, the one-row table of that category.
+
+## Examples
+```julia
+using LegendDataManagement
+
+l200 = LegendData(:l200)
+runinfo(l200)                                   # table of all runs of the dataset
+runinfo(l200, :p03)                             # all runs in period p03
+runinfo(l200, (:p03, :r005))                    # table with the one row of that run
+runinfo(l200, (:p03, :r005, :phy))              # only the :phy entry of that run
+runinfo(l200, FileKey("l200-p03-r005-phy-20230312T043356Z"))  # same, via a file key
+```
+
+See also [`start_filekey`](@ref), [`is_analysis_run`](@ref), [`livetime`](@ref).
 """
 function runinfo(data::LegendData)
     get!(_cached_runinfo, objectid(data)) do
@@ -430,8 +541,22 @@ runinfo(data, selectors...) = runinfo(data, selectors)
 
 """
     start_filekey(data::LegendData, runsel::RunCategorySelLike)
+    start_filekey(data::LegendData, filekey::FileKey)
 
-Get the starting filekey for `data` in `period`, `run`, `category`.
+Returns the first file key of the run `(period, run, category)` of `data`, or
+`missing` if the metadata records none.
+
+For a `FileKey` the run is that of the file key.
+
+## Examples
+```julia
+using LegendDataManagement
+
+l200 = LegendData(:l200)
+start_filekey(l200, (:p03, :r005, :phy))
+```
+
+See also [`runinfo`](@ref).
 """
 function start_filekey end
 export start_filekey
@@ -441,9 +566,20 @@ start_filekey(data::LegendData, selectors...) = start_filekey(data, selectors)
 
 
 """
-    livetime(data::LegendData, runsel::RunSelLike)
+    livetime(data::LegendData, runsel::RunCategorySelLike)
 
-Get the livetime for `data` in physics data taking of `run` in `period`.
+Returns the livetime of `data` in the run `(period, run, category)`, in
+seconds. The livetime is `NaN` seconds if the metadata records none.
+
+## Examples
+```julia
+using LegendDataManagement
+
+l200 = LegendData(:l200)
+livetime(l200, (:p03, :r005, :phy))
+```
+
+See also [`runinfo`](@ref), [`get_exposure`](@ref).
 """
 function livetime end
 export livetime
@@ -451,9 +587,13 @@ livetime(data::LegendData, runsel::RunCategorySelLike) = only(runinfo(data, runs
 livetime(data, selectors...) = livetime(data, selectors)
 
 """
-    is_lrun(data::LegendData, runsel::RunSelLike)
+    is_lrun(data::LegendData, runsel::RunCategorySelLike)
+    is_lrun(data::LegendData, filekey::FileKey)
 
-Return `true` if `runsel` is a valid run for `data` and therefore appears in the metadata.
+Returns `true` if `runsel` is a valid run `(period, run, category)` for `data`
+that appears in the metadata with a start file key.
+
+See also [`runinfo`](@ref), [`is_analysis_run`](@ref).
 """
 function is_lrun(data::LegendData, runsel::RunCategorySelLike)::Bool
     period, run, category = runsel
@@ -464,25 +604,45 @@ is_lrun(data::LegendData, selectors...) = is_lrun(data, selectors)
 export is_lrun
 
 """
-    is_analysis_phy_run(data::LegendData, (period::DataPeriodLike, run::DataRunLike))
+    LegendDataManagement.is_analysis_phy_run(data::LegendData, runsel::RunSelLike)
 
-Return `true` if `run` is an analysis run for `data` in `period`. 
-# ATTENTION: This is only valid for `phy` runs.
+Returns `true` if the run `(period, run)` is an analysis run for `data` in the
+`phy` category.
+
+See also [`is_analysis_run`](@ref).
 """
 is_analysis_phy_run(data::LegendData, runsel::RunSelLike) = only(runinfo(data, runsel).phy.is_analysis_run)
 
 """
-    is_analysis_cal_run(data::LegendData, (period::DataPeriodLike, run::DataRunLike))
+    LegendDataManagement.is_analysis_cal_run(data::LegendData, runsel::RunSelLike)
 
-Return `true` if `run` is an analysis run for `data` in `period`. 
-# ATTENTION: This is only valid for `cal` runs.
+Returns `true` if the run `(period, run)` is an analysis run for `data` in the
+`cal` category.
+
+See also [`is_analysis_run`](@ref).
 """
 is_analysis_cal_run(data::LegendData, runsel::RunSelLike) = only(runinfo(data, runsel).cal.is_analysis_run)
 
 """
-    is_analysis_run(data::LegendData, (period::DataPeriodLike, run::DataRunLike, cat::DataCategoryLike))
+    is_analysis_run(data::LegendData, runsel::RunCategorySelLike)
+    is_analysis_run(data::LegendData, filekey::FileKey)
 
-Return `true` if `run` is an `cat` analysis run for `data` in `period`.
+Returns `true` if the run `(period, run, category)` is an analysis run of that
+category for `data`.
+
+Returns `false` if [`is_lrun`](@ref) is `false` for the run. Throws an
+`ArgumentError` if the run information has no such category.
+
+## Examples
+```julia
+using LegendDataManagement
+
+l200 = LegendData(:l200)
+is_analysis_run(l200, (:p03, :r005, :phy))
+is_analysis_run(l200, :p03, :r005, :phy)
+```
+
+See also [`analysis_runs`](@ref), [`runinfo`](@ref).
 """
 function is_analysis_run end
 export is_analysis_run
@@ -505,12 +665,24 @@ is_analysis_run(data::LegendData, selectors...) = is_analysis_run(data, selector
 const _cached_bad_filekeys = LRU{Tuple{UInt, Vector{Symbol}}, Set{FileKey}}(maxsize = 10^3)
 
 """
-    bad_filekeys(data::LegendData; load_key::Symbol=:all)
+    bad_filekeys(data::LegendData; load_key::Symbol = :all)
 
-Get the list of filekeys to ignore for `data`: those listed under `load_key` in `datasets/ignored_daq_cycles`,
-or under any of its keys for `:all`.
+Returns the set of file keys to ignore for `data`: those listed under
+`load_key` in the metadata `datasets/ignored_daq_cycles`, or under any of its
+keys for `:all`.
+
+Throws an `ArgumentError` if `load_key` is neither `:all` nor a key of
+`datasets/ignored_daq_cycles`.
+
+## Examples
+```julia
+using LegendDataManagement
+
+l200 = LegendData(:l200)
+bad_filekeys(l200)
+```
 """
-function bad_filekeys(data::LegendData; load_key::Symbol=:all)
+function bad_filekeys(data::LegendData; load_key::Symbol = :all)
     ignored_keys = Symbol.(keys(PropDict(data.metadata.datasets.ignored_daq_cycles)))
     load_key == :all || load_key in ignored_keys ||
         throw(ArgumentError("No key $load_key in datasets/ignored_daq_cycles, which has $(join(ignored_keys, ", "))"))

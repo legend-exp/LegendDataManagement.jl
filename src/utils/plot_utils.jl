@@ -5,10 +5,16 @@
 ChannelIdOrDetectorIDLike = Union{ChannelIdLike, DetectorIdLike}
 
 """
-    get_pltfolder(data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, process::Symbol)
-    get_pltfolder(data::LegendData, filekey::FileKey, process::Symbol)
-    get_pltfolder(data::LegendData, partition::DataPartitionLike, category::DataCategoryLike, process::Symbol, ch::ChannelIdOrDetectorIDLike)
-Get the folder for the plot files for a given period, run, category and process.
+    LegendDataManagement.LDMUtils.get_pltfolder(data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, process::Symbol)
+    LegendDataManagement.LDMUtils.get_pltfolder(data::LegendData, filekey::FileKey, process::Symbol)
+    LegendDataManagement.LDMUtils.get_pltfolder(data::LegendData, partition::DataPartitionLike, category::DataCategoryLike, process::Symbol, ch::Union{ChannelIdLike, DetectorIdLike})
+
+Returns the folder for the plot files of a given period, run, category and
+process, and creates it if necessary.
+
+The folder is `data.tier[:jlplt]/rplt/<category>/<period>/<run>/<process>`, or
+`data.tier[:jlplt]/pplt/<ch>/<partition>/<category>/<process>` for a
+partition and a channel or detector.
 """
 function get_pltfolder end
 get_pltfolder(data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, process::Symbol) = mkpath(joinpath(data.tier[:jlplt], "rplt", string(category), string(period), string(run), string(process)))
@@ -16,10 +22,17 @@ get_pltfolder(data::LegendData, filekey::FileKey, process::Symbol) = get_pltfold
 get_pltfolder(data::LegendData, partition::DataPartitionLike, category::DataCategoryLike, process::Symbol, ch::ChannelIdOrDetectorIDLike) = mkpath(joinpath(data.tier[:jlplt], "pplt", string(ch), string(partition), string(category), string(process)))
 
 """
-    get_pltfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike, process::Symbol)
-    get_pltfilename(data::LegendData, filekey::FileKey, ch::ChannelIdLike, process::Symbol)
-    get_pltfilename(data::LegendData, partition::DataPartitionLike, setup::ExpSetupLike, category::DataCategoryLike, ch::ChannelIdLike, process::Symbol)
-Get the filename for the plot file for a given setup, period, run, category, channel and process.
+    LegendDataManagement.LDMUtils.get_pltfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::Union{ChannelIdLike, DetectorIdLike}, process::Symbol)
+    LegendDataManagement.LDMUtils.get_pltfilename(data::LegendData, filekey::FileKey, ch::Union{ChannelIdLike, DetectorIdLike}, process::Symbol)
+    LegendDataManagement.LDMUtils.get_pltfilename(data::LegendData, partition::DataPartitionLike, setup::ExpSetupLike, category::DataCategoryLike, ch::Union{ChannelIdLike, DetectorIdLike}, process::Symbol)
+
+Returns the file name of the plot file for a given setup, period, run,
+category, channel or detector and process.
+
+The file is a `.png` file named
+`<setup>-<period>-<run>-<category>-<ch>-<process>.png` in the folder given by
+`get_pltfolder`. For a partition the name is
+`<setup>-<partition>-<category>-<ch>-<process>.png`.
 """
 function get_pltfilename end
 get_pltfilename(data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdOrDetectorIDLike, process::Symbol) = joinpath(get_pltfolder(data, period, run, category, process), format("{}-{}-{}-{}-{}-{}.png", string(setup), string(period), string(run), string(category), string(ch), string(process)))
@@ -27,12 +40,16 @@ get_pltfilename(data::LegendData, filekey::FileKey, ch::ChannelIdOrDetectorIDLik
 get_pltfilename(data::LegendData, partition::DataPartitionLike, setup::ExpSetupLike, category::DataCategoryLike, ch::ChannelIdOrDetectorIDLike, process::Symbol) = joinpath(get_pltfolder(data, partition, category, process, ch), format("{}-{}-{}-{}-{}.png", string(setup), string(partition), string(category), string(ch), string(process)))
 
 """
-    get_plottitle(setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, det::DetectorIdLike, process::AbstractString; additional_type::AbstractString="")
+    get_plottitle(setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, det::DetectorIdLike, process::AbstractString; additional_type::AbstractString = "")
     get_plottitle(filekey::FileKey, det::DetectorIdLike, process::AbstractString; kwargs...)
-    get_plottitle(setup::ExpSetupLike, partition::DataPartitionLike, category::DataCategoryLike, det::DetectorIdLike, process::AbstractString; additional_type::AbstractString="")
+    get_plottitle(setup::ExpSetupLike, partition::DataPartitionLike, category::DataCategoryLike, det::DetectorIdLike, process::AbstractString; additional_type::AbstractString = "")
     get_plottitle(filekey::FileKey, partition::DataPartitionLike, det::DetectorIdLike, process::AbstractString; kwargs...)
 
-Get the title for a plot.
+Returns the title for a plot of a detector as a string.
+
+The title is the detector, `additional_type` (if not empty) and `process`,
+followed by the run or partition selection in parentheses, e.g.
+`<det> <process> (<setup>-<period>-<run>-<category>)`.
 """
 function get_plottitle end
 export get_plottitle
@@ -54,10 +71,25 @@ end
 
 
 """
-    savelfig(save_func::Function, p, data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::ChannelIdLike, process::Symbol; kwargs...)
-    savelfig(save_func::Function, p, data::LegendData, filekey::FileKey, ch::ChannelIdLike, process::Symbol; kwargs...)
-    savelfig(save_func::Function, p, data::LegendData, partition::DataPartitionLike, setup::ExpSetupLike, category::DataCategoryLike, ch::ChannelIdLike, process::Symbol; kwargs...)
-Save a lplot.
+    savelfig(save_func::Function, p, data::LegendData, setup::ExpSetupLike, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, ch::Union{ChannelIdLike, DetectorIdLike}, process::Symbol; kwargs...)
+    savelfig(save_func::Function, p, data::LegendData, filekey::FileKey, ch::Union{ChannelIdLike, DetectorIdLike}, process::Symbol; kwargs...)
+    savelfig(save_func::Function, p, data::LegendData, partition::DataPartitionLike, setup::ExpSetupLike, category::DataCategoryLike, ch::Union{ChannelIdLike, DetectorIdLike}, process::Symbol; kwargs...)
+    savelfig(save_func::Function, p, data::LegendData, partition::DataPartitionLike, filekey::FileKey, ch::Union{ChannelIdLike, DetectorIdLike}, process::Symbol; kwargs...)
+
+Saves the plot `p` to the plot file of the given selection.
+
+Calls `save_func(p, filename; kwargs...)`, where `filename` is the file name
+given by `get_pltfilename`; the folder is created if necessary.
+
+## Examples
+```julia
+using LegendDataManagement, LegendDataManagement.LDMUtils, Plots
+
+l200 = LegendData(:l200)
+filekey = FileKey("l200-p03-r000-cal-20230311T235840Z")
+p = plot(rand(10))
+savelfig(savefig, p, l200, filekey, ChannelId(1080005), :example)
+```
 """
 function savelfig end
 export savelfig

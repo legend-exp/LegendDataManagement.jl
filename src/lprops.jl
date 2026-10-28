@@ -62,13 +62,27 @@ _lprops2props(d::Dict) = _lprops2props(PropDict(d))
 _lprops2props(nt::NamedTuple) = _lprops2props(PropDict(pairs(nt)))
 
 """
-    readlprops(filename::AbstractString)
-    readlprops(filenames::Vector{<:AbstractString}) 
+    readlprops(filename::AbstractString; trim_null::Bool = false, kwargs...)
+    readlprops(filenames::Vector{<:AbstractString}; trim_null::Bool = false, kwargs...)
 
+Reads a `PropDict` from a file, or merged from several files, and converts
+entries with units and uncertainties to `Unitful.Quantity` and
+`Measurements.Measurement` objects.
 
-Read a PropDict from a file and parse it to `Unitful.Quantity` and `Measurements.Measurement` objects.
-# Returns
-- `pd::PropDict` with all `:val` fields converted to `Unitful.Quantity` objects and all `:val` fields converted to `Measurements.Measurement` objects.
+An entry with the fields `val` and `unit` becomes a `Unitful.Quantity`, an
+entry with `val` and `err` a `Measurements.Measurement`, and an entry with
+`val`, `err` and `unit` a `Unitful.Quantity` of a `Measurements.Measurement`.
+An entry with only `unit` becomes a `NaN` with that unit, and a `null` `err`
+becomes `NaN`. The unit is parsed with Unitful.jl and UnitfulAtomic.jl; `e` is
+the atomic elementary charge, `%` is `percent`, and the units `none`, `ADC`,
+`adc` and `sample` (and an empty unit) are unitless. An `ArgumentError` is
+thrown for an unknown unit. Arrays are converted element-wise.
+
+## Keywords
+* `trim_null::Bool = false`: Passed to `PropDicts.readprops`.
+* `kwargs...`: Further keywords of `PropDicts.readprops`.
+
+See also [`writelprops`](@ref).
 """
 function readlprops end
 export readlprops
@@ -77,11 +91,22 @@ readlprops(filename::AbstractString; trim_null::Bool=false, kwargs...) = _props2
 readlprops(filenames::Vector{<:AbstractString}; trim_null::Bool=false, kwargs...) = _props2lprops(readprops(filenames; trim_null=trim_null, kwargs...))
 
 """
-    writelprops(f::IO, p::PropDict; multiline::Bool=true)
-    writelprops(filename::AbstractString, p::PropDict; multiline::Bool=true)
+    writelprops(f::IO, p::PropDict; multiline::Bool = true)
+    writelprops(filename::AbstractString, p::PropDict; multiline::Bool = true)
     writelprops(db::MaybePropsDB, key::Union{Symbol, DataSelector}, p::PropDict; kwargs...)
 
-Write a PropDict to a file and strip it to `:val` and `:unit` fields and `:val` and `:err` fields.
+Writes a `PropDict` to an IO stream or a file, converting
+`Unitful.Quantity` and `Measurements.Measurement` objects to entries with the
+fields `val`, `err` and `unit`.
+
+This is the inverse of [`readlprops`](@ref). The method for a
+`db::MaybePropsDB` writes the file `<key>.yaml` in the directory of `db` (see
+[`data_path`](@ref)) and creates the directory if necessary.
+
+## Keywords
+* `multiline::Bool = true`: Passed to `PropDicts.writeprops`.
+
+See also [`readlprops`](@ref).
 """
 function writelprops end
 export writelprops
@@ -99,7 +124,11 @@ writelprops(db::MaybePropsDB, key::Union{Symbol, DataSelector}, p::PropDict; kwa
 """
     lstring(x)
 
-Return a string representation of `x` according to LEGEND preferences.
+Returns a string representation of `x` according to LEGEND preferences.
+
+For a `PropDict` this is the single-line text written by
+[`writelprops`](@ref) with `multiline = false`; any other value is converted
+with `string`.
 """
 function lstring end
 export lstring
@@ -119,7 +148,15 @@ end
     get_values(pd::PropDict)
     get_values(A::AbstractArray)
 
-Get the value of a `Unitful.Quantity` or `Measurements.Measurement` object or a `PropDict` or an array of `Unitful.Quantity` or `Measurements.Measurement` objects.
+Returns the value of a `Unitful.Quantity` of a `Measurements.Measurement`, of
+a `Measurements.Measurement`, or of every element of a `PropDict` or an array
+of such objects, without the uncertainty. The units of a `Unitful.Quantity`
+are kept.
+
+Any other value is returned unchanged. A `Unitful.Quantity` of a `Real` is
+such a value.
+
+See also [`get_uncertainties`](@ref).
 """
 function get_values end
 export get_values
@@ -137,7 +174,14 @@ get_values(x::Measurements.Measurement{<:Real}) = Measurements.value(x)
     get_uncertainties(pd::PropDict)
     get_uncertainties(A::AbstractArray)
 
-Get the uncertainty of a `Unitful.Quantity` or `Measurements.Measurement` object or a `PropDict` or an array of `Unitful.Quantity` or `Measurements.Measurement` objects.
+Returns the uncertainty of a `Unitful.Quantity` of a
+`Measurements.Measurement`, of a `Measurements.Measurement`, or of every
+element of a `PropDict` or an array of such objects.
+
+Any other value, including a `Unitful.Quantity` of a `Real`, is returned
+unchanged.
+
+See also [`get_values`](@ref).
 """
 function get_uncertainties end
 export get_uncertainties

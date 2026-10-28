@@ -61,13 +61,22 @@ function _dataprod_ged_cal(data::LegendData, sel::AnyValiditySelection, detector
 end
 
 """
-    get_ged_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    get_ged_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol = :rpars, pars_cat::Symbol = :ecal)
 
-Get the HPGe calibration function for the given data, validity selection and
-detector.
+Returns the HPGe energy calibration `PropertyFunction` for the given data,
+validity selection and detector.
 
-Note: Caches configuration/calibration data internally, use a fresh `data`
-object if on-disk configuration/calibration data may have changed.
+The function has one property `<energy_type>_cal` for each energy type of the
+energy configuration of `detector`. Each property evaluates the calibration
+function stored in the parameters `pars_cat` of `pars_type`; without a stored
+function the result is `NaN`.
+
+## Keywords
+* `pars_type::Symbol = :rpars`: Parameter set to use, `:rpars` or `:ppars`.
+* `pars_cat::Symbol = :ecal`: Parameter category that holds the calibration.
+
+The configuration and calibration data are cached internally; use a fresh
+`data` object if the data on disk may have changed.
 """
 function get_ged_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:rpars, pars_cat::Symbol=:ecal)
     let energies = Symbol.(_dataprod_ged_cal(data, sel, detector; pars_type=pars_type).energy_types), energies_cal = Symbol.(string.(energies) .* "_cal")
@@ -125,13 +134,24 @@ function _dataprod_lq(data::LegendData, sel::AnyValiditySelection, detector::Det
 end
 
 """
-    get_ged_psd_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
+    get_ged_psd_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; aoe_pars_type::Symbol = :ppars, aoe_pars_cat::Symbol = :aoe, lq_pars_type::Symbol = :ppars, lq_pars_cat::Symbol = :lq)
 
-Get the HPGe psd calibration function for the given data, validity selection and
-detector.
+Returns the HPGe PSD calibration `PropertyFunction` for the given data,
+validity selection and detector.
 
-Note: Caches configuration/calibration data internally, use a fresh `data`
-object if on-disk configuration/calibration data may have changed.
+The function has one property `<aoe_type>_classifier` for each A/E type and
+one property `<lq_type>_classifier` for each LQ type of the PSD configuration
+of `detector`. Each evaluates the calibration function stored in the
+parameters.
+
+## Keywords
+* `aoe_pars_type::Symbol = :ppars`: Parameter set for A/E, `:ppars` or `:rpars`.
+* `aoe_pars_cat::Symbol = :aoe`: Parameter category that holds the A/E calibration.
+* `lq_pars_type::Symbol = :ppars`: Parameter set for LQ, `:ppars` or `:rpars`.
+* `lq_pars_cat::Symbol = :lq`: Parameter category that holds the LQ calibration.
+
+The configuration and calibration data are cached internally; use a fresh
+`data` object if the data on disk may have changed.
 """
 function get_ged_psd_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; aoe_pars_type::Symbol=:ppars, aoe_pars_cat::Symbol=:aoe, lq_pars_type::Symbol=:ppars, lq_pars_cat::Symbol=:lq)
     let aoe_types = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=aoe_pars_type).aoe_types), aoe_classifier = Symbol.(string.(aoe_types) .* "_classifier"), lq_types = Symbol.(_dataprod_lq(data, sel, detector; pars_type=lq_pars_type).lq_types), lq_classifier = Symbol.(string.(lq_types) .* "_classifier")
@@ -172,10 +192,13 @@ const _cached_dataprod_qc_cuts_pf = LRU{Tuple, PropertyFunction}(maxsize = 10^3)
 """
     get_ged_qc_cuts_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
 
-Get the Ge-detector QC cut definitions for the given data and validity selection.
+Returns the `PropertyFunction` of the Ge-detector quality cut (QC) definitions
+for the given data, validity selection and detector.
 
-The effective QC configuration is merged in increasing order of precedence:
-`default`, the detector's usability group (for example `ac`), and the detector.
+The function is built from the `labels` of the effective QC configuration,
+which is merged in increasing order of precedence from `default`, the
+usability group of the detector (for example `ac`), and the detector itself.
+The result is cached per `data`, `sel` and `detector`.
 """
 function get_ged_qc_cuts_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
     key = _qc_key(data, sel, detector)
@@ -189,9 +212,13 @@ export get_ged_qc_cuts_propfunc
 const _cached_dataprod_is_trig_pf = LRU{Tuple, PropertyFunction}(maxsize = 10^3)
 
 """
-    get_ged_qc_istrig_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    get_ged_qc_is_trig_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
 
-Get the Ge-detector trigger condition for the given data and validity selection.
+Returns the `PropertyFunction` of the Ge-detector trigger condition `is_trig`
+for the given data, validity selection and detector.
+
+The effective QC configuration is resolved as in
+[`get_ged_qc_cuts_propfunc`](@ref).
 """
 function get_ged_qc_is_trig_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
     key = _qc_key(data, sel, detector)
@@ -207,9 +234,12 @@ const _cached_dataprod_is_single_pulse_pf = LRU{Tuple, PropertyFunction}(maxsize
 """
     get_ged_qc_is_single_pulse_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
 
-Get a `PropertyFunction` that returns `true` for events that fulfill the effective
-`is_single_pulse` definition. Usability-group and detector-specific QC overrides
-are applied while resolving the detector's QC configuration.
+Returns a `PropertyFunction` that returns `true` for events that fulfill the
+effective `is_single_pulse` definition.
+
+Usability-group and detector-specific QC overrides are applied while resolving
+the QC configuration of the detector, as in
+[`get_ged_qc_cuts_propfunc`](@ref).
 """
 function get_ged_qc_is_single_pulse_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
     key = _qc_key(data, sel, detector)
@@ -225,7 +255,11 @@ const _cached_dataprod_is_empty_trace_pf = LRU{Tuple, PropertyFunction}(maxsize 
 """
     get_ged_qc_is_empty_trace_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
 
-Get a `PropertyFunction` that returns `true` for events that fullfill the `is_empty_trace` definition.
+Returns a `PropertyFunction` that returns `true` for events that fulfill the
+effective `is_empty_trace` definition.
+
+The effective QC configuration is resolved as in
+[`get_ged_qc_cuts_propfunc`](@ref).
 """
 function get_ged_qc_is_empty_trace_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
     key = _qc_key(data, sel, detector)
@@ -241,7 +275,11 @@ const _cached_dataprod_is_crosstalk_pf = LRU{Tuple, PropertyFunction}(maxsize = 
 """
     get_ged_qc_is_crosstalk_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
 
-Get a `PropertyFunction` that returns `true` for events that fullfill the `is_crosstalk` definition.
+Returns a `PropertyFunction` that returns `true` for events that fulfill the
+effective `is_crosstalk` definition.
+
+The effective QC configuration is resolved as in
+[`get_ged_qc_cuts_propfunc`](@ref).
 """
 function get_ged_qc_is_crosstalk_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
     key = _qc_key(data, sel, detector)
@@ -256,9 +294,19 @@ export get_ged_qc_is_crosstalk_propfunc
 ### HPGe cut functions
 
 """
-    LegendDataManagement.dataprod_pars_aoe_window(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    dataprod_pars_aoe_window(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, aoe_classifier::Symbol; pars_type::Symbol = :ppars, pars_cat::Symbol = :aoe)
 
-Get the A/E cut window for the given data, validity selection and detector.
+Returns the A/E cut window of `aoe_classifier` for the given data, validity
+selection and detector as a `ClosedInterval`.
+
+The limits are the `lowcut` and `highcut` entries of the A/E parameters; a
+missing limit is `-Inf` or `Inf`, respectively.
+
+## Keywords
+* `pars_type::Symbol = :ppars`: Parameter set to use, `:ppars` or `:rpars`.
+* `pars_cat::Symbol = :aoe`: Parameter category that holds the A/E parameters.
+
+See also [`LegendDataManagement.dataprod_pars_lq_window`](@ref).
 """
 function dataprod_pars_aoe_window(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, aoe_classifier::Symbol; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
     aoecut_lo::Float64 = get(_get_aoecal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat)[aoe_classifier], :lowcut, -Inf)
@@ -277,9 +325,21 @@ function _get_ged_aoe_dscut_propfunc_str(data::LegendData, sel::AnyValiditySelec
 end
 
 """
-    LegendDataManagement.get_ged_aoe_cut_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
+    get_ged_aoe_cut_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol = :ppars, pars_cat::Symbol = :aoe)
 
-Get the A/E cut propfuncs for the given data, validity selection and detector.
+Returns the A/E cut `PropertyFunction` for the given data, validity selection
+and detector.
+
+For each A/E classifier of the configuration of `detector` the function has
+the properties `<classifier>_low_cut`, which is `true` below the lower limit
+of the cut window, and `<classifier>_ds_cut`, which is `true` outside the
+window. The window is given by [`dataprod_pars_aoe_window`](@ref).
+
+## Keywords
+* `pars_type::Symbol = :ppars`: Parameter set to use, `:ppars` or `:rpars`.
+* `pars_cat::Symbol = :aoe`: Parameter category that holds the A/E parameters.
+
+See also [`get_ged_lq_cut_propfunc`](@ref).
 """
 function get_ged_aoe_cut_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
     let aoe_classifiers = Symbol.(_dataprod_aoe(data, sel, detector; pars_type=pars_type).aoe_classifiers), aoe_low_cut = Symbol.(string.(aoe_classifiers) .* "_low_cut"),
@@ -301,9 +361,19 @@ export get_ged_aoe_cut_propfunc
 
 
 """
-    LegendDataManagement.dataprod_pars_lq_window(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, lq_classifier::Symbol; pars_type::Symbol=:ppars, pars_cat::Symbol=:lq)
+    LegendDataManagement.dataprod_pars_lq_window(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, lq_classifier::Symbol; pars_type::Symbol = :ppars, pars_cat::Symbol = :lq)
 
-Get the LQ cut window for the given data, validity selection and detector.
+Returns the LQ cut window of `lq_classifier` for the given data, validity
+selection and detector as a `ClosedInterval`.
+
+The limits are the `lowcut` and `highcut` entries of the LQ parameters; a
+missing limit is `-Inf` or `Inf`, respectively.
+
+## Keywords
+* `pars_type::Symbol = :ppars`: Parameter set to use, `:ppars` or `:rpars`.
+* `pars_cat::Symbol = :lq`: Parameter category that holds the LQ parameters.
+
+See also [`dataprod_pars_aoe_window`](@ref).
 """
 function dataprod_pars_lq_window(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, lq_classifier::Symbol; pars_type::Symbol=:ppars, pars_cat::Symbol=:lq)
     lqcut_lo::Float64 = get(_get_lqcal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat)[lq_classifier], :lowcut, -Inf)
@@ -320,9 +390,22 @@ function _get_ged_lq_dscut_propfunc_str(data::LegendData, sel::AnyValiditySelect
 end
 
 """
-    LegendDataManagement.get_ged_lq_cut_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:lq)
+    get_ged_lq_cut_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol = :ppars, pars_cat::Symbol = :lq)
 
-Get the LQ cut propfuncs for the given data, validity selection and detector.
+Returns the LQ cut `PropertyFunction` for the given data, validity selection
+and detector.
+
+For each LQ classifier of the configuration of `detector` the function has the
+properties `<classifier>_high_cut`, which is `true` above the upper limit of
+the cut window, and `<classifier>_ds_cut`, which is `true` outside the
+window. The window is given by
+[`LegendDataManagement.dataprod_pars_lq_window`](@ref).
+
+## Keywords
+* `pars_type::Symbol = :ppars`: Parameter set to use, `:ppars` or `:rpars`.
+* `pars_cat::Symbol = :lq`: Parameter category that holds the LQ parameters.
+
+See also [`get_ged_aoe_cut_propfunc`](@ref).
 """
 function get_ged_lq_cut_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:lq)
     let lq_classifiers = Symbol.(_dataprod_lq(data, sel, detector; pars_type=pars_type).lq_classifiers), lq_high_cut = Symbol.(string.(lq_classifiers) .* "_high_cut"),
@@ -344,9 +427,16 @@ export get_ged_lq_cut_propfunc
 
 
 """
-    get_ged_psd_classifier_propfunc(data::LegendData, sel::AnyValiditySelection)
+    get_ged_psd_classifier_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol = :ppars)
 
-Get the PSD cut propfuncs for the given data and validity selection.
+Returns the `PropertyFunction` of the PSD classifier for the given data,
+validity selection and detector.
+
+The function is built from the `psd_classifier` entry of the PSD
+configuration of `detector`.
+
+## Keywords
+* `pars_type::Symbol = :ppars`: Configuration set to use, `:ppars` or `:rpars`.
 """
 function get_ged_psd_classifier_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars)
     dataprod_psd_config = _dataprod_psd(data, sel).psd
@@ -397,10 +487,18 @@ end
 
 
 """
-    get_spm_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    get_spm_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol = :ppars, pars_cat::Symbol = :sipmcal)
 
-Get the LAr/SPMS calibration function for the given data, validity selection
-and detector.
+Returns the liquid-argon (LAr) SiPM calibration `PropertyFunction` for the
+given data, validity selection and detector.
+
+The function has one property `<energy_type>_cal` for each energy type of the
+LAr configuration. Each evaluates the calibration function stored in the
+parameters; without a stored function the result is `NaN`.
+
+## Keywords
+* `pars_type::Symbol = :ppars`: Parameter set to use, `:ppars` or `:rpars`.
+* `pars_cat::Symbol = :sipmcal`: Parameter category that holds the calibration.
 """
 function get_spm_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:sipmcal)
     let energies = keys(_dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types), energies_cal = Symbol.(string.(keys(_dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types)) .* "_cal")
@@ -414,10 +512,19 @@ end
 export get_spm_cal_propfunc
 
 """
-    get_spm_dc_sel_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    get_spm_dc_sel_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol = :ppars)
 
-Get the LAr/SPMS DC calibration selector function for the given data, validity selection
-and detector.
+Returns the SiPM delayed-coincidence (DC) selector functions for the given
+data, validity selection and detector as a `NamedTuple` of
+`PropSelFunction`s.
+
+The tuple has one entry `<energy_type>_is_dc` for each energy type of the LAr
+configuration. Each selects the properties of the energy type and of its DC
+counterpart under the names `max`, `pos`, `max_dc` and `pos_dc`, which are the
+inputs of the corresponding function of [`get_spm_dc_cal_propfunc`](@ref).
+
+## Keywords
+* `pars_type::Symbol = :ppars`: Configuration set to use, `:ppars` or `:rpars`.
 """
 function get_spm_dc_sel_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars)
     let energies = keys(_dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types), energies_dc = Symbol.(string.(keys(_dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types)) .* "_is_dc")
@@ -428,10 +535,19 @@ export get_spm_dc_sel_propfunc
 
 
 """
-    get_spm_dc_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    get_spm_dc_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol = :ppars)
 
-Get the LAr/SPMS DC calibration function for the given data, validity selection
-and detector.
+Returns the SiPM delayed-coincidence (DC) tagging functions for the given
+data, validity selection and detector as a `NamedTuple` of
+`PropertyFunction`s.
+
+The tuple has one entry `<energy_type>_is_dc` for each energy type of the LAr
+configuration. Each returns, for every pulse position, whether a DC pulse lies
+within the configured time difference and amplitude interval. The input
+properties are those selected by [`get_spm_dc_sel_propfunc`](@ref).
+
+## Keywords
+* `pars_type::Symbol = :ppars`: Configuration set to use, `:ppars` or `:rpars`.
 """
 function get_spm_dc_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars)
     let energies = keys(_dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types), energies_dc = Symbol.(string.(keys(_dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types)) .* "_is_dc")
@@ -496,10 +612,18 @@ end
 
 
 """
-    get_pmt_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    get_pmt_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol = :rpars, pars_cat::Symbol = :pmtcal)
 
-Get the PMT calibration function for the given data, validity selection
-and detector.
+Returns the PMT calibration `PropertyFunction` for the given data, validity
+selection and detector.
+
+The function has one property `<energy_type>_cal` for each energy type of the
+muon configuration. Each evaluates the calibration function stored in the
+parameters; without a stored function the result is `NaN`.
+
+## Keywords
+* `pars_type::Symbol = :rpars`: Parameter set to use, `:rpars` or `:ppars`.
+* `pars_cat::Symbol = :pmtcal`: Parameter category that holds the calibration.
 """
 function get_pmt_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:rpars, pars_cat::Symbol=:pmtcal)
     let energies = keys(_dataprod_muon_cal(data, sel, detector; pars_type=pars_type).energy_types), energies_cal = Symbol.(string.(keys(_dataprod_muon_cal(data, sel, detector; pars_type=pars_type).energy_types)) .* "_cal")
@@ -514,9 +638,16 @@ export get_pmt_cal_propfunc
 
 
 """
-    get_pmt_is_physical_trig_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    get_pmt_is_physical_trig_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type = :rpars)
 
-Get the PMT physical trigger condition for the given data and validity selection.
+Returns the PMT physical trigger condition as a `PropertyFunction` for the
+given data, validity selection and detector.
+
+The function has one property `<energy_type>_is_physical_trig` for each energy
+type of the muon configuration.
+
+## Keywords
+* `pars_type = :rpars`: Configuration set to use, `:rpars` or `:ppars`.
 """
 function get_pmt_is_physical_trig_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type=:rpars)
     let energies = keys(_dataprod_muon_cal(data, sel, detector; pars_type=pars_type).energy_types), energies_is_physical_trig = Symbol.(string.(keys(_dataprod_muon_cal(data, sel, detector; pars_type=pars_type).energy_types)) .* "_is_physical_trig")

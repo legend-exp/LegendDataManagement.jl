@@ -4,25 +4,32 @@
 """
     struct LegendData <: AbstractSetupData
 
+    LegendData(setup::Symbol; dataset::Symbol = :default)
+    LegendData(setup_config::SetupConfig, name::Symbol, dataset::Symbol)
+
 Provides access to LEGEND data and metadata.
 
-Constructors:
+`LegendData(setup; dataset)` requires the `\$$_data_config_envvar_name` environment
+variable to be set (see [`LegendDataConfig`](@ref)) and uses the
+[`SetupConfig`](@ref) of `setup`. `dataset` names the run list in the metadata
+`datasets/runlists` that [`runinfo`](@ref) and [`analysis_runs`](@ref) read;
+`:default` selects no run list, so `runinfo` holds every run the metadata has.
 
-* `LegendData(setup_config::SetupConfig)`.
+`LegendData` has the (virtual) properties
+* `metadata`: The metadata database as a [`LegendDataManagement.PropsDB`](@ref).
+* `par`: The parameter database `par` as a [`LegendDataManagement.PropsDB`](@ref).
+* `jlpar`: The parameter database `jlpar` as a [`LegendDataManagement.PropsDB`](@ref).
+* `tier`: A [`LegendDataManagement.LegendTierData`](@ref) that gives the paths of the data files.
+* `name::Symbol`: Name of the setup.
+* `dataset::Symbol`: Name of the dataset.
 
-* `LegendData(setup::Symbol; dataset::Symbol = :default)` - requires the `\$$_data_config_envvar_name`
-  environment variable to be set. `dataset` names the run list in the metadata `datasets/runlists`
-  that `runinfo` and `analysis_runs` read; `:default` selects no run list, so `runinfo` holds every
-  run the metadata has.
-
-Examples:
-
+## Examples
 ```julia
+using LegendDataManagement
+
 config_filename = "/path/to/config.json"
 config = LegendDataConfig(config_filename)
-l200 = LegendData(config.setups.l200)
-
-filekey = FileKey("l200-p02-r006-cal-20221226T200846Z")
+l200 = LegendData(config.setups.l200, :l200, :default)
 ```
 
 or simply (if `\$$_data_config_envvar_name` is set):
@@ -31,24 +38,18 @@ or simply (if `\$$_data_config_envvar_name` is set):
 l200 = LegendData(:l200)
 ```
 
-`LegendData` has the (virtual) properties `metadata` and `tier`.
-
-The full path to "tier" data files can be retrieved using
-```julia
-(data::LegendData)[tier::Symbol, filekey::FileKey]
-(data::LegendData).tier[tier::Symbol, filekey::AbstractString]
-```
-
-Example:
+The full path to tier data files can be retrieved using `l200.tier`:
 
 ```julia
 l200.tier[:raw]
 l200.tier[:raw, FileKey("l200-p02-r006-cal-20221226T200846Z")]
 ```
 
-LegendData comes with an extension for SolidStateDetectors:
+`LegendData` comes with an extension for SolidStateDetectors.jl:
 
 ```julia
+using SolidStateDetectors
+
 l200 = LegendData(:l200)
 SolidStateDetector(l200, :V99000A)
 ```
@@ -109,20 +110,24 @@ end
 Base.@deprecate data_filename(data::LegendData, filekey::FileKey, tier::DataTierLike) data.tier[tier, filekey]
 export data_filename
 
+"""
+    data_filename(data::LegendData, filekey::FileKey, tier::DataTierLike)
+
+Deprecated. Use `data.tier[tier, filekey]` instead (see
+[`LegendDataManagement.LegendTierData`](@ref)).
+"""
+data_filename
+
 
 """
     struct LegendDataManagement.LegendTierData
 
-Constructors:
+    LegendDataManagement.LegendTierData(data::LegendData)
 
-```julia
-(data::LegendData).tier
+Gives access to the paths of the data directories and files of a
+[`LegendData`](@ref). The usual way to get one is `data.tier`.
 
-LegendDataManagement.LegendTierData(data::LegendData)
-```
-
-The path to data directories and files can be accessed via `getindex` on
-`tier_data::LegendTierData`:
+The paths can be accessed via `getindex` on `tier_data::LegendTierData`:
 
 ```julia
 tier_data[]
@@ -131,14 +136,25 @@ tier_data[tier::DataTierLike, category::DataCategoryLike]
 tier_data[tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike]
 tier_data[tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike, run::DataRunLike]
 tier_data[tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike, run::DataRunLike, ch::ChannelIdLike]
+tier_data[tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike, run::DataRunLike, det::DetectorIdLike]
 
 tier_data[tier::DataTierLike, filekey::FileKeyLike]
-tier_data[tier::DataTierLike, filekey::FileKeyLike, ch::ChannelIdLike]
+tier_data[tier::DataTierLike, filekey::FileKey, ch::ChannelIdLike]
+tier_data[tier::DataTierLike, filekey::FileKey, det::DetectorIdLike]
 ```
 
-Examples:
+The paths with a channel or a detector are the names of the files of that
+channel or detector in the directory of the run. A string as second index is
+interpreted as a data category if it can be converted to one, otherwise as a
+file key.
 
+## Fields
+* `data::LegendData`: The data the paths belong to.
+
+## Examples
 ```julia
+using LegendDataManagement
+
 l200 = LegendData(:l200)
 
 filekey = FileKey("l200-p02-r006-cal-20221226T200846Z")
@@ -148,6 +164,9 @@ isdir(l200.tier[:raw, :cal])
 isdir(l200.tier[:raw, :cal, "p02"])
 isdir(l200.tier[:raw, :cal, "p02", "r006"])
 isdir(l200.tier[DataTier(:raw), DataCategory(:cal), DataPeriod(2), DataRun(6)])
+```
+
+See also [`data_path`](@ref).
 """
 struct LegendTierData
     data::LegendData
@@ -157,7 +176,8 @@ end
 """
     data_path(tier_data::LegendTierData, path_components::AbstractString...)
 
-Get the full absolute path for the given `path_components` relative to `tier_data`.
+Returns the full absolute path for the given `path_components` relative to
+the `tier` directory of `tier_data`.
 """
 data_path(tier_data::LegendTierData, path_components::AbstractString...) = data_path(tier_data.data, "tier", path_components...)
 
@@ -225,21 +245,31 @@ end
 
 
 """
-    search_disk(::Type{<:DataSelector}, path::AbstractString)
-    search_disk(::Type{DataSet}, data::LegendData; search_categories::Vector{<:DataCategoryLike} = DataCategory.([:cal, :phy]), search_tier::DataTierLike = DataTier(:raw), only_analysis_runs::Bool=true, save_filekeys::Bool=true, ignore_save_tier::Bool=false, save_tier::DataTierLike=DataTier(:jlfks))
+    search_disk(::Type{DT}, path::AbstractString) where DT<:DataSelector
+    search_disk(::Type{DataSet}, data::LegendData; search_categories = DataCategory.([:cal, :phy]), search_tier = DataTier(:raw), only_analysis_runs = true, save_filekeys = true, ignore_save_tier = false, save_tier = DataTier(:jlfks))
 
-Search on-disk data for data categories, periods, runs, and filekeys or whole datasets
-If you want to search for a whole `DataSet`, you have the following keyword options:
-    - `search_categories` (default: `[:cal, :phy]`): The categories to search on disk.
-    - `search_tier` (default: `DataTier(:raw)`): The tier to search on disk.
-    - `only_analysis_runs` (default: `true`): Only include for analysis runs as defined in the metadata
-    - `save_filekeys` (default: `true`): Save the filekeys to a file in the `save_tier` directory.
-    - `ignore_save_tier` (default: `false`): Ignore the `save_tier` and do not save the filekeys.
-    - `save_tier` (default: `DataTier(:jlfks)`): The tier to save the filekeys to.
+Searches on-disk data for data categories, periods, runs, and file keys or
+for a whole [`DataSet`](@ref).
 
-Examples:
+For `DT<:DataSelector` the method returns the sorted, unique values of type
+`DT` that can be parsed from the names of the entries in the directory `path`.
+For `DataSet` it searches the directories of the categories, periods and runs
+of `runinfo(data)` and returns the file keys found as a `DataSet`.
 
+## Keywords
+* `search_categories::Vector{<:DataCategoryLike} = DataCategory.([:cal, :phy])`: The categories to search on disk.
+* `search_tier::DataTierLike = DataTier(:raw)`: The tier to search on disk.
+* `only_analysis_runs::Bool = true`: Only include analysis runs as defined in the metadata.
+* `save_filekeys::Bool = true`: Save the file keys found to the file `filekeys.txt` in the run directory of `save_tier`.
+* `ignore_save_tier::Bool = false`: Search the disk even if a file with saved file keys exists, and discard the cached result.
+* `save_tier::DataTierLike = DataTier(:jlfks)`: The tier that holds the saved file keys.
+
+The result for `DataSet` is cached per `data`, categories, tiers.
+
+## Examples
 ```julia
+using LegendDataManagement
+
 l200 = LegendData(:l200)
 
 search_disk(DataCategory, l200.tier[:raw])
@@ -248,6 +278,8 @@ search_disk(DataRun, l200.tier[:raw, :cal, "p02"])
 search_disk(FileKey, l200.tier[DataTier(:raw), :cal, DataPeriod(2), "r006"])
 search_disk(DataSet, l200)
 ```
+
+See also [`find_filekey`](@ref).
 """
 function search_disk end
 export search_disk
@@ -293,9 +325,23 @@ end
 """
     find_filekey(ds::DataSet, ts::TimestampLike)
     find_filekey(data::LegendData, ts::TimestampLike)
-Find the filekey of the DAQ cycle that contains a given timestamp, i.e. the last key
-that starts at or before `ts`. `ds.keys` must be sorted by time; for `data` the
-`DataSet` is built (and cached) from the cycle keys of `runinfo(data)`.
+
+Finds the file key of the DAQ cycle that contains the timestamp `ts`, i.e. the
+last key that starts at or before `ts`.
+
+`ds.keys` must be sorted by time. For `data` the `DataSet` is built (and
+cached) from the cycle keys of `runinfo(data)`. Throws an `ArgumentError` if
+`ts` is before the first key.
+
+## Examples
+```julia
+using LegendDataManagement
+
+l200 = LegendData(:l200)
+find_filekey(l200, "20221226T200846Z")
+```
+
+See also [`DataSet`](@ref), [`runinfo`](@ref).
 """
 function find_filekey end
 export find_filekey
@@ -314,13 +360,33 @@ end
 
 
 """
+    DataSet(keys::AbstractVector{FileKey}, name::Symbol = :default)
     DataSet(data::LegendData)
     DataSet(data::LegendData, period::DataPeriodLike)
     DataSet(data::LegendData, period::DataPeriodLike, run::DataRunLike)
     DataSet(data::LegendData, rinfo::Table)
 
-The DAQ cycle keys of every category of the given runs, sorted by time and named after
-`data.dataset`. Without a selection the set holds the keys of every run of `runinfo(data)`.
+Vector of [`FileKey`](@ref)s with a name, e.g. the keys of the DAQ cycles of
+every category of the given runs.
+
+For a [`LegendData`](@ref) the keys are sorted by time and the set is named
+after `data.dataset`. Without a selection the set holds the keys of every run
+of `runinfo(data)`. The keys of a set are available as `ds.keys`. `ts in ds`
+tells whether the timestamp `ts` lies in the time the keys of `ds` cover.
+
+## Fields
+* `keys::Vector{FileKey}`: The file keys of the set.
+
+## Examples
+```julia
+using LegendDataManagement
+
+l200 = LegendData(:l200)
+ds = DataSet(l200, :p03)
+ds = DataSet(l200, :p03, :r000)
+```
+
+See also [`search_disk`](@ref), [`find_filekey`](@ref).
 """
 DataSet(data::LegendData, rinfo::Table) = DataSet(sort(reduce(vcat, rinfo.keys; init = FileKey[]); by = Timestamp), data.dataset)
 DataSet(data::LegendData) = DataSet(data, runinfo(data))
@@ -363,14 +429,37 @@ const _channelinfo_status_ranking = (;
 )
 
 """
-    channelinfo(data::LegendData, sel::AnyValiditySelection; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, extended::Bool = false)
-    channelinfo(data::LegendData, sel::RunCategorySelLike; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, extended::Bool = false)
-    channelinfo(data::LegendData, sel::RunSelLike; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, extended::Bool = false)
-    channelinfo(data::LegendData, sel::PeriodSelLike; only_analysis_runs::Bool = true, explode_partitions::Bool = false, kwargs...)
-    channelinfo(data::LegendData, period::DataPeriodLike; only_analysis_runs::Bool = true, explode_partitions::Bool = false, kwargs...)
+    channelinfo(data::LegendData, sel::AnyValiditySelection; kwargs...)
+    channelinfo(data::LegendData, sel::RunCategorySelLike; kwargs...)
+    channelinfo(data::LegendData, sel::RunSelLike; kwargs...)
+    channelinfo(data::LegendData, sel::PeriodSelLike; kwargs...)
+    channelinfo(data::LegendData, period::DataPeriodLike; kwargs...)
 
-Get all channel information for the given [`LegendData`](@ref) and
-[`ValiditySelection`](@ref). A selection that names no category uses `:cal`.
+Returns the channel information of `data` for the selection `sel` as a
+`TypedTables.Table` with one row per channel.
+
+`sel` is a [`LegendDataManagement.ValiditySelection`](@ref) or a
+[`FileKey`](@ref), a run `(period, run, category)`, a run `(period, run)`, a
+period `(period, category)` or a period. A selection that names no category
+uses `:cal`; a period alone selects `(period, :cal)`. The selections can also
+be passed as separate arguments, e.g. `channelinfo(data, period, run, category)`.
+
+## Keywords
+* `system::Symbol = :all`: Keep only the channels of this system, e.g. `:geds` or `:spms`. `:all` keeps every system.
+* `only_processable::Bool = false`: Keep only channels that are marked as processable.
+* `only_usability::Symbol = :all`: Keep only channels with this usability, e.g. `:on`. `:all` keeps every usability.
+* `sort_by::Symbol = :detector`: Name of the column to sort by, compared as strings. `:string` sorts by detector string and position. A name that is not a column leaves the order of the channel map.
+* `extended::Bool = false`: Add the columns `cc4`, `cc4ch`, `daqcrate`, `daqcard`, `hvcard`, `hvch`, `enrichment`, `mass`, `total_volume`, `active_volume` and `fccd`.
+* `verbose::Bool = true`: Warn if the metadata has no FCCD value of a detector with `extended = true`; the FCCD is then set to zero.
+* `only_analysis_runs::Bool = true`: For a period selection, merge only the analysis runs.
+* `explode_partitions::Bool = false`: Return one row per detector and partition.
+
+## Columns
+The table has the columns `detector`, `channel`, `fcid`, `rawid`, `system`,
+`processable`, `usability`, `is_blinded`, `psd_usability`, `low_aoe_status`,
+`high_aoe_status`, `lq_status`, `ann_status`, `coax_rt_status`, `is_bb_like`,
+`partition`, `det_type`, `location`, `detstring`, `fiber` and `position`, plus
+the columns listed for `extended`.
 
 For a period selection `(period, category)` the channel information of all
 runs of that category in the period (only the analysis runs if
@@ -379,16 +468,30 @@ runs of that category in the period (only the analysis runs if
 `*_status` columns take the best value over the runs, all other columns must
 be identical in every run.
 
-The table has the column `partition` after `is_bb_like`, from
-[`partitioninfo`](@ref). For a period selection `(period, category)` it holds
-the sorted [`DataPartition`](@ref)s of each detector that contain the period,
-empty for a detector in no partition. For every other selection it holds the
-one `DataPartition` of each detector that contains the run, `missing` for a
-detector in no partition. If the metadata has no groupings of the category
-(`datasets/<category>_groupings`), `partition` is `missing` for every
-detector. With `explode_partitions = true` the table has one row per detector
-and partition, with a single `DataPartition` in `partition`; detectors in no
-partition are left out.
+The column `partition` is taken from [`partitioninfo`](@ref). For a period
+selection `(period, category)` it holds the sorted [`DataPartition`](@ref)s of
+each detector that contain the period, empty for a detector in no partition.
+For every other selection it holds the one `DataPartition` of each detector
+that contains the run, `missing` for a detector in no partition. If the
+metadata has no groupings of the category (`datasets/<category>_groupings`),
+`partition` is `missing` for every detector. With `explode_partitions = true`
+the table has one row per detector and partition, with a single
+`DataPartition` in `partition`; detectors in no partition are left out.
+
+The result is cached per `data` object and selection, so changes of the
+metadata on disk are not seen by the same `data`.
+
+## Examples
+```julia
+using LegendDataManagement
+
+l200 = LegendData(:l200)
+chinfo = channelinfo(l200, (:p03, :r000, :cal))
+chinfo = channelinfo(l200, :p03, :r000, :cal; system = :geds, only_processable = true)
+chinfo = channelinfo(l200, FileKey("l200-p03-r000-cal-20230311T235840Z"); extended = true)
+```
+
+See also [`partitioninfo`](@ref), [`runinfo`](@ref).
 """
 function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunSelLike, PeriodSelLike}; system::Symbol = :all, only_processable::Bool = false, only_usability::Symbol = :all, sort_by::Symbol=:detector, extended::Bool = false, verbose::Bool = true, only_analysis_runs::Bool = true, explode_partitions::Bool = false)
     if sel isa Tuple
@@ -629,12 +732,27 @@ end
     channelinfo(data::LegendData, sel, channel::Union{ChannelIdLike, DetectorIdLike}; kwargs...)
     channelinfo(data::LegendData, sel, channels::AbstractVector; kwargs...)
 
-Get the channel information of the selection `sel` (see above, e.g. a validity selection,
-`(period, run, category)` or `(period, category)`) for one [`ChannelId`](@ref) or
-[`DetectorId`](@ref), or for a vector of them. One channel gives its row, or with
-`explode_partitions = true` a table of its rows, one per partition. A vector gives a table
-with the rows of the channels in the given order. The selection and the channel can also be
-passed as separate arguments, e.g. `channelinfo(data, period, category, detector)`.
+Returns the channel information of the selection `sel` (as for the methods
+above, e.g. a validity selection, `(period, run, category)` or
+`(period, category)`) for one [`ChannelId`](@ref) or [`DetectorId`](@ref), or
+for a vector of them.
+
+One channel gives its row, or with `explode_partitions = true` a table of its
+rows, one per partition. A vector gives a table with the rows of the channels
+in the given order. The selection and the channel can also be passed as
+separate arguments, e.g. `channelinfo(data, period, category, detector)`.
+Throws an `ArgumentError` if the channel is not found or if it has several
+rows without `explode_partitions = true`. The keywords are those of the
+methods above.
+
+## Examples
+```julia
+using LegendDataManagement
+
+l200 = LegendData(:l200)
+channelinfo(l200, (:p03, :r000, :cal), :V00000A)
+channelinfo(l200, :p03, :cal, [:V00000A, :V00000B])
+```
 """
 function channelinfo(data::LegendData, sel::Tuple{Union{AnyValiditySelection, RunSelLike, PeriodSelLike, RunCategorySelLike}, Union{ChannelIdLike, DetectorIdLike}}; explode_partitions::Bool = false, kwargs...)
     sel, channel = sel[1], sel[2]
@@ -657,6 +775,12 @@ function channelinfo(data::LegendData, sel::Tuple{Union{AnyValiditySelection, Ru
     chinfo[idxs]
 end
 
+"""
+    channel_info(data::LegendData, sel::AnyValiditySelection)
+
+Deprecated. Use [`channelinfo`](@ref) instead; the columns of the result
+differ.
+"""
 function channel_info(data::LegendData, sel::AnyValiditySelection)
     Base.depwarn(
         "`channel_info(data::LegendData, sel::AnyValiditySelection)` is deprecated, use `channelinfo(data, sel)` instead (note: output format differs).",

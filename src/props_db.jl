@@ -46,7 +46,29 @@ end
 """
     struct LegendDataManagement.ValiditySelection
 
-Representy validiy selection for a `LegendDataManagement.PropsDB`[@ref].
+    ValiditySelection(timestamp::TimestampLike, category::DataCategoryLike)
+    ValiditySelection(filekey::FileKey)
+
+Selects the time and data category for which the content of a
+[`LegendDataManagement.PropsDB`](@ref) is valid.
+
+The time and the category of a [`FileKey`](@ref) are used for
+`ValiditySelection(filekey)`. The arguments are converted by the constructors
+of [`Timestamp`](@ref) and [`DataCategory`](@ref).
+
+## Fields
+* `timestamp::Timestamp`: Time of the selection.
+* `category::DataCategory`: Data category of the selection.
+
+## Examples
+```julia
+using LegendDataManagement
+
+sel = ValiditySelection("20221226T194007Z", :cal)
+sel = ValiditySelection(FileKey("l200-p02-r006-cal-20221226T194007Z"))
+```
+
+See also [`AnyValiditySelection`](@ref).
 """
 struct ValiditySelection
     timestamp::Timestamp
@@ -60,7 +82,8 @@ ValiditySelection(filekey::FileKey) = ValiditySelection(DateTime(filekey), DataC
 """
     const AnyValiditySelection = Union{ValiditySelection,FileKey}
 
-Anything that can be used in time/category-based data selection.
+Anything that can be used in time/category-based data selection, i.e. a
+[`LegendDataManagement.ValiditySelection`](@ref) or a [`FileKey`](@ref).
 """
 const AnyValiditySelection = Union{ValiditySelection,FileKey}
 export AnyValiditySelection
@@ -112,28 +135,37 @@ end
 """
     struct LegendDataManagement.PropsDB
 
-A PropsDB instance, e.g. `myprops`, presents an on-disk directory containing
-JSON files or sub-directories (that contains JSON files in leaf directories)
-as a dictionary of properties.
+A `PropsDB` instance, e.g. `myprops`, presents an on-disk directory containing
+JSON or YAML files or sub-directories (that contain such files in leaf
+directories) as a dictionary of properties.
 
 `PropsDB` supports `Base.keys` and `Base.getindex` as well as
-`Base.propertynames` and `Base.getproperty` to access it's contents.
-`getindex` and `getproperty` will return either another `PropsDB`
+`Base.propertynames` and `Base.getproperty` to access its contents.
+`getindex` and `getproperty` return either another `PropsDB`
 or a `PropDicts.PropDict`, depending on whether the accessed property
-is stored as a sub-directory or a JSON file. We recommend to use
-`getproperty` where the properties/keys of the PropDict are more or less
-standardized and where they may be arbitrary (see examples below).
+is stored as a sub-directory or a file. `getproperty` is meant for
+properties/keys that are more or less standardized, `getindex` for arbitrary
+ones (see examples below).
 
 The contents of `PropsDB` may be time- and category-dependent, determined by
-the presence of a "validity.json" file. In this case, use
-`myprops(sel::LegendDataManagement.ValiditySelection)` or
-`myprops(filekey::FileKey)` to select the desired time and category. The
-selection can be made at some point during traversal of properties or at
-the leaf `PropsDB` (see the examples below).
+the presence of a `validity.yaml` file. In this case, use
+`myprops(sel::LegendDataManagement.ValiditySelection)`,
+`myprops(timestamp, category)` or `myprops(filekey::FileKey)` to select the
+desired time and category. The selection can be made at some point during
+traversal of properties or at the leaf `PropsDB` (see the examples below).
 
-Examples:
+Code that uses `PropsDB` should not instantiate it directly. Use
+[`LegendDataManagement.AnyProps(path::AbstractString)`](@ref) instead, which
+returns the `PropsDB` for the directory `path`.
 
+## Parametric types
+* `VS`: `Nothing` if no validity selection has been made, otherwise
+    [`LegendDataManagement.ValiditySelection`](@ref).
+
+## Examples
 ```julia
+using LegendDataManagement
+
 l200 = LegendData(:l200)
 
 propertynames(l200.metadata.hardware)
@@ -147,14 +179,11 @@ diodes[keys(diodes)]
 
 sel = ValiditySelection("20221226T194007Z", :cal)
 filekey = FileKey("l200-p02-r006-cal-20221226T194007Z")
-data.metadata.hardware(sel).configuration.channelmaps
-data.metadata.hardware.configuration.channelmaps(filekey)
+l200.metadata.hardware(sel).configuration.channelmaps
+l200.metadata.hardware.configuration.channelmaps(filekey)
 ```
 
-Use code should *not* instantiate `PropsDB` directly, use 
-[`LegendDataManagement.AnyProps(path::AbstractString)`](@ref)
-instead, which may return a `PropsDB` or a `PropDicts.PropDict`
-depending on what on-disk content `path` points to. 
+See also [`LegendDataManagement.AnyProps`](@ref).
 """
 struct PropsDB{VS<:Union{Nothing,ValiditySelection}} <: AbstractDict{Symbol,AbstractDict}
     _base_path::String
@@ -175,11 +204,13 @@ end
     struct LegendDataManagement.NoSuchPropsDBEntry
 
 Indicates that a given property (path) of a
-`LegendDataManagementPropsDB`[@ref] does not exist.
+[`LegendDataManagement.PropsDB`](@ref) does not exist.
 
 Supports
 `PropDicts.writeprops(missing_props::NoSuchPropsDBEntry, props::PropDicts.PropDict)`
-to create the missing directories and file for the property path.
+to create the missing directories and file for the property path. A further
+property access on a `NoSuchPropsDBEntry` returns a `NoSuchPropsDBEntry` for
+the extended path.
 """
 struct NoSuchPropsDBEntry
     _base_path::String
@@ -213,16 +244,16 @@ PropDicts.PropDict(@nospecialize(missing_props::NoSuchPropsDBEntry)) = PropDicts
 
 """
     LegendDataManagement.AnyProps = Union{LegendDataManagement.PropsDB,PropDicts.PropDict}
+    LegendDataManagement.AnyProps(base_path::AbstractString; override_base::AbstractString = "")
 
 Properties stored either in a directory managed via
-[`LegendDataManagement.PropsDB`][@ref] or loaded from one or several files
+[`LegendDataManagement.PropsDB`](@ref) or loaded from one or several files
 into a `PropDicts.PropDict`.
 
-Constructors:
-
-```julia
-LegendDataManagement.AnyProps(base_path::AbstractString; override_base::AbstractString = "")
-```
+The constructor returns the [`LegendDataManagement.PropsDB`](@ref) for the
+directory `base_path`. Files in the directory `override_base`, if given, take
+precedence over files of the same name in `base_path`. Throws an
+`ArgumentError` if `base_path` is not a directory.
 """
 const AnyProps = Union{PropsDB,PropDict}
 
@@ -327,7 +358,7 @@ _needs_vsel(@nospecialize(pd::PropsDB)) = getfield(pd, :_needs_vsel)
 """
     data_path(pd::LegendDataManagement.PropsDB)
 
-Return the path to the data directory that contains `pd`.
+Returns the path of the directory that `pd` reads its properties from.
 """
 data_path(@nospecialize(pd::PropsDB)) = joinpath(_base_path(pd), _rel_path(pd)...)
 data_path(@nospecialize(pd::NoSuchPropsDBEntry)) = joinpath(_base_path(pd), _rel_path(pd)...)

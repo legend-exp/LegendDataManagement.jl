@@ -1,3 +1,19 @@
+"""
+    LegendDataManagementLegendHDF5IOExt
+
+Extension of LegendDataManagement for LegendHDF5IO.jl. It is loaded when
+LegendHDF5IO.jl and LegendDataTypes.jl are loaded.
+
+The extension provides the methods of [`read_ldata`](@ref) that read `lh5`
+files, and the reading and writing of the data selectors
+([`ExpSetup`](@ref), [`DataTier`](@ref), [`DataRun`](@ref),
+[`DataPeriod`](@ref), [`DataCategory`](@ref), [`DataPartition`](@ref),
+[`Timestamp`](@ref), [`FileKey`](@ref), [`ChannelId`](@ref) and
+[`DetectorId`](@ref)) and of arrays of them in `lh5` files. Selectors are
+stored as strings with a datatype attribute named like the type in lowercase
+(e.g. `datatier`); a [`DetectorId`](@ref) is stored as its `UInt32` encoding
+and read from either a string or an integer.
+"""
 module LegendDataManagementLegendHDF5IOExt
 
 using LegendDataManagement
@@ -373,6 +389,43 @@ function _read_lh5_det(h, data::LegendData, tier::DataTier, filekey::FileKey, de
 end
 
 
+"""
+    read_ldata(f, data::LegendData, (tier, filekey, timestamps, det); filterby = nothing, ignore_missing = false)
+
+Reads `lh5` data of `data`; the methods are provided by the extension for
+LegendHDF5IO.jl. See [`read_ldata`](@ref) for the arguments, keywords and
+examples.
+
+The selectors, as a tuple or as separate arguments, can have the forms
+
+* `(tier, filekey)`, `(tier, filekey, det)`: one DAQ cycle, all channels or one detector.
+* `(tier, filekey, timestamps)`, `(tier, filekey, timestamps, det)`: the rows of one DAQ cycle with the given times.
+* `(tier, timestamps)`, `(tier, timestamps, det)`: the rows with the given times, each read from the DAQ cycle that contains it.
+* `(tier, filekeys)`, `(tier, filekeys, det)`: several DAQ cycles.
+* `(tier, category, period)`, `(tier, category, period, det)`, `(tier, category, period, run)`, `(tier, category, period, run, det)`: runs of a period or a run.
+* `(tier, category, partition, det)`: the runs of a partition of a detector.
+* `(tier, category, runtable)`, `(tier, category, runtable, det)`: the runs listed in a table with the columns `period` and `run`.
+* any of these with a vector of detectors in place of `det`: one result per detector, in a `NamedTuple` keyed by detector.
+
+`tier` is a [`DataTier`](@ref) or anything it can be created from, `det` is a
+[`DetectorId`](@ref) or `nothing` for all channels. The other selectors are
+converted from symbols or strings by their type, so `(:jldsp, :cal, :p03, :r000,
+:V00000A)` selects the tier `jldsp`, category `cal`, period `p03`, run `r000`
+and the detector `V00000A`. An ambiguous selector throws an `ArgumentError`.
+
+The data of a detector is read from the file `data.tier[tier, filekey, det]` if
+it exists and otherwise from the group `<tier>/<det>` of
+`data.tier[tier, filekey]`. The results of several files are flattened
+key-wise into one table. Results for all channels are a `NamedTuple` keyed by
+channel.
+
+## Keywords
+* `filterby`: A `PropertyFunction`, or a `tier => PropertyFunction` pair or tuple of pairs, that selects the rows to read. The tiers must have one row per trigger; a row-count mismatch throws a `DimensionMismatch`.
+* `ignore_missing::Bool = false`: Skip tables that are missing or lack a requested timestamp.
+* `parallel::Bool = false`: Read the files in parallel on the workers of `wpool`. Available when reading several DAQ cycles, timestamps or runs.
+* `wpool::WorkerPool = default_worker_pool()`: Worker pool for `parallel = true`.
+* `search_disk::Bool = false`, `ignore_keys::Symbol = :all`: Choice of the file keys of a run, see [`read_ldata`](@ref).
+"""
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, FileKey, TimestampSel, DetectorSel};
     filterby::Union{Nothing, PropertyFunctions.PropertyFunction, Pair{<:DataTierLike, <:PropertyFunctions.PropertyFunction},
         Tuple{Vararg{Pair{<:DataTierLike, <:PropertyFunctions.PropertyFunction}}}}=nothing,
