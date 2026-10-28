@@ -163,11 +163,12 @@ struct PropsDB{VS<:Union{Nothing,ValiditySelection}} <: AbstractDict{Symbol,Abst
     _validity_sel::VS
     _prop_names::Vector{Symbol}
     _needs_vsel::Bool
+    _run_override::Union{Nothing,_ValidityDict}
 end
 
 function Base.:(==)(a::PropsDB, b::PropsDB)
     _base_path(a) == _base_path(b) && _override_base(a) == _override_base(b) && _rel_path(a) == _rel_path(b) && _validity_sel(a) == _validity_sel(b) &&
-        _prop_names(a) == _prop_names(b) && _needs_vsel(a) == _needs_vsel(b)
+        _prop_names(a) == _prop_names(b) && _needs_vsel(a) == _needs_vsel(b) && _run_override(a) == _run_override(b)
 end
 
 
@@ -226,11 +227,12 @@ LegendDataManagement.AnyProps(base_path::AbstractString; override_base::Abstract
 """
 const AnyProps = Union{PropsDB,PropDict}
 
-function AnyProps(base_path::AbstractString; override_base::AbstractString = "")
-    return _any_props(String(base_path), String(override_base), String[], nothing)
+function AnyProps(base_path::AbstractString; override_base::AbstractString = "", run_override::Union{Nothing,_ValidityDict} = nothing)
+    return _any_props(String(base_path), String(override_base), String[], nothing, run_override)
 end
 
-function _any_props(base_path::String, override_base::String, rel_path::Vector{String}, validity_sel::Union{Nothing,ValiditySelection})
+function _any_props(base_path::String, override_base::String, rel_path::Vector{String}, validity_sel::Union{Nothing,ValiditySelection},
+                    run_override::Union{Nothing,_ValidityDict} = nothing)
     !isdir(base_path) && throw(ArgumentError("PropsDB base path \"$base_path\" is not a directory"))
     full_primary_path = String(joinpath(base_path, rel_path...))
     full_override_path = String(joinpath(override_base, rel_path...))
@@ -253,10 +255,10 @@ function _any_props(base_path::String, override_base::String, rel_path::Vector{S
         if !isnothing(validity_sel)
             _read_validity_sel_filelist(full_primary_path, full_override_path, validity_info, validity_sel)
         else
-            PropsDB(base_path, override_base, rel_path, validity_sel, prop_names, true)
+            PropsDB(base_path, override_base, rel_path, validity_sel, prop_names, true, run_override)
         end
     else
-        PropsDB(base_path, override_base, rel_path, validity_sel, prop_names, false)
+        PropsDB(base_path, override_base, rel_path, validity_sel, prop_names, false, run_override)
     end
 end
 
@@ -322,6 +324,7 @@ _rel_path(@nospecialize(pd::PropsDB)) = getfield(pd, :_rel_path)
 _validity_sel(@nospecialize(pd::PropsDB)) = getfield(pd, :_validity_sel)
 _prop_names(@nospecialize(pd::PropsDB)) = getfield(pd, :_prop_names)
 _needs_vsel(@nospecialize(pd::PropsDB)) = getfield(pd, :_needs_vsel)
+_run_override(@nospecialize(pd::PropsDB)) = getfield(pd, :_run_override)
 
 
 """
@@ -352,7 +355,21 @@ function _check_propery_access(pd, existing_filename::String="")
 end
 
 
-(@nospecialize(pd::PropsDB{Nothing}))(selection::ValiditySelection) = _any_props(_base_path(pd), _override_base(pd), _rel_path(pd), selection)
+# A run override replaces the selected time by the time of the filekey it applies, if any:
+_run_override_sel(::Nothing, sel::ValiditySelection) = sel
+
+function _run_override_sel(run_override::_ValidityDict, sel::ValiditySelection)
+    category = haskey(run_override, sel.category) ? sel.category : DataCategory(:all)
+    haskey(run_override, category) || return sel
+    times, filelists = run_override[category]
+    idx = searchsortedlast(times, sel.timestamp)
+    (idx < firstindex(times) || isempty(filelists[idx])) && return sel
+    return ValiditySelection(FileKey(only(filelists[idx])).time, sel.category)
+end
+
+function (@nospecialize(pd::PropsDB{Nothing}))(selection::ValiditySelection)
+    _any_props(_base_path(pd), _override_base(pd), _rel_path(pd), _run_override_sel(_run_override(pd), selection), _run_override(pd))
+end
 
 function(@nospecialize(pd::PropsDB{Nothing}))(timestamp::Union{DateTime,Timestamp,AbstractString}, category::Union{DataCategory,Symbol,AbstractString})
     pd(ValiditySelection(timestamp, category))
@@ -364,7 +381,7 @@ end
 function _validity_sel_filelist(@nospecialize(pd::PropsDB{Nothing}), sel::AnyValiditySelection)
     validity_info = _load_validity_info(_base_path(pd), _override_base(pd), _rel_path(pd))
     isnothing(validity_info) && throw(ArgumentError("No validity information in $(data_path(pd))"))
-    return _get_validity_sel_filelist(validity_info, sel isa FileKey ? ValiditySelection(sel) : sel)
+    return _get_validity_sel_filelist(validity_info, _run_override_sel(_run_override(pd), sel isa FileKey ? ValiditySelection(sel) : sel))
 end
 
 
@@ -424,9 +441,9 @@ function _get_md_property(@nospecialize(pd::PropsDB), s::Symbol)
     yaml_primary_filename, yaml_override_filename = _propsdb_fullpaths(pd, "$s.yaml")
 
     if isdir(joinpath(_base_path(pd), new_relpath...))
-        _any_props(_base_path(pd), _override_base(pd), new_relpath, _validity_sel(pd))
+        _any_props(_base_path(pd), _override_base(pd), new_relpath, _validity_sel(pd), _run_override(pd))
     elseif isdir(joinpath(_override_base(pd), new_relpath...))
-        _any_props(_override_base(pd), "", new_relpath, _validity_sel(pd))
+        _any_props(_override_base(pd), "", new_relpath, _validity_sel(pd), _run_override(pd))
     elseif ispath(yaml_primary_filename)
         _check_propery_access(pd, yaml_primary_filename)
         if ispath(yaml_override_filename)
