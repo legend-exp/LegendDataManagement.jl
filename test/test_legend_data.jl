@@ -38,6 +38,18 @@ include("testing_utils.jl")
         @test LegendDataManagement._channelinfo_inputs(l200, other_filekey, false) == LegendDataManagement._channelinfo_inputs(l200, filekey, false)
         @test channelinfo(l200, other_filekey) == chinfo
         @test LegendDataManagement._channelinfo_inputs(l200, FileKey("l200-p02-r007-cal-20221226T210000Z"), false) != LegendDataManagement._channelinfo_inputs(l200, filekey, false)
+
+        # metadata of selections with the same validity entry is read once and shared
+        cache = LegendDataManagement.LRU{LegendDataManagement._ValidityKey, Any}(maxsize = 10)
+        get_chmaps = () -> l200.metadata.hardware.configuration.channelmaps
+        chmaps = LegendDataManagement._validity_cached(identity, cache, get_chmaps, l200, filekey, (:test, :channelmaps))
+        @test chmaps == get_chmaps()(filekey)
+        @test LegendDataManagement._validity_cached(identity, cache, get_chmaps, l200, other_filekey, (:test, :channelmaps)) === chmaps
+        @test LegendDataManagement._validity_cached(identity, cache, get_chmaps, l200, FileKey("l200-p03-r000-cal-20230311T235840Z"), (:test, :channelmaps)) != chmaps
+        @test length(cache) == 2
+        get_missing = () -> l200.metadata.hardware.configuration.nosuchentry
+        @test_throws ArgumentError LegendDataManagement._validity_cached(identity, cache, get_missing, l200, filekey, (:test, :missing))
+        @test LegendDataManagement._validity_cached(identity, cache, get_missing, l200, filekey, (:test, :missing); allow_missing = true) == LegendDataManagement.PropDict()
         @test all(filterby(@pf $processable && $usability == :on)(chinfo).processable)
         @test all(filterby(@pf $processable && $usability == :on)(chinfo).usability .== :on)
 

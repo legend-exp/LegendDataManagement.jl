@@ -1,18 +1,38 @@
 # This file is a part of LegendDataManagement.jl, licensed under the MIT License (MIT).
 
-const _cached_cal_filelist = LRU{Tuple{UInt, Symbol, Symbol, AnyValiditySelection}, Vector{String}}(maxsize = 10^3)
-const _cached_cal_values = LRU{Tuple{UInt, Symbol, Symbol, Vector{String}}, PropDict}(maxsize = 15)
+const _ValidityKey = Tuple{UInt, Tuple{Vararg{Symbol}}, Union{Nothing, Vector{String}}}
+const _cached_validity_filelist = LRU{Tuple{UInt, Tuple{Vararg{Symbol}}, AnyValiditySelection}, Union{Nothing, Vector{String}}}(maxsize = 10^4)
+const _cached_cal_values = LRU{_ValidityKey, PropDict}(maxsize = 15)
+const _cached_dataprod_cal_config = LRU{_ValidityKey, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^2)
 
-# Cached per validity entry, so all files that select the same parameter files share one entry:
-function _get_cal_values(data::LegendData, sel::AnyValiditySelection, pars_type::Symbol, pars_cat::Symbol)
-    filelist = get!(_cached_cal_filelist, (objectid(data), pars_type, pars_cat, sel)) do
-        pd = dataprod_parameters(data)[pars_type][pars_cat]
-        pd isa NoSuchPropsDBEntry ? String[] : _validity_sel_filelist(pd, sel)
-    end
-    get!(_cached_cal_values, (objectid(data), pars_type, pars_cat, filelist)) do
-        isempty(filelist) ? PropDict() : get_values(dataprod_parameters(data)[pars_type][pars_cat](sel))
+# Files of the validity entry that `sel` selects in the props db `get_pd()` called `name`, `nothing` if it does not exist:
+function _validity_filelist(get_pd, data::LegendData, sel::AnyValiditySelection, name::Tuple{Vararg{Symbol}})
+    get!(_cached_validity_filelist, (objectid(data), name, sel)) do
+        pd = get_pd()
+        pd isa NoSuchPropsDBEntry ? nothing : _validity_sel_filelist(pd, sel)
     end
 end
+
+# `f(get_pd()(sel))`, cached per validity entry, so all selections of the same entry share it:
+function _validity_cached(f, cache::LRU, get_pd, data::LegendData, sel::AnyValiditySelection, name::Tuple{Vararg{Symbol}}; allow_missing::Bool = false)
+    filelist = _validity_filelist(get_pd, data, sel, name)
+    isnothing(filelist) && !allow_missing && throw(ArgumentError("No metadata $(join(name, '/')) in $(data.name)"))
+    get!(cache, (objectid(data), name, filelist)) do
+        isnothing(filelist) ? PropDict() : f(get_pd()(sel))
+    end
+end
+
+function _get_cal_values(data::LegendData, sel::AnyValiditySelection, pars_type::Symbol, pars_cat::Symbol)
+    _validity_cached(get_values, _cached_cal_values, () -> dataprod_parameters(data)[pars_type][pars_cat], data, sel, (:pars, pars_type, pars_cat); allow_missing = true)
+end
+
+function _dataprod_config(data::LegendData, sel::AnyValiditySelection, name::Symbol; cache::LRU = _cached_dataprod_cal_config)
+    _validity_cached(identity, cache, () -> getproperty(dataprod_config(data), name), data, sel, (:config, name))
+end
+
+# QC definitions of a detector depend on the QC config and on the detector's usability:
+_qc_key(data::LegendData, sel::AnyValiditySelection, detector::DetectorId) =
+    (objectid(data), _validity_filelist(() -> dataprod_config(data).qc, data, sel, (:config, :qc)), _channelinfo_inputs(data, sel, false), detector)
 
 
 ### HPGe calibration functions
@@ -29,14 +49,7 @@ function _get_e_cal_propsfunc_str(data::LegendData, sel::AnyValiditySelection, d
     return ecal_props
 end
 
-const _cached_dataprod_ged_cal = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
-
-function _dataprod_ged_cal(data::LegendData, sel::AnyValiditySelection)
-    key = (objectid(data), sel)
-    get!(_cached_dataprod_ged_cal, key) do
-        dataprod_config(data).energy(sel)
-    end
-end
+_dataprod_ged_cal(data::LegendData, sel::AnyValiditySelection) = _dataprod_config(data, sel, :energy)
 
 function _dataprod_ged_cal(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:rpars)
     @assert pars_type in (:ppars, :rpars) "pars_type must be either :ppars or :rpars"
@@ -94,14 +107,7 @@ function _get_lq_cal_propfunc_str(data::LegendData, sel::AnyValiditySelection, d
     return lqcal_props
 end
 
-const _cached_dataprod_psd = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
-
-function _dataprod_psd(data::LegendData, sel::AnyValiditySelection)
-    key = (objectid(data), sel)
-    get!(_cached_dataprod_psd, key) do
-        dataprod_config(data).psd(sel)
-    end
-end
+_dataprod_psd(data::LegendData, sel::AnyValiditySelection) = _dataprod_config(data, sel, :psd)
 
 function _dataprod_aoe(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars)
     dataprod_aoe_config = _dataprod_psd(data, sel).aoe
@@ -145,14 +151,7 @@ export get_ged_psd_propfunc
 
 ### HPGe QC calibration functions
 
-const _cached_dataprod_qc = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
-
-function _dataprod_qc(data::LegendData, sel::AnyValiditySelection)
-    key = (objectid(data), sel)
-    get!(_cached_dataprod_qc, key) do
-        dataprod_config(data).qc(sel)
-    end
-end
+_dataprod_qc(data::LegendData, sel::AnyValiditySelection) = _dataprod_config(data, sel, :qc)
 
 function _dataprod_qc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
     dataprod_qc = _dataprod_qc(data, sel)
@@ -164,7 +163,7 @@ function _dataprod_qc(data::LegendData, sel::AnyValiditySelection, detector::Det
     )
 end
 
-const _cached_dataprod_qc_cuts_pf = LRU{Tuple{UInt, AnyValiditySelection, DetectorId}, PropertyFunction}(maxsize = 10^2)
+const _cached_dataprod_qc_cuts_pf = LRU{Tuple, PropertyFunction}(maxsize = 10^3)
 
 
 """
@@ -176,7 +175,7 @@ The effective QC configuration is merged in increasing order of precedence:
 `default`, the detector's usability group (for example `ac`), and the detector.
 """
 function get_ged_qc_cuts_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    key = (objectid(data), sel, detector)
+    key = _qc_key(data, sel, detector)
     get!(_cached_dataprod_qc_cuts_pf, key) do
         cut_def_props = _dataprod_qc(data, sel, detector).labels
         return ljl_propfunc(cut_def_props)
@@ -184,7 +183,7 @@ function get_ged_qc_cuts_propfunc(data::LegendData, sel::AnyValiditySelection, d
 end
 export get_ged_qc_cuts_propfunc
 
-const _cached_dataprod_is_trig_pf = LRU{Tuple{UInt, AnyValiditySelection, DetectorId}, PropertyFunction}(maxsize = 10^2)
+const _cached_dataprod_is_trig_pf = LRU{Tuple, PropertyFunction}(maxsize = 10^3)
 
 """
     get_ged_qc_istrig_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
@@ -192,7 +191,7 @@ const _cached_dataprod_is_trig_pf = LRU{Tuple{UInt, AnyValiditySelection, Detect
 Get the Ge-detector trigger condition for the given data and validity selection.
 """
 function get_ged_qc_is_trig_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    key = (objectid(data), sel, detector)
+    key = _qc_key(data, sel, detector)
     get!(_cached_dataprod_is_trig_pf, key) do
         is_trig_def_props = _dataprod_qc(data, sel, detector).is_trig
         return ljl_propfunc(is_trig_def_props)
@@ -200,7 +199,7 @@ function get_ged_qc_is_trig_propfunc(data::LegendData, sel::AnyValiditySelection
 end
 export get_ged_qc_is_trig_propfunc
 
-const _cached_dataprod_is_single_pulse_pf = LRU{Tuple{UInt, AnyValiditySelection, DetectorId}, PropertyFunction}(maxsize = 10^2)
+const _cached_dataprod_is_single_pulse_pf = LRU{Tuple, PropertyFunction}(maxsize = 10^3)
 
 """
     get_ged_qc_is_single_pulse_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
@@ -210,7 +209,7 @@ Get a `PropertyFunction` that returns `true` for events that fulfill the effecti
 are applied while resolving the detector's QC configuration.
 """
 function get_ged_qc_is_single_pulse_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    key = (objectid(data), sel, detector)
+    key = _qc_key(data, sel, detector)
     get!(_cached_dataprod_is_single_pulse_pf, key) do
         is_single_pulse_def_props = _dataprod_qc(data, sel, detector).is_single_pulse
         return ljl_propfunc(is_single_pulse_def_props)
@@ -218,7 +217,7 @@ function get_ged_qc_is_single_pulse_propfunc(data::LegendData, sel::AnyValidityS
 end
 export get_ged_qc_is_single_pulse_propfunc
 
-const _cached_dataprod_is_empty_trace_pf = LRU{Tuple{UInt, AnyValiditySelection, DetectorId}, PropertyFunction}(maxsize = 10^2)
+const _cached_dataprod_is_empty_trace_pf = LRU{Tuple, PropertyFunction}(maxsize = 10^3)
 
 """
     get_ged_qc_is_empty_trace_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
@@ -226,7 +225,7 @@ const _cached_dataprod_is_empty_trace_pf = LRU{Tuple{UInt, AnyValiditySelection,
 Get a `PropertyFunction` that returns `true` for events that fullfill the `is_empty_trace` definition.
 """
 function get_ged_qc_is_empty_trace_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    key = (objectid(data), sel, detector)
+    key = _qc_key(data, sel, detector)
     get!(_cached_dataprod_is_empty_trace_pf, key) do
         is_empty_trace_def_props = _dataprod_qc(data, sel, detector).is_empty_trace
         return ljl_propfunc(is_empty_trace_def_props)
@@ -234,7 +233,7 @@ function get_ged_qc_is_empty_trace_propfunc(data::LegendData, sel::AnyValiditySe
 end
 export get_ged_qc_is_empty_trace_propfunc
 
-const _cached_dataprod_is_crosstalk_pf = LRU{Tuple{UInt, AnyValiditySelection, DetectorId}, PropertyFunction}(maxsize = 10^2)
+const _cached_dataprod_is_crosstalk_pf = LRU{Tuple, PropertyFunction}(maxsize = 10^3)
 
 """
     get_ged_qc_is_crosstalk_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
@@ -242,7 +241,7 @@ const _cached_dataprod_is_crosstalk_pf = LRU{Tuple{UInt, AnyValiditySelection, D
 Get a `PropertyFunction` that returns `true` for events that fullfill the `is_crosstalk` definition.
 """
 function get_ged_qc_is_crosstalk_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    key = (objectid(data), sel, detector)
+    key = _qc_key(data, sel, detector)
     get!(_cached_dataprod_is_crosstalk_pf, key) do
         is_crosstalk_def_props = _dataprod_qc(data, sel, detector).is_crosstalk
         return ljl_propfunc(is_crosstalk_def_props)
@@ -356,14 +355,7 @@ export get_ged_psd_classifier_propfunc
 
 ### SiPM LAr cal functions
 
-const _cached_dataprod_spms_cal = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
-
-function _dataprod_spms_cal(data::LegendData, sel::AnyValiditySelection)
-    key = (objectid(data), sel)
-    get!(_cached_dataprod_spms_cal, key) do
-        dataprod_config(data).sipm(sel)
-    end
-end
+_dataprod_spms_cal(data::LegendData, sel::AnyValiditySelection) = _dataprod_config(data, sel, :sipm)
 
 function _dataprod_lar_cal(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars)
     @assert pars_type in (:ppars, :rpars) "pars_type must be either :ppars or :rpars"
@@ -472,14 +464,7 @@ export get_spm_noise_cut_propfunc
 
 ### PMT Muon cal functions
 
-const _cached_dataprod_pmt_cal = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
-
-function _dataprod_pmt_cal(data::LegendData, sel::AnyValiditySelection)
-    key = (objectid(data), sel)
-    get!(_cached_dataprod_pmt_cal, key) do
-        dataprod_config(data).pmt(sel)
-    end
-end
+_dataprod_pmt_cal(data::LegendData, sel::AnyValiditySelection) = _dataprod_config(data, sel, :pmt)
 
 function _dataprod_muon_cal(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:rpars)
     @assert pars_type in (:ppars, :rpars) "pars_type must be either :ppars or :rpars"
