@@ -33,6 +33,11 @@ include("testing_utils.jl")
         # ToDo: Make type-stable:
         @test channelinfo(l200, filekey) isa TypedTables.Table
         chinfo = channelinfo(l200, filekey)
+        # files of the same run and validity entries share one cached channel info
+        other_filekey = FileKey("l200-p02-r006-cal-20221226T210000Z")
+        @test LegendDataManagement._channelinfo_inputs(l200, other_filekey, false) == LegendDataManagement._channelinfo_inputs(l200, filekey, false)
+        @test channelinfo(l200, other_filekey) == chinfo
+        @test LegendDataManagement._channelinfo_inputs(l200, FileKey("l200-p02-r007-cal-20221226T210000Z"), false) != LegendDataManagement._channelinfo_inputs(l200, filekey, false)
         @test all(filterby(@pf $processable && $usability == :on)(chinfo).processable)
         @test all(filterby(@pf $processable && $usability == :on)(chinfo).usability .== :on)
 

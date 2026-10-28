@@ -328,7 +328,24 @@ DataSet(data::LegendData, period::DataPeriodLike) = DataSet(data, runinfo(data, 
 DataSet(data::LegendData, period::DataPeriodLike, run::DataRunLike) = DataSet(data, runinfo(data, (DataPeriod(period), DataRun(run))))
 
 
-const _cached_channelinfo = LRU{Tuple{UInt, Union{AnyValiditySelection, Tuple{DataPeriod, DataCategory}}, Bool, Bool}, StructVector}(maxsize = 10^3)
+const _cached_channelinfo = LRU{Tuple{UInt, Tuple, Bool, Bool}, StructVector}(maxsize = 10^3)
+const _cached_channelinfo_inputs = LRU{Tuple{UInt, AnyValiditySelection, Bool}, Tuple}(maxsize = 10^3)
+
+# Validity entries and run that the channel info of `sel` is built from:
+function _channelinfo_inputs(data::LegendData, sel::AnyValiditySelection, extended::Bool)
+    get!(_cached_channelinfo_inputs, (objectid(data), sel, extended)) do
+        fk = sel isa FileKey ? sel : find_filekey(data, sel.timestamp)
+        geometry = data.metadata.hardware.geometry
+        geometry_files = if extended && !isa(geometry, NoSuchPropsDBEntry)
+            (_validity_sel_filelist(geometry.hpge, sel), _validity_sel_filelist(geometry.spms, sel))
+        else
+            ()
+        end
+        (_validity_sel_filelist(data.metadata.hardware.configuration.channelmaps, sel),
+         _validity_sel_filelist(data.metadata.datasets.statuses, sel),
+         geometry_files..., DataCategory(sel.category), fk.period, fk.run)
+    end
+end
 const _bf862_expr = r"^BF862-\d{2}$"
 
 # Status columns whose value may change from run to run, each ordered from best to worst.
@@ -380,7 +397,7 @@ function channelinfo(data::LegendData, sel::Union{AnyValiditySelection, RunSelLi
         _can_convert_to(DataRun, sel[2]) && return channelinfo(data, (sel[1], sel[2], :cal); system, only_processable, only_usability, sort_by, extended, verbose, explode_partitions)
         sel = (DataPeriod(sel[1]), DataCategory(sel[2]))
     end
-    key = (objectid(data), sel, extended, only_analysis_runs)
+    key = (objectid(data), sel isa Tuple ? sel : _channelinfo_inputs(data, sel, extended), extended, only_analysis_runs)
     chinfo = get!(_cached_channelinfo, key) do
         if sel isa Tuple
             period, category = sel
