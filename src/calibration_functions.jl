@@ -1,17 +1,23 @@
 # This file is a part of LegendDataManagement.jl, licensed under the MIT License (MIT).
 
-_get_cal_values(pd::PropsDB, sel::AnyValiditySelection) = get_values(pd(sel))
-_get_cal_values(pd::NoSuchPropsDBEntry, sel::AnyValiditySelection) = PropDicts.PropDict()
+const _cached_cal_filelist = LRU{Tuple{UInt, Symbol, Symbol, AnyValiditySelection}, Vector{String}}(maxsize = 10^3)
+const _cached_cal_values = LRU{Tuple{UInt, Symbol, Symbol, Vector{String}}, PropDict}(maxsize = 15)
+
+# Cached per validity entry, so all files that select the same parameter files share one entry:
+function _get_cal_values(data::LegendData, sel::AnyValiditySelection, pars_type::Symbol, pars_cat::Symbol)
+    filelist = get!(_cached_cal_filelist, (objectid(data), pars_type, pars_cat, sel)) do
+        pd = dataprod_parameters(data)[pars_type][pars_cat]
+        pd isa NoSuchPropsDBEntry ? String[] : _validity_sel_filelist(pd, sel)
+    end
+    get!(_cached_cal_values, (objectid(data), pars_type, pars_cat, filelist)) do
+        isempty(filelist) ? PropDict() : get_values(dataprod_parameters(data)[pars_type][pars_cat](sel))
+    end
+end
 
 
 ### HPGe calibration functions
-const _cached_get_ecal_props = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
-
 function _get_ecal_props(data::LegendData, sel::AnyValiditySelection; pars_type::Symbol=:rpars, pars_cat::Symbol=:ecal)
-    key = (objectid(data), sel)
-    get!(_cached_get_ecal_props, key) do
-        _get_cal_values(dataprod_parameters(data)[pars_type][pars_cat], sel)
-    end
+    _get_cal_values(data, sel, pars_type, pars_cat)
 end
 
 function _get_ecal_props(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; kwargs...)
@@ -61,13 +67,8 @@ export get_ged_cal_propfunc
 
 ### HPGe PSD calibration functions
 # A/E
-const _cached_get_aoecal_props = LRU{Tuple{UInt, AnyValiditySelection, Symbol, Symbol}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
-
 function _get_aoecal_props(data::LegendData, sel::AnyValiditySelection; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
-    key = (objectid(data), sel, pars_type, pars_cat)
-    get!(_cached_get_aoecal_props, key) do
-        _get_cal_values(dataprod_parameters(data)[pars_type][pars_cat], sel)
-    end
+    _get_cal_values(data, sel, pars_type, pars_cat)
 end
 
 function _get_aoecal_props(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:aoe)
@@ -80,13 +81,8 @@ function _get_aoe_cal_propfunc_str(data::LegendData, sel::AnyValiditySelection, 
 end
 
 # LQ
-const _cached_get_lqcal_props = LRU{Tuple{UInt, AnyValiditySelection, Symbol, Symbol}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
-
 function _get_lqcal_props(data::LegendData, sel::AnyValiditySelection; pars_type::Symbol=:ppars, pars_cat::Symbol=:lq)
-    key = (objectid(data), sel, pars_type, pars_cat)
-    get!(_cached_get_lqcal_props, key) do
-        _get_cal_values(dataprod_parameters(data)[pars_type][pars_cat], sel)
-    end
+    _get_cal_values(data, sel, pars_type, pars_cat)
 end
 
 function _get_lqcal_props(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:lq)
@@ -375,13 +371,8 @@ function _dataprod_lar_cal(data::LegendData, sel::AnyValiditySelection, detector
     merge(dataprod_lar_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_lar_config, :p, PropDict()), dataprod_lar_config), detector, PropDict()))
 end
 
-const _cached_get_larcal_props = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
-
 function _get_larcal_props(data::LegendData, sel::AnyValiditySelection; pars_type::Symbol=:ppars, pars_cat::Symbol=:sipmcal)
-    key = (objectid(data), sel)
-    get!(_cached_get_larcal_props, key) do
-        _get_cal_values(dataprod_parameters(data)[pars_type][pars_cat], sel)
-    end
+    _get_cal_values(data, sel, pars_type, pars_cat)
 end
 
 function _get_larcal_props(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; kwargs...)
@@ -501,14 +492,9 @@ function _get_pmt_is_physical_trig_propfunc_str(data::LegendData, sel::AnyValidi
     return is_physical_trig_props
 end
 
-const _cached_get_pmtcal_props = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
-
 function _get_pmtcal_props(data::LegendData, sel::AnyValiditySelection; pars_type::Symbol=:rpars, pars_cat::Symbol=:pmtcal)
-    key = (objectid(data), sel)
     mkpath(data_path(dataprod_parameters(data)[pars_type][pars_cat]))
-    get!(_cached_get_pmtcal_props, key) do
-        _get_cal_values(dataprod_parameters(data)[pars_type][pars_cat], sel)
-    end
+    _get_cal_values(data, sel, pars_type, pars_cat)
 end
 
 function _get_pmtcal_props(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; kwargs...)

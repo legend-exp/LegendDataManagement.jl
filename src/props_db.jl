@@ -76,14 +76,18 @@ function _get_validity_sel_filelist(validity::_ValidityDict, category::DataCateg
     return validity_filelists[idx]
 end
 
-function _read_validity_sel_filelist(primary_path::String, override_path::String, validity::_ValidityDict, sel::ValiditySelection)
-    filelist = if haskey(validity, sel.category)
+function _get_validity_sel_filelist(validity::_ValidityDict, sel::ValiditySelection)
+    if haskey(validity, sel.category)
         _get_validity_sel_filelist(validity, sel.category, sel.timestamp)
     elseif haskey(validity, DataCategory(:all))
         _get_validity_sel_filelist(validity, DataCategory(:all), sel.timestamp)
     else
         throw(ErrorException("No validity entries for category $(sel.category) or category all"))
     end
+end
+
+function _read_validity_sel_filelist(primary_path::String, override_path::String, validity::_ValidityDict, sel::ValiditySelection)
+    filelist = _get_validity_sel_filelist(validity, sel)
 
     abs_filelist = Vector{String}()
     for rel_filename in filelist
@@ -234,19 +238,7 @@ function _any_props(base_path::String, override_base::String, rel_path::Vector{S
         full_override_path = ""
     end
 
-    validity_primary_path = joinpath(full_primary_path, validity_filename)
-    validity_primary_info = _load_validity(String(validity_primary_path))
-    validity_info = if !isempty(override_base)
-        validity_override_path = joinpath(override_base, rel_path..., validity_filename)
-        if ispath(validity_override_path)
-            validity_override_info = _load_validity(validity_override_path)
-            _merge_validity_info!!(validity_primary_info, validity_override_info)
-        else
-            validity_primary_info
-        end
-    else
-        validity_primary_info
-    end
+    validity_info = _load_validity_info(base_path, override_base, rel_path)
 
     files_in_dir = Set(String.(readdir(full_primary_path)))
     if !isempty(full_override_path)
@@ -268,6 +260,16 @@ function _any_props(base_path::String, override_base::String, rel_path::Vector{S
     end
 end
 
+
+function _load_validity_info(base_path::String, override_base::String, rel_path::Vector{String})
+    validity_primary_info = _load_validity(joinpath(base_path, rel_path..., validity_filename))
+    validity_override_path = joinpath(override_base, rel_path..., validity_filename)
+    if !isempty(override_base) && ispath(validity_override_path)
+        _merge_validity_info!!(validity_primary_info, _load_validity(validity_override_path))
+    else
+        validity_primary_info
+    end
+end
 
 function _load_validity(validity_path::AbstractString; mode_default::AbstractString = "append")
     if isfile(validity_path)
@@ -357,6 +359,13 @@ function(@nospecialize(pd::PropsDB{Nothing}))(timestamp::Union{DateTime,Timestam
 end
 
 (@nospecialize(pd::PropsDB{Nothing}))(filekey::FileKey) = pd(ValiditySelection(filekey))
+
+# Relative files of the validity entry that `sel` selects, without reading them:
+function _validity_sel_filelist(@nospecialize(pd::PropsDB{Nothing}), sel::AnyValiditySelection)
+    validity_info = _load_validity_info(_base_path(pd), _override_base(pd), _rel_path(pd))
+    isnothing(validity_info) && throw(ArgumentError("No validity information in $(data_path(pd))"))
+    return _get_validity_sel_filelist(validity_info, sel isa FileKey ? ValiditySelection(sel) : sel)
+end
 
 
 const MaybePropsDB = Union{PropsDB,NoSuchPropsDBEntry}
