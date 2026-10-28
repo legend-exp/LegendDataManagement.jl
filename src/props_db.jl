@@ -166,6 +166,11 @@ struct PropsDB{VS<:Union{Nothing,ValiditySelection}} <: AbstractDict{Symbol,Abst
     _run_override::Union{Nothing,_ValidityDict}
 end
 
+PropsDB{VS}(base_path, override_base, rel_path, validity_sel, prop_names, needs_vsel) where {VS} =
+    PropsDB{VS}(base_path, override_base, rel_path, validity_sel, prop_names, needs_vsel, nothing)
+PropsDB(base_path, override_base, rel_path, validity_sel, prop_names, needs_vsel) =
+    PropsDB(base_path, override_base, rel_path, validity_sel, prop_names, needs_vsel, nothing)
+
 function Base.:(==)(a::PropsDB, b::PropsDB)
     _base_path(a) == _base_path(b) && _override_base(a) == _override_base(b) && _rel_path(a) == _rel_path(b) && _validity_sel(a) == _validity_sel(b) &&
         _prop_names(a) == _prop_names(b) && _needs_vsel(a) == _needs_vsel(b) && _run_override(a) == _run_override(b)
