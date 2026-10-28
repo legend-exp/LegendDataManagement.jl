@@ -177,3 +177,10 @@ using YAML
         end
     end
 end
+@testset "merge copies" begin
+    PropDict = LegendDataManagement.PropDict
+    default, override = PropDict(:x => PropDict(:p => 1)), PropDict(:x => PropDict(:q => 2))
+    @test LegendDataManagement._merge_copies(default, override) == PropDict(:x => PropDict(:p => 1, :q => 2))
+    @test default == PropDict(:x => PropDict(:p => 1))
+    @test override == PropDict(:x => PropDict(:q => 2))
+end

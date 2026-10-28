@@ -22,6 +22,9 @@ function _validity_cached(f, cache::LRU, get_pd, data::LegendData, sel::AnyValid
     end
 end
 
+# `merge` of PropDicts merges into the nested dicts of its arguments, which belong to the caches:
+_merge_copies(dicts...) = merge(deepcopy.(dicts)...)
+
 function _get_cal_values(data::LegendData, sel::AnyValiditySelection, pars_type::Symbol, pars_cat::Symbol)
     _validity_cached(get_values, _cached_cal_values, () -> dataprod_parameters(data)[pars_type][pars_cat], data, sel, (:pars, pars_type, pars_cat); allow_missing = true)
 end
@@ -54,7 +57,7 @@ _dataprod_ged_cal(data::LegendData, sel::AnyValiditySelection) = _dataprod_confi
 function _dataprod_ged_cal(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:rpars)
     @assert pars_type in (:ppars, :rpars) "pars_type must be either :ppars or :rpars"
     dataprod_ged_config = _dataprod_ged_cal(data, sel)
-    merge(dataprod_ged_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_ged_config, :p, PropDict()), dataprod_ged_config), detector, PropDict()))
+    _merge_copies(dataprod_ged_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_ged_config, :p, PropDict()), dataprod_ged_config), detector, PropDict()))
 end
 
 """
@@ -112,13 +115,13 @@ _dataprod_psd(data::LegendData, sel::AnyValiditySelection) = _dataprod_config(da
 function _dataprod_aoe(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars)
     dataprod_aoe_config = _dataprod_psd(data, sel).aoe
     @assert pars_type in (:ppars, :rpars) "pars_type must be either :ppars or :rpars"
-    merge(dataprod_aoe_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_aoe_config, :p, PropDict()), dataprod_aoe_config), detector, PropDict()))
+    _merge_copies(dataprod_aoe_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_aoe_config, :p, PropDict()), dataprod_aoe_config), detector, PropDict()))
 end
 
 function _dataprod_lq(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars)
     dataprod_lq_config = _dataprod_psd(data, sel).lq
     @assert pars_type in (:ppars, :rpars) "pars_type must be either :ppars or :rpars"
-    merge(dataprod_lq_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_lq_config, :p, PropDict()), dataprod_lq_config), detector, PropDict()))
+    _merge_copies(dataprod_lq_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_lq_config, :p, PropDict()), dataprod_lq_config), detector, PropDict()))
 end
 
 """
@@ -156,7 +159,7 @@ _dataprod_qc(data::LegendData, sel::AnyValiditySelection) = _dataprod_config(dat
 function _dataprod_qc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
     dataprod_qc = _dataprod_qc(data, sel)
     usability = channelinfo(data, sel, detector).usability
-    merge(
+    _merge_copies(
         dataprod_qc.default,
         get(dataprod_qc, usability, PropDict()),
         get(dataprod_qc, detector, PropDict()),
@@ -348,7 +351,7 @@ Get the PSD cut propfuncs for the given data and validity selection.
 function get_ged_psd_classifier_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars)
     dataprod_psd_config = _dataprod_psd(data, sel).psd
     @assert pars_type in (:ppars, :rpars) "pars_type must be either :ppars or :rpars"
-    ljl_propfunc(merge(dataprod_psd_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_psd_config, :p, PropDict()), dataprod_psd_config), detector, PropDict())).psd_classifier)
+    ljl_propfunc(_merge_copies(dataprod_psd_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_psd_config, :p, PropDict()), dataprod_psd_config), detector, PropDict())).psd_classifier)
 end
 export get_ged_psd_classifier_propfunc
 
@@ -360,7 +363,7 @@ _dataprod_spms_cal(data::LegendData, sel::AnyValiditySelection) = _dataprod_conf
 function _dataprod_lar_cal(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars)
     @assert pars_type in (:ppars, :rpars) "pars_type must be either :ppars or :rpars"
     dataprod_lar_config = _dataprod_spms_cal(data, sel).lar
-    merge(dataprod_lar_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_lar_config, :p, PropDict()), dataprod_lar_config), detector, PropDict()))
+    _merge_copies(dataprod_lar_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_lar_config, :p, PropDict()), dataprod_lar_config), detector, PropDict()))
 end
 
 function _get_larcal_props(data::LegendData, sel::AnyValiditySelection; pars_type::Symbol=:ppars, pars_cat::Symbol=:sipmcal)
@@ -469,7 +472,7 @@ _dataprod_pmt_cal(data::LegendData, sel::AnyValiditySelection) = _dataprod_confi
 function _dataprod_muon_cal(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:rpars)
     @assert pars_type in (:ppars, :rpars) "pars_type must be either :ppars or :rpars"
     dataprod_muon_config = _dataprod_pmt_cal(data, sel).muon
-    merge(dataprod_muon_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_muon_config, :p, PropDict()), dataprod_muon_config), detector, PropDict()))
+    _merge_copies(dataprod_muon_config[ifelse(pars_type == :ppars, :p_default, :default)], get(ifelse(pars_type == :ppars, get(dataprod_muon_config, :p, PropDict()), dataprod_muon_config), detector, PropDict()))
 end
 
 function _get_pmt_is_physical_trig_propfunc_str(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol; kwargs...)
