@@ -1,10 +1,6 @@
 # This file is a part of LegendDataManagement.jl, licensed under the MIT License (MIT).
 
 
-# ToDo: Pull numerical values out of expressions and turn them into
-# parameters, to reduce the amount of generated code.
-
-
 """
     const LJlExprLike = Union{Expr, Symbol, Integer, AbstractFloat}
 
@@ -193,10 +189,21 @@ function _lift_ustr!(env::Dict{Symbol,Any}, @nospecialize(expr::Expr))
     end
 end
 
+# Float literals become env values, so expressions differing only in their floats share one compiled function:
+_lift_floats!(env::Dict{Symbol,Any}, @nospecialize(x)) = x
+
+function _lift_floats!(env::Dict{Symbol,Any}, x::AbstractFloat)
+    sym = Symbol("#float#", length(env) + 1)
+    env[sym] = x
+    return sym
+end
+
+_lift_floats!(env::Dict{Symbol,Any}, @nospecialize(expr::Expr)) = Expr(expr.head, map(e -> _lift_floats!(env, e), expr.args)...)
+
 function _propfrom_from_expr(@nospecialize(pf_body))
-    unit_env = Dict{Symbol,Any}()
-    body = _lift_ustr!(unit_env, pf_body)
-    env = isempty(unit_env) ? _ljl_propfunc_env : merge(_ljl_propfunc_env, unit_env)
+    unit_env, float_env = Dict{Symbol,Any}(), Dict{Symbol,Any}()
+    body = _lift_floats!(float_env, _lift_ustr!(unit_env, pf_body))
+    env = isempty(unit_env) && isempty(float_env) ? _ljl_propfunc_env : merge(_ljl_propfunc_env, unit_env, float_env)
     return PropertyFunction(body, env)
 end
 

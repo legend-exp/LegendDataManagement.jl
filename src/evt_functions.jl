@@ -1,13 +1,8 @@
 # This file is a part of LegendDataManagement.jl, licensed under the MIT License (MIT).
 
-const _cached_dataprod_evt = LRU{Tuple{UInt, AnyValiditySelection}, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^3)
+const _cached_dataprod_evt = LRU{_ValidityKey, Union{PropDict,PropDicts.MissingProperty}}(maxsize = 10^2)
 
-function _dataprod_evt(data::LegendData, sel::AnyValiditySelection)
-    key = (objectid(data), sel)
-    get!(_cached_dataprod_evt, key) do
-        dataprod_config(data).evt(sel)
-    end
-end
+_dataprod_evt(data::LegendData, sel::AnyValiditySelection) = _dataprod_config(data, sel, :evt; cache = _cached_dataprod_evt)
 
 function _dataprod_evt(data::LegendData, sel::AnyValiditySelection, system::Symbol)
     _dataprod_evt(data, sel)[system]
@@ -73,7 +68,7 @@ export get_ged_evt_kwargs
 ### aux
 
 
-const _cached_dataprod_evt_puls_pf = LRU{Tuple{UInt, AnyValiditySelection, DetectorId}, PropertyFunction}(maxsize = 10^2)
+const _cached_dataprod_evt_puls_pf = LRU{Tuple, PropertyFunction}(maxsize = 10^3)
 
 """
     get_aux_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
@@ -82,7 +77,7 @@ Get the aux calibration function for the given data, validity selection
 and the aux channel referred to by `detector`.
 """
 function get_aux_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
-    key = (objectid(data), sel, detector)
+    key = (objectid(data), _validity_filelist(() -> dataprod_config(data).evt, data, sel, (:config, :evt)), detector)
     get!(_cached_dataprod_evt_puls_pf, key) do
         ljl_propfunc(_dataprod_evt(data, sel, :aux)[detector].cal)
     end
