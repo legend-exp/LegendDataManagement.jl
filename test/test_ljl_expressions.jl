@@ -77,6 +77,18 @@ include("testing_utils.jl")
     @test ljl_propfunc(:(E * keV))((E = 3,)) == 3u"keV"
     @test @inferred(ljl_propfunc("E * u\"keV\"")((E = 3,))) == 3u"keV"
 
+    # Expressions that differ only in their float literals share one compiled function:
+    cal_a, cal_b = ljl_propfunc("0.0529 * E_trap + -0.0545"), ljl_propfunc("0.2111 * E_trap + -0.0398")
+    @test typeof(cal_a) === typeof(cal_b)
+    @test @inferred(cal_a(data[1])) == 0.0529 * 21092 + -0.0545
+    @test @inferred(cal_b(data[1])) == 0.2111 * 21092 + -0.0398
+    @test typeof(ljl_propfunc("(1.5 ± 0.1) * E_trap * keV")) === typeof(ljl_propfunc("(2.5 ± 0.2) * E_trap * keV"))
+    @test ljl_propfunc("(1.5 ± 0.1) * E_trap * keV")(data[1]) == Measurements.:(±)(1.5, 0.1) * 21092u"keV"
+    @test ljl_propfunc("a .> 0.5e")((a = [0.4, 0.6] .* LegendDataManagement.UnitfulAtomic.e_au,)) == [false, true]
+    # integer literals stay in the code:
+    @test @inferred(ljl_propfunc("E_trap^2")(data[1])) === 21092^2
+    @test typeof(ljl_propfunc("E_trap^2")) !== typeof(ljl_propfunc("E_trap^3"))
+
     # Compiled property functions are serializable (e.g. for Distributed):
     io = IOBuffer()
     serialize(io, num_pf)
