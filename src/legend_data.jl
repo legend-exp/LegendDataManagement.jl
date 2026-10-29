@@ -31,7 +31,12 @@ or simply (if `\$$_data_config_envvar_name` is set):
 l200 = LegendData(:l200)
 ```
 
-`LegendData` has the (virtual) properties `metadata` and `tier`.
+`LegendData` has the (virtual) properties `metadata`, `par`, `jlpar` and `tier`.
+
+While a run override in the metadata `datasets/run_override.yaml` (or in
+`jldataprod/overrides/metadata/datasets`) is active, validity selections in `par` and `jlpar`, e.g.
+`l200.par.rpars.ecal(filekey)`, select the parameters at the time of the filekey that it applies;
+`metadata` always uses the selected time.
 
 The full path to "tier" data files can be retrieved using
 ```julia

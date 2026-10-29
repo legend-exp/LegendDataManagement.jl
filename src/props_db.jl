@@ -227,8 +227,15 @@ into a `PropDicts.PropDict`.
 Constructors:
 
 ```julia
-LegendDataManagement.AnyProps(base_path::AbstractString; override_base::AbstractString = "")
+LegendDataManagement.AnyProps(base_path::AbstractString; override_base::AbstractString = "", run_override = nothing)
 ```
+
+`run_override` holds the entries of a run override file, such as
+`datasets/run_override.yaml` of the metadata, which [`LegendData`](@ref) passes
+for `par` and `jlpar`. While an entry with a non-empty `apply` is active at the
+selected time, `props(filekey)` and `props(sel::ValiditySelection)` select the
+time of the filekey in `apply` instead and keep their own category. An entry
+with more than one filekey is an error.
 """
 const AnyProps = Union{PropsDB,PropDict}
 
