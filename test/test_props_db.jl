@@ -42,4 +42,18 @@ end
     # an override entry keeps the files of the primary list that are active at its time, and vice versa
     @test merged.valid_from == [t1, t2, t3]
     @test merged.filelist == [["a1.yaml"], ["a1.yaml", "o.yaml"], ["a3.yaml", "o.yaml"]]
+
+    # a category that only one list has is merged with the entries for category all of the other list
+    sel_files(validity, category) = LegendDataManagement._get_validity_sel_filelist(validity, ValiditySelection(t2, category))
+    primary = LegendDataManagement._ValidityDict(cat => (valid_from = [t1], filelist = [["a.yaml"]]))
+    override = LegendDataManagement._ValidityDict(DataCategory(:cal) => (valid_from = [t2], filelist = [["o-cal.yaml"]]))
+    merged = LegendDataManagement._merge_validity_info!!(primary, override)
+    @test sel_files(merged, :cal) == ["a.yaml", "o-cal.yaml"]
+    @test sel_files(merged, :phy) == ["a.yaml"]
+    primary = LegendDataManagement._ValidityDict(DataCategory(:cal) => (valid_from = [t1], filelist = [["a-cal.yaml"]]), DataCategory(:phy) => (valid_from = [t1], filelist = [["a-phy.yaml"]]))
+    override = LegendDataManagement._ValidityDict(cat => (valid_from = [t2], filelist = [["o.yaml"]]))
+    merged = LegendDataManagement._merge_validity_info!!(primary, override)
+    @test sel_files(merged, :cal) == ["a-cal.yaml", "o.yaml"]
+    @test sel_files(merged, :phy) == ["a-phy.yaml", "o.yaml"]
+    @test sel_files(merged, :ssc) == ["o.yaml"]
 end
