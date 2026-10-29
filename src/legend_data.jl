@@ -31,7 +31,12 @@ or simply (if `\$$_data_config_envvar_name` is set):
 l200 = LegendData(:l200)
 ```
 
-`LegendData` has the (virtual) properties `metadata` and `tier`.
+`LegendData` has the (virtual) properties `metadata`, `par`, `jlpar` and `tier`.
+
+While a run override in the metadata `datasets/run_override.yaml` (or in
+`jldataprod/overrides/metadata/datasets`) is active, validity selections in `par` and `jlpar`, e.g.
+`l200.par.rpars.ecal(filekey)`, select the parameters at the time of the filekey that it applies;
+`metadata` always uses the selected time.
 
 The full path to "tier" data files can be retrieved using
 ```julia
@@ -89,7 +94,15 @@ function _ldata_propsdb(d::LegendData, dbsym::Symbol)
     dbname = string(dbsym)
     base_path = data_path(d, dbname)
     override_base = joinpath(data_path(d, "metadata"), "jldataprod", "overrides", dbname)
-    AnyProps(base_path, override_base = override_base)
+    run_override = dbsym in (:par, :jlpar) ? _load_run_override(d) : nothing
+    AnyProps(base_path; override_base, run_override)
+end
+
+# `datasets/run_override.yaml` maps the time of runs whose calibration is not usable to the filekey whose calibration applies:
+function _load_run_override(d::LegendData)
+    primary = joinpath(data_path(d, "metadata"), "datasets", "run_override.yaml")
+    override = joinpath(data_path(d, "metadata"), "jldataprod", "overrides", "metadata", "datasets", "run_override.yaml")
+    _merge_validity_info!!(_load_validity(primary), _load_validity(override))
 end
 
 @inline function Base.propertynames(d::LegendData)

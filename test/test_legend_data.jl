@@ -29,6 +29,55 @@ include("testing_utils.jl")
         @test LegendData(:l200; dataset = :valid).dataset == :valid
     end
 
+    @testset "run override" begin
+        # a par and a metadata database with one file per run and category
+        dir = mktempdir()
+        runs = [:r000 => "20230101T000000Z", :r001 => "20230201T000000Z", :r002 => "20230301T000000Z", :r003 => "20230401T000000Z", :r004 => "20230501T000000Z"]
+        for db in (joinpath(dir, "par", "rpars", "ecal"), joinpath(dir, "metadata", "hardware", "configuration", "channelmaps"))
+            mkpath(db)
+            write(joinpath(db, "validity.yaml"), join(["""
+                - valid_from: $t
+                  category: $cat
+                  mode: reset
+                  apply: [$run-$cat.yaml]
+                """ for (run, t) in runs for cat in (:cal, :phy)]))
+            for (run, _) in runs, cat in (:cal, :phy)
+                write(joinpath(db, "$run-$cat.yaml"), "run: $run\ncategory: $cat\n")
+            end
+        end
+        # r001 uses r002-cal, and in the overrides package r004 uses r003-cal
+        mkpath(joinpath(dir, "metadata", "datasets"))
+        write(joinpath(dir, "metadata", "datasets", "run_override.yaml"), """
+        - valid_from: 20230201T000000Z
+          apply:
+            - l200-p01-r002-cal-20230301T000000Z
+        - valid_from: 20230301T000000Z
+          mode: reset
+          apply: []
+        """)
+        mkpath(joinpath(dir, "metadata", "jldataprod", "overrides", "metadata", "datasets"))
+        write(joinpath(dir, "metadata", "jldataprod", "overrides", "metadata", "datasets", "run_override.yaml"), """
+        - valid_from: 20230501T000000Z
+          apply:
+            - l200-p01-r003-cal-20230401T000000Z
+        """)
+        paths = LegendDataManagement.PropDict(:metadata => joinpath(dir, "metadata"), :par => joinpath(dir, "par"), :jlpar => joinpath(dir, "par"))
+        ldata = LegendData(SetupConfig(LegendDataManagement.PropDict(:paths => paths)), :l200, :default)
+
+        r001_cal = FileKey("l200-p01-r001-cal-20230201T000000Z")
+        @test ldata.par.rpars.ecal(r001_cal).run == "r002"
+        @test ldata.par(r001_cal).rpars.ecal.run == "r002"
+        @test ldata.jlpar.rpars.ecal(r001_cal).run == "r002"
+        @test LegendDataManagement._get_ecal_props(ldata, r001_cal).run == "r002"
+        @test ldata.metadata.hardware.configuration.channelmaps(r001_cal).run == "r001"
+        # a phy selection keeps its category
+        @test ldata.par.rpars.ecal(FileKey("l200-p01-r001-phy-20230205T000000Z")) == LegendDataManagement.PropDict(:run => "r002", :category => "phy")
+        # before the override, after its reset, and the override of the overrides package
+        @test ldata.par.rpars.ecal(FileKey("l200-p01-r000-phy-20230105T000000Z")).run == "r000"
+        @test ldata.par.rpars.ecal(FileKey("l200-p01-r003-phy-20230405T000000Z")).run == "r003"
+        @test ldata.par.rpars.ecal(FileKey("l200-p01-r004-phy-20230505T000000Z")) == LegendDataManagement.PropDict(:run => "r003", :category => "phy")
+    end
+
     @testset "channelinfo" begin
         # ToDo: Make type-stable:
         @test channelinfo(l200, filekey) isa TypedTables.Table
