@@ -27,7 +27,8 @@ on disk is an error. Two kwargs control which filekeys these are:
   i.e. those listed under `ignore_keys` in `datasets/ignored_daq_cycles`, or under any of its keys for `:all`.
   `:none` keeps every filekey.
 A run with no filekeys left is an error. A per-run file of the detector, `data.tier[tier, category, period, run, det]`,
-holds the whole run and is read in place of the filekeys whenever it exists.
+holds the whole run and is read in place of the filekeys whenever it exists. Likewise, the skimmed tier `jlskm` holds the
+whole run in one file named by the start filekey of the run and is read from that file.
 # Examples
 ```julia
 dsp = read_ldata(l200, :jldsp, filekey, ch)
