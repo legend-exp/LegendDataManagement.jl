@@ -109,6 +109,22 @@ include("testing_utils.jl")
             @test all(ismissing, channelinfo(p03only, DataPeriod(3), DataRun(0), :cal; system = :geds).partition)
         end
 
+        # detector-specific partitions replace the default partitions of the same name, detectors
+        # without their own entry share the default partitions
+        open(io -> write(io, "\nV99000A:\n  calgroup001a:\n    p02: r000..r003\n  calgroup002a:\n    p02: r004..r007\n"),
+            joinpath(meta, "datasets", "cal_groupings.yaml"), "a")
+        withenv("LEGEND_DATA_CONFIG" => "$override:$julia_config") do
+            detgroupings = LegendData(:l200)
+            own = partitioninfo(detgroupings, :V99000A, :cal)
+            @test Set(keys(own)) == Set([DataPartition(1), DataPartition(2)])
+            @test own[DataPartition(1)].run == filter(r -> r.no <= 3, partinfo[DataPartition(1)].run)
+            @test own[DataPartition(2)].run == filter(r -> r.no > 3, partinfo[DataPartition(1)].run)
+            default = partitioninfo(detgroupings, :V99000B, :cal)
+            @test only(keys(default)) == DataPartition(1)
+            @test default[DataPartition(1)].run == partinfo[DataPartition(1)].run
+            @test partitioninfo(detgroupings, :V99000C, :cal) === default
+        end
+
         # a category without groupings: the partitions are all missing
         rm(joinpath(meta, "datasets", "cal_groupings.yaml"))
         withenv("LEGEND_DATA_CONFIG" => "$override:$julia_config") do
