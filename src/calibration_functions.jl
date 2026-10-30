@@ -447,15 +447,15 @@ export get_spm_dc_cal_propfunc
 Get the LAr/SPMS noise cut function for the given data, validity selection
 and detector. For each energy type it keeps only the triggers above the
 `trigger_threshold_cal` of the detector in the calibrated trigger amplitudes,
-trigger positions and discharge flags.
+trigger positions and discharge flags. An energy type without calibration pars
+keeps no triggers (threshold `NaN`), like the `NaN` amplitudes of [`get_spm_cal_propfunc`](@ref).
 """
 function get_spm_noise_cut_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:sipmcal)
     energy_types = _dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types
     larcal_props = _get_larcal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat)
     expr_map = Dict{Symbol, String}()
     for e_filter in keys(energy_types)
-        haskey(get(larcal_props, e_filter, PropDict()), :trigger_threshold_cal) || throw(ArgumentError("No trigger_threshold_cal for $e_filter of $detector in $pars_type $pars_cat"))
-        noise_cut = "$(e_filter)_cal .> $(larcal_props[e_filter].trigger_threshold_cal)e"
+        noise_cut = "$(e_filter)_cal .> $(get(get(larcal_props, e_filter, PropDict()), :trigger_threshold_cal, NaN))*e"
         for col in (Symbol("$(e_filter)_cal"), Symbol(energy_types[e_filter].pos), Symbol("$(e_filter)_is_dc"))
             expr_map[col] = "$(col)[$(noise_cut)]"
         end
