@@ -455,7 +455,7 @@ function get_spm_noise_cut_propfunc(data::LegendData, sel::AnyValiditySelection,
     expr_map = Dict{Symbol, String}()
     for e_filter in keys(energy_types)
         haskey(get(larcal_props, e_filter, PropDict()), :trigger_threshold_cal) || throw(ArgumentError("No trigger_threshold_cal for $e_filter of $detector in $pars_type $pars_cat"))
-        noise_cut = "$(e_filter)_cal .> $(ustrip(UnitfulAtomic.e_au, larcal_props[e_filter].trigger_threshold_cal))e"
+        noise_cut = "$(e_filter)_cal .> $(larcal_props[e_filter].trigger_threshold_cal)e"
         for col in (Symbol("$(e_filter)_cal"), Symbol(energy_types[e_filter].pos), Symbol("$(e_filter)_is_dc"))
             expr_map[col] = "$(col)[$(noise_cut)]"
         end
