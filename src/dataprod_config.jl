@@ -105,36 +105,38 @@ export pydataprod_parameters
 const _cached_partitioninfo = LRU{Tuple{UInt, Symbol, Symbol}, IdDict{DataPartition, Table}}(maxsize = 300)
 function _get_partitions(data::LegendData, label::Symbol, category::DataCategoryLike)
     category = Symbol(category)
-    rinfo = runinfo(data)
-    pd = IdDict{Symbol, Vector{Tuple{DataPeriod, DataRun}}}()
+    get!(_cached_partitioninfo, (objectid(data), label, category)) do
+        rinfo = runinfo(data)
+        pd = IdDict{Symbol, Vector{Tuple{DataPeriod, DataRun}}}()
 
-    # Merge default and Detector-specific partitions
-    if !haskey(data.metadata.datasets, Symbol("$(category)_groupings"))
-        throw(ArgumentError("Groupings for category \"$category\" not found"))
-    end
-    partitions = merge(
-        (v1, v2) -> v2,
-        data.metadata.datasets[Symbol("$(category)_groupings")].default,
-        get(data.metadata.datasets[Symbol("$(category)_groupings")], label, PropDict()),
-    )
-
-    # Convert partition definitions into a mapping from detector name to (period, run) tuples
-    for (n, pr) in partitions
-        pd[n] = Tuple{DataPeriod, DataRun}[]
-        for (p, r) in pr
-            append!(pd[n], tuple.(Ref(DataPeriod(p)), parse_runs(r)))
+        # Merge default and Detector-specific partitions
+        if !haskey(data.metadata.datasets, Symbol("$(category)_groupings"))
+            throw(ArgumentError("Groupings for category \"$category\" not found"))
         end
-    end
+        partitions = merge(
+            (v1, v2) -> v2,
+            data.metadata.datasets[Symbol("$(category)_groupings")].default,
+            get(data.metadata.datasets[Symbol("$(category)_groupings")], label, PropDict()),
+        )
 
-    # Keep only period, run, and the selected category. The runs are selected first, so that a
-    # partition without analysis runs in the run information (e.g. of a dataset) gets an empty
-    # table of the same type.
-    IdDict(DataPartition.(keys(pd)) .=> [
-        let sel = filter(row -> (row.period, row.run) in pr && getproperty(row, category).is_analysis_run, rinfo)
-            Table(NamedTuple{(:period, :run, category)}((sel.period, sel.run, getproperty(sel, category))))
+        # Convert partition definitions into a mapping from detector name to (period, run) tuples
+        for (n, pr) in partitions
+            pd[n] = Tuple{DataPeriod, DataRun}[]
+            for (p, r) in pr
+                append!(pd[n], tuple.(Ref(DataPeriod(p)), parse_runs(r)))
+            end
         end
-        for pr in values(pd)
-    ])
+
+        # Keep only period, run, and the selected category. The runs are selected first, so that a
+        # partition without analysis runs in the run information (e.g. of a dataset) gets an empty
+        # table of the same type.
+        IdDict(DataPartition.(keys(pd)) .=> [
+            let sel = filter(row -> (row.period, row.run) in pr && getproperty(row, category).is_analysis_run, rinfo)
+                Table(NamedTuple{(:period, :run, category)}((sel.period, sel.run, getproperty(sel, category))))
+            end
+            for pr in values(pd)
+        ])
+    end
 end
 
 
