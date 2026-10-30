@@ -22,7 +22,7 @@ using Distributed
 
     # The test production has no metadata: a run read takes its filekeys from a metadata
     # written here, listing `run_keys` for cal p18 r000 and `ignored` as ignored DAQ cycles.
-    function l200_with_metadata(run_keys::AbstractVector{FileKey}, ignored::AbstractDict)
+    function l200_with_metadata(run_keys::AbstractVector{FileKey}, ignored::AbstractDict; tier_dir = joinpath(lh5testdata_dir, "generated", "tier"))
         dir = mktempdir()
         datasets = joinpath(dir, "metadata", "datasets")
         mkpath(joinpath(datasets, "filekeys", "p18"))
@@ -35,7 +35,7 @@ using Distributed
             Dict(string(k) => string.(v) for (k, v) in ignored))
         config = joinpath(dir, "config.yaml")
         YAML.write_file(config, Dict("setups" => Dict("l200" => Dict("paths" => Dict(
-            "tier" => joinpath(lh5testdata_dir, "generated", "tier"), "metadata" => joinpath(dir, "metadata"))))))
+            "tier" => tier_dir, "metadata" => joinpath(dir, "metadata"))))))
         withenv(() -> LegendData(:l200), "LEGEND_DATA_CONFIG" => config)
     end
 
@@ -160,13 +160,22 @@ using Distributed
             @test_throws "All 2 filekeys of cal p18 r000 are ignored" read_ldata(l200_all_ign, tier, cat, period, run, det)
             @test read_ldata(:timestamp, l200_all_ign, tier, cat, period, run, det; ignore_keys = :none).timestamp == all_ts
             # a run without a directory on disk is an error
-            @test_throws "no such file or directory" read_ldata(l200_all_ign, DataTier(:jlskm), cat, period, run, det; search_disk = true)
+            @test_throws "no such file or directory" read_ldata(l200_all_ign, DataTier(:jlevt), cat, period, run, det; search_disk = true)
 
             # a detector's per-run file holds the whole run, and is read once
             hit_det = DetectorId("V97061A")
             @test isfile(l200.tier[DataTier(:jlhit), cat, period, run, hit_det])
             @test read_ldata(:qc, l200_ign, DataTier(:jlhit), cat, period, run, hit_det; ignore_keys = :none) ==
                 read_ldata(:qc, l200_ign, DataTier(:jlhit), fks[1], hit_det)
+
+            # the skimmed tier `jlskm` holds the whole run in one file of the run's start filekey, and is read once
+            # TODO: add a minimal `jlskm` file to LegendTestData and drop the synthetic file created here
+            l200_skm = l200_with_metadata(fks, Dict(:removed => FileKey[]); tier_dir = mktempdir())
+            mkpath(l200_skm.tier[DataTier(:jlskm), cat, period, run])
+            lh5open(l200_skm.tier[DataTier(:jlskm), fks[1]], "w") do f
+                f["jlskm"] = Table(timestamp = all_ts)
+            end
+            @test read_ldata(:timestamp, l200_skm, DataTier(:jlskm), cat, period, run).timestamp == all_ts
         end
 
         # a per-detector file of a tier that holds a level below the detector

@@ -501,11 +501,16 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], runinfo(data, rsel[3]), rsel[4]); kwargs...)
 end
 
-# A per-run file of a detector holds the whole run: reading it once per filekey would repeat its rows.
+# The tiers stored as one file per run, named by the start filekey of the run. Such a file has the name of the first DAQ
+# cycle of the run, so it cannot be told apart on disk and the tier has to be listed here.
+const _run_file_tiers = (DataTier(:jlskm),)
+
+# A per-run file of a detector, and the file of a tier in `_run_file_tiers`, hold the whole run: reading them once per
+# filekey would repeat their rows.
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, DataPeriod, DataRun, DetectorSel};
     search_disk::Bool=false, ignore_keys::Symbol=:all, kwargs...)
     tier, cat, period, run, det = rsel
-    !isnothing(det) && isfile(data.tier[tier, cat, period, run, det]) &&
+    (tier in _run_file_tiers || !isnothing(det) && isfile(data.tier[tier, cat, period, run, det])) &&
         return LegendDataManagement.read_ldata(f, data, (tier, start_filekey(data, (period, run, cat)), det); kwargs...)
     all_fks = search_disk ? LegendDataManagement.search_disk(FileKey, data.tier[tier, cat, period, run]) : only(runinfo(data, (period, run, cat)).keys)
     isempty(all_fks) && throw(ArgumentError("No filekeys found for $cat $period $run"))
