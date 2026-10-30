@@ -102,7 +102,7 @@ end
 export pydataprod_parameters
 
 
-const _cached_partitioninfo = LRU{Tuple{UInt, Symbol, Symbol}, IdDict{DataPartition, Table}}(maxsize = 300)
+const _cached_partitioninfo = LRU{Tuple{UInt, Symbol, Symbol}, IdDict{DataPartition, Table}}(maxsize = 10^4)
 function _get_partitions(data::LegendData, label::Symbol, category::DataCategoryLike)
     category = Symbol(category)
     get!(_cached_partitioninfo, (objectid(data), label, category)) do
