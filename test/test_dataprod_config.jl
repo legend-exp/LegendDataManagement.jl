@@ -119,6 +119,29 @@ include("testing_utils.jl")
         end
     end
 
+    @testset "get_dsp_pars" begin
+        # the DSP config reads `ppars` by default and `rpars` for V99000B; only `ppars` exists
+        meta = joinpath(mktempdir(), "metadata")
+        cp(joinpath(testdata_dir, "metadata"), meta)
+        chmod(meta, 0o755; recursive = true)
+        dsp = mkpath(joinpath(meta, "jldataprod", "config", "dsp"))
+        write(joinpath(dsp, "validity.yaml"), "- valid_from: 20220101T000000Z\n  apply:\n    - dsp.yaml\n")
+        write(joinpath(dsp, "dsp.yaml"), "default:\n  pars_type: ppars\nV99000B:\n  pars_type: rpars\n")
+        par = joinpath(dirname(meta), "par")
+        pz = mkpath(joinpath(par, "ppars", "pz"))
+        write(joinpath(pz, "validity.yaml"), "- valid_from: 20220101T000000Z\n  apply:\n    - pz.yaml\n")
+        write(joinpath(pz, "pz.yaml"), "V99000A:\n  tau: 500.0\n")
+        override = joinpath(dirname(meta), "override.yaml")
+        write(override, "setups:\n  l200:\n    paths:\n      metadata: '$meta'\n      par: '$par'\n")
+        withenv("LEGEND_DATA_CONFIG" => "$override:$julia_config") do
+            data = LegendData(:l200)
+            sel = start_filekey(data, (DataPeriod(2), DataRun(6), :cal))
+            @test get_dsp_pars(data, sel, :V99000A, :pz).tau == 500.0
+            @test isempty(get_dsp_pars(data, sel, :V99000C, :pz))
+            @test_throws "No metadata pars/rpars/pz" get_dsp_pars(data, sel, :V99000B, :pz)
+        end
+    end
+
     @testset "utils" begin
         sel = (DataPeriod(2), DataRun(6), :phy)
         rsel = (DataPeriod(2), DataRun(6))
