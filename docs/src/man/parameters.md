@@ -188,3 +188,24 @@ The processors of the dataflow use the wrappers `write_pars` and `write_validity
 ### Overrides
 
 If the metadata directory contains `jldataprod/overrides/par` (or `jlpar`), the files in it take precedence over files of the same name in the parameter directory, and its `validity.yaml` entries are merged with those of the parameter directory. `l200.par` reads the override directory but writes only to the directory configured as `par`.
+
+### Run Overrides
+
+For runs without usable calibration, the metadata file `datasets/run_override.yaml` assigns the file key of another run whose parameters are used instead. It has the format of a `validity.yaml` file, with file keys in place of file names:
+
+```yaml
+- valid_from: 20230201T000000Z
+  apply:
+    - l200-p01-r002-cal-20230301T000000Z
+- valid_from: 20230301T000000Z
+  mode: reset
+  apply: []
+```
+
+While an entry with a file key is active, validity selections of `l200.par` and `l200.jlpar` select the time of that file key and keep their own category. In this example, the parameters of all selections from `20230201T000000Z` to `20230301T000000Z` are those valid at `20230301T000000Z`; the entry with an empty file list ends the override. An entry with more than one file key is an error. A file `run_override.yaml` in `jldataprod/overrides/metadata/datasets` of the metadata is merged with the main file as described in [Override Directories](@ref). Selections of `l200.metadata` always use the selected time.
+
+```julia
+fk = FileKey("l200-p01-r001-cal-20230201T000000Z")
+l200.par.rpars.ecal(fk)                            # parameters of r002
+l200.metadata.hardware.configuration.channelmaps(fk) # channel map of r001
+```

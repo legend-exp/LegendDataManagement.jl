@@ -555,12 +555,24 @@ export get_spm_dc_cal_propfunc
 
 
 """
-    get_spm_noise_cut_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId)
+    get_spm_noise_cut_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol = :ppars, pars_cat::Symbol = :sipmcal)
 
-Get the LAr/SPMS noise cut function for the given data, validity selection
-and detector. For each energy type it keeps only the triggers above the
-`noise_threshold` of the detector in the calibrated trigger amplitudes,
-trigger positions and discharge flags.
+Returns the liquid-argon (LAr) SiPM noise cut `PropertyFunction` for the given
+data, validity selection and detector.
+
+For each energy type of the LAr configuration, the function keeps only the
+triggers whose calibrated amplitude `<energy_type>_cal` (see
+[`get_spm_cal_propfunc`](@ref)) is above the `noise_threshold` stored in the
+parameters. It returns the properties `<energy_type>_cal`, the trigger
+positions of the energy type and `<energy_type>_is_dc` (see
+[`get_spm_dc_cal_propfunc`](@ref)), each reduced to these triggers.
+
+Throws an `ArgumentError` if the parameters have no `noise_threshold` for an
+energy type.
+
+## Keywords
+* `pars_type::Symbol = :ppars`: Parameter set to use, `:ppars` or `:rpars`.
+* `pars_cat::Symbol = :sipmcal`: Parameter category that holds the noise thresholds.
 """
 function get_spm_noise_cut_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:sipmcal)
     energy_types = _dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types

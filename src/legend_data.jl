@@ -463,7 +463,7 @@ be passed as separate arguments, e.g. `channelinfo(data, period, run, category)`
 * `only_processable::Bool = false`: Keep only channels that are marked as processable.
 * `only_usability::Symbol = :all`: Keep only channels with this usability, e.g. `:on`. `:all` keeps every usability.
 * `sort_by::Symbol = :detector`: Name of the column to sort by, compared as strings. `:string` sorts by detector string and position. A name that is not a column leaves the order of the channel map.
-* `extended::Bool = false`: Add the columns `cc4`, `cc4ch`, `daqcrate`, `daqcard`, `hvcard`, `hvch`, `enrichment`, `mass`, `total_volume`, `active_volume` and `fccd`.
+* `extended::Bool = false`: Add the columns `cc4`, `cc4ch`, `daqcrate`, `daqcard`, `hvcard`, `hvch`, `enrichment`, `mass`, `total_volume`, `active_volume` and `fccd`, and the position columns `x`, `y`, `z`, `radius`, `angle` and `barrel` from the metadata `hardware/geometry`. A position that the metadata does not list is `NaN` (`barrel` is an empty `Symbol`).
 * `verbose::Bool = true`: Warn if the metadata has no FCCD value of a detector with `extended = true`; the FCCD is then set to zero.
 * `only_analysis_runs::Bool = true`: For a period selection, merge only the analysis runs.
 * `explode_partitions::Bool = false`: Return one row per detector and partition.

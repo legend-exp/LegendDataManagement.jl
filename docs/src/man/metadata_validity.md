@@ -190,7 +190,7 @@ end
 
 ### Override Directories
 
-[`LegendDataManagement.AnyProps`](@ref) takes a second directory via `override_base`. A file of the base directory is read together with the file of the same relative path in the override directory, which is read later and so takes precedence. The `validity.yaml` files of both directories are merged per category: entries with the same `valid_from` get the concatenated file lists (base first), and all other entries keep the file list that results from their own file. [`LegendData`](@ref) uses `<metadata>/jldataprod/overrides/<name>` as the override directory of the database `<name>`.
+[`LegendDataManagement.AnyProps`](@ref) takes a second directory via `override_base`. A file of the base directory is read together with the file of the same relative path in the override directory, which is read later and so takes precedence. The `validity.yaml` files of both directories are merged per category: each `valid_from` of either file starts an entry whose file list holds the files active at that time in the base file, followed by those active in the override file. For a category that only one of the files lists, the entries of the category `all` of the other file are used. [`LegendData`](@ref) uses `<metadata>/jldataprod/overrides/<name>` as the override directory of the database `<name>`.
 
 ```@example ldm
 override = joinpath(scratch_dir, "toy_override")
