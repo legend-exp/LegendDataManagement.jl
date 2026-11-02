@@ -562,25 +562,25 @@ data, validity selection and detector.
 
 For each energy type of the LAr configuration, the function keeps only the
 triggers whose calibrated amplitude `<energy_type>_cal` (see
-[`get_spm_cal_propfunc`](@ref)) is above the `noise_threshold` stored in the
-parameters. It returns the properties `<energy_type>_cal`, the trigger
-positions of the energy type and `<energy_type>_is_dc` (see
+[`get_spm_cal_propfunc`](@ref)) is above the `trigger_threshold` stored in the
+parameters (PE of the final calibration, unit `e_au`). It returns the properties
+`<energy_type>_cal`, the trigger positions of the energy type and `<energy_type>_is_dc` (see
 [`get_spm_dc_cal_propfunc`](@ref)), each reduced to these triggers.
 
-Throws an `ArgumentError` if the parameters have no `noise_threshold` for an
-energy type.
+An energy type without `trigger_threshold` in the parameters keeps no triggers
+(threshold `NaN`), like the `NaN` amplitudes of [`get_spm_cal_propfunc`](@ref).
 
 ## Keywords
 * `pars_type::Symbol = :ppars`: Parameter set to use, `:ppars` or `:rpars`.
-* `pars_cat::Symbol = :sipmcal`: Parameter category that holds the noise thresholds.
+* `pars_cat::Symbol = :sipmcal`: Parameter category that holds the trigger thresholds.
 """
 function get_spm_noise_cut_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:ppars, pars_cat::Symbol=:sipmcal)
     energy_types = _dataprod_lar_cal(data, sel, detector; pars_type=pars_type).energy_types
     larcal_props = _get_larcal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat)
     expr_map = Dict{Symbol, String}()
     for e_filter in keys(energy_types)
-        haskey(get(larcal_props, e_filter, PropDict()), :noise_threshold) || throw(ArgumentError("No noise_threshold for $e_filter of $detector in $pars_type $pars_cat"))
-        noise_cut = "$(e_filter)_cal .> $(ustrip(UnitfulAtomic.e_au, larcal_props[e_filter].noise_threshold))e"
+        trigger_threshold = get(get(larcal_props, e_filter, PropDict()), :trigger_threshold, NaN * u"e_au")
+        noise_cut = "$(e_filter)_cal .> $(ustrip(u"e_au", trigger_threshold))*e"
         for col in (Symbol("$(e_filter)_cal"), Symbol(energy_types[e_filter].pos), Symbol("$(e_filter)_is_dc"))
             expr_map[col] = "$(col)[$(noise_cut)]"
         end
