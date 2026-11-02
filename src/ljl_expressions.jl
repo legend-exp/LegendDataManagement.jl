@@ -2,9 +2,10 @@
 
 
 """
-    const LJlExprLike = Union{Expr, Symbol, Integer, AbstractFloat}
+    LJlExprLike = Union{Expr, Symbol, Integer, AbstractFloat}
 
-Anything that can represent a parsed LEGEND Julia expression.
+Anything that can represent a parsed LEGEND Julia expression, i.e. the
+result of [`parse_ljlexpr`](@ref).
 """
 const LJlExprLike = Union{Expr, Symbol, Integer, AbstractFloat}
 export LJlExprLike
@@ -15,7 +16,27 @@ const _cached_jlparsed = LRU{String, LJlExprLike}(maxsize = 10^4)
 """
     parse_ljlexpr(expr_string::AbstractString)::LJlExprLike
 
-Parse an LEGEND Julia expression and return a Julia syntax tree.
+Parses a LEGEND Julia expression and returns a Julia syntax tree.
+
+LEGEND Julia expressions are a subset of Julia expressions. They may contain
+numbers, variable names, property access (`a.b`), indexing, comparisons,
+`&&`, `||`, conditional expressions `a ? b : c`, the unit macro `u"..."`, and
+calls and broadcasts of the allowed functions (arithmetic and logical
+operators, elementary mathematical functions, reductions like `sum` and
+`maximum`, and a few more, see `LegendDataManagement.ljl_expr_allowed_funcs`).
+The unit names `s`, `ms`, `μs`, `us`, `ns`, `MeV`, `keV`, `eV` and `e` are
+replaced by the corresponding Unitful units. An `ArgumentError` is thrown for
+other syntax, such as `if ... end` blocks and tuples, and for other functions
+or macros. The parsed expressions are cached.
+
+## Examples
+```julia
+using LegendDataManagement
+
+expr = parse_ljlexpr("e_cusp * 0.5keV < 10.0keV && !isnan(baseline)")
+```
+
+See also [`process_ljlexpr`](@ref), [`ljl_propfunc`](@ref).
 """
 function parse_ljlexpr(@nospecialize(expr_string::AbstractString))
     get!(_cached_jlparsed, expr_string) do
@@ -71,10 +92,14 @@ const _cached_procjlexpr = LRU{Tuple{LJlExprLike,Any},LJlExprLike}(maxsize = 10^
 """
     process_ljlexpr(expr::LJlExprLike, f_varsubst = identity)::LJlExprLike
 
-Verify that `expr` is a valid LEGEND Julia expression and return it,
-with modifications if necessary.
+Verifies that `expr` is a valid LEGEND Julia expression and returns it, with
+modifications if necessary.
 
-Optionally substitute variables in `expr` using `f_varsubst`.
+An expression is valid if it only uses the syntax, functions and macros
+described in [`parse_ljlexpr`](@ref); an `ArgumentError` is thrown otherwise.
+Variables in `expr` are replaced by `f_varsubst(variable)`.
+
+See also [`parse_ljlexpr`](@ref).
 """
 function process_ljlexpr(@nospecialize(expr::LJlExprLike), f_varsubst = identity)
     get!(_cached_procjlexpr, (expr, f_varsubst)) do
@@ -228,7 +253,19 @@ const _cached_ljl_propfunc_lock = ReentrantLock()
 Compiles a `PropertyFunctions.PropertyFunction` from a LEGEND Julia
 expression.
 
-See also [`parse_lpyexpr`](@ref).
+Variable names in the expression are properties of the input of the function;
+the names `NaN`, `Inf`, `missing` and `nothing` and the unit names of
+[`parse_ljlexpr`](@ref) are values. The compiled functions are cached.
+
+## Examples
+```julia
+using LegendDataManagement
+
+pf = ljl_propfunc("e_cusp > 1000keV")
+pf((e_cusp = 1500u"keV",))
+```
+
+See also [`parse_ljlexpr`](@ref).
 """
 function ljl_propfunc end
 export ljl_propfunc
@@ -255,8 +292,15 @@ end
 Compiles a map between output field-names and LEGEND Julia expressions to
 a single `PropertyFunctions.PropertyFunction`.
 
-The generated function will return `NamedTuple`s with the same property names
-as the keys of `expr_map`.
+The generated function returns `NamedTuple`s with the same property names
+as the keys of `expr_map`, sorted by name.
+
+## Examples
+```julia
+using LegendDataManagement
+
+pf = ljl_propfunc(Dict(:e_keV => "e_cusp * 1.0", :is_valid => "e_cusp > 0.0"))
+```
 """
 function ljl_propfunc(@nospecialize(expr_map::AbstractDict{Symbol,<:LJlExprLike}))
     nt_entries = [:($label = $(process_ljlexpr(expr, _pf_varsym))) for (label, expr) in expr_map]

@@ -8,17 +8,28 @@
         category::DataCategoryLike, filekeys::AbstractVector{<:FileKey}
     )
 
-Processes all `filekeys` in `data` for `category`.
+Processes the files of all `filekeys` in `data`.
 
-Opens the files using `f_open` and processes them using `f_process`.
+Opens each file using `f_open`, processes it using `f_process` and closes it.
+The file name is `data.tier[category, filekey]`, so `category` has to be a
+value that `data.tier` accepts as its first index. Errors while opening or
+processing a file are logged and recorded instead of thrown.
 
 Returns a
-`@NamedTuple{result::Dict{Filekey}, failed::Dict{Filekey}, success::Bool}`:
+`@NamedTuple{result::Dict{FileKey}, success::Bool, failed::Dict{FileKey}}`:
 
-* `values(result)` contains the results `f_process(f_open(filename))` for
-   all filenames referred to by `category` and `filekeys`.
-* `values(result)` contains the error where processing failed.
-* `success` equals `isempty(failed)`
+* `result` contains the results `f_process(f_open(filename))` for all
+  `filekeys` that were processed.
+* `failed` contains the error for each file key where opening or processing
+  failed.
+* `success` equals `isempty(failed)`.
+
+## Arguments
+* `f_process`: Function that processes the opened file.
+* `f_open`: Function that opens a file name and returns an object that can be closed.
+* `data::LegendData`: The data that holds the files.
+* `category::DataCategoryLike`: Used as first index of `data.tier`.
+* `filekeys::AbstractVector{<:FileKey}`: File keys of the files to process.
 """
 function map_datafiles(
     f_process, f_open, data::LegendData,

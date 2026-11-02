@@ -1,20 +1,29 @@
 """
-    struct HPGeEnvironment{T}
+    struct HPGeEnvironment{T<:Unitful.Temperature{<:Number}}
 
-Struct to describe the environment of a HPGe detector which are not set in metadata.
+    HPGeEnvironment()
+    HPGeEnvironment(medium::AbstractString, temperature)
+
+Description of the environment of an HPGe detector, which is not part of the
+metadata.
+
+`HPGeEnvironment()` describes a vacuum cryostat at 78 K.
 
 ## Parametric types
-* `T`: Temperature type
+* `T`: Temperature type, a temperature with units.
 
 ## Fields
-* `medium::AbstractString`: Name of the medium.
-* `temperature::T`: Temperature of detector/medium with units. 
+* `medium::AbstractString`: Name of the medium, e.g. `"vacuum"`.
+* `temperature::T`: Temperature of the detector and the medium, with units.
 
-## Default constructor for vacuum cryostat at 78 K:
+## Examples
+```julia
+using LegendDataManagement, Unitful
 
-* `HPGeEnvironment()`.
+env = HPGeEnvironment()
+env = HPGeEnvironment("vacuum", 90u"K")
+```
 """
-
 struct HPGeEnvironment{T<:Unitful.Temperature{<:Number}}
     medium::AbstractString
     temperature::T

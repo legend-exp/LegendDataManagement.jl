@@ -1,5 +1,39 @@
 # This file is a part of LegendSpecFits.jl, licensed under the MIT License (MIT).
 
+"""
+    LegendDataManagementPlotsExt
+
+Extension of LegendDataManagement for Plots.jl, loaded together with
+RecipesBase.jl and Plots.jl. It defines the following plot recipes, which are
+used through `plot`.
+
+    plot(chinfo::Table, pars::PropDict, properties::AbstractVector = []; calculate_mean = true, verbose = false)
+
+Plots a parameter of every detector in the channel information `chinfo`,
+grouped by detector string and ordered by position. The parameter is the
+entry `properties` (a path of property names) of the entry `pars[detector]`;
+its value with uncertainty is drawn as a scatter plot. Detectors without a
+(non-zero) entry are marked in red. With `calculate_mean = true` the legend
+shows the (weighted) mean. With `verbose = true` a warning is printed for each
+detector without an entry.
+
+    plot(data::LegendData, fk::FileKey, ts::Unitful.Time, ch::ChannelIdLike; plot_tier = DataTier(:raw), plot_waveform = [:waveform_presummed], show_unixtime = false)
+    plot(data::LegendData, ts::Unitful.Time, ch::ChannelIdLike; kwargs...)
+
+Plots the waveforms `plot_waveform` of the event at time `ts` in channel `ch`,
+read from the tier `plot_tier`. The file key `fk` is found with
+[`find_filekey`](@ref) if it is not given. A `Dates.DateTime` can be given in
+place of `ts`. With `show_unixtime = true` the title shows the Unix time.
+
+    plot(data::LegendData, ts::Unitful.Time; plot_tier = DataTier(:raw), system = Dict(:geds => [:waveform_presummed], :spms => [:waveform_bit_drop]), only_processable = true, show_unixtime = false)
+
+Plots the event at time `ts`. For a calibration event the waveform of the
+HPGe channel that triggered is drawn; for a physics event the waveforms of all
+channels of each system in `system` are drawn, one subplot per system.
+`system` maps system names to the waveform properties to plot. With
+`only_processable = true` only processable channels are used. A
+`Dates.DateTime` can be given in place of `ts`.
+"""
 module LegendDataManagementPlotsExt
 
 using RecipesBase

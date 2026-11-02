@@ -3,17 +3,28 @@
 ###################
 
 """
-    load_run_ch(open_func::Function, flatten_func::Function, data::LegendData, filekeys::Vector{FileKey}, tier::DataTierLike, ch::ChannelIdLike; check_filekeys::Bool=true)
+    load_run_ch(open_func::Function, flatten_func::Function, data::LegendData, filekeys::Vector{FileKey}, tier::DataTierLike, ch::ChannelIdLike; check_filekeys::Bool = true, keys::Tuple = ())
+    load_run_ch(open_func::Function, flatten_func::Function, data::LegendData, period::DataPeriodLike, run::DataRunLike, category::DataCategoryLike, tier::DataTierLike, ch::ChannelIdLike; kwargs...)
+    load_run_ch(open_func::Function, flatten_func::Function, data::LegendData, start_filekey::FileKey, tier::DataTierLike, ch::ChannelIdLike; kwargs...)
 
-Load data for a channel from a list of filekeys in a given tier.
-# Arguments
-- `open_func::Function`: function to open a file
-- `flatten_func::Function`: function to flatten data
-- `data::LegendData`: data object
-- `filekeys::Vector{FileKey}`: list of filekeys
-- `tier::DataTierLike`: tier to load data from
-- `ch::ChannelIdLike`: channel to load data for
-- `check_filekeys::Bool=true`: check if filekeys are valid
+Deprecated. Loads the data of a channel from a list of file keys in a given
+tier; use [`read_ldata`](@ref) instead.
+
+The method for a period, run and category (or the start file key of a run)
+uses the file keys that [`search_disk`](@ref) finds in the directory of the
+run.
+
+## Arguments
+* `open_func::Function`: Function to open a file.
+* `flatten_func::Function`: Function to flatten the data of the files.
+* `data::LegendData`: Data that holds the files.
+* `filekeys::Vector{FileKey}`: File keys of the files to read.
+* `tier::DataTierLike`: Tier to load data from.
+* `ch::ChannelIdLike`: Channel to load data for.
+
+## Keywords
+* `check_filekeys::Bool = true`: Skip file keys whose file does not exist or does not contain the channel.
+* `keys::Tuple = ()`: Names of the columns to read; an empty tuple reads the whole table.
 """
 function load_run_ch end
 export load_run_ch
@@ -82,16 +93,19 @@ load_run_ch(open_func::Function, flatten_func::Function, data::LegendData, start
 
 """
     load_raw_evt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::Int)
-    load_raw_evt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::UnitRange{Int})
-Load data for a channel from a hitch file for a given selected event index or index range.
-# Arguments
-- `open_func::Function`: function to open a file
-- `data::LegendData`: data object
-- `ch::ChannelIdLike`: channel
-- `data_hit::Table`: hitch data
-- `sel_evt::Int/UnitRange{Int}`: selected event index
-# Return
-- `Table`: data table of raw events
+    load_raw_evt(open_func::Function, data::LegendData, ch::ChannelIdLike, data_hit::Table, sel_evt::Union{UnitRange{Int}, Vector{Int}})
+
+Deprecated. Loads the raw data of a channel for the selected events of a hit
+table; use [`read_ldata`](@ref) instead.
+
+## Arguments
+* `open_func::Function`: Function to open a file.
+* `data::LegendData`: Data that holds the files.
+* `ch::ChannelIdLike`: Channel to read.
+* `data_hit::Table`: Hit data with the columns `filekey` and `eventID_fadc`.
+* `sel_evt`: Index or indices of the selected events in `data_hit`.
+
+Returns the table of the raw events.
 """
 function load_raw_evt end
 export load_raw_evt
@@ -122,22 +136,28 @@ end
 
 
 """
-    load_partition_ch(open_func::Function, flatten_func::Function, data::LegendData, partinfo::StructVector, tier::DataTierLike, cat::DataCategoryLike, ch::ChannelIdLike; data_keys::Tuple=(), n_evts::Int=-1, select_random::Bool=false)
+    load_partition_ch(open_func::Function, flatten_func::Function, data::LegendData, partinfo::Table, tier::DataTierLike, cat::DataCategoryLike, ch::ChannelIdLike; data_keys::Tuple = (), n_evts::Int = -1, select_random::Bool = false)
     load_partition_ch(open_func::Function, flatten_func::Function, data::LegendData, part::DataPartition, tier::DataTierLike, cat::DataCategoryLike, ch::ChannelIdLike; kwargs...)
-Load data for a channel from a partition. 
-# Arguments
-- `open_func::Function`: function to open a file
-- `flatten_func::Function`: function to flatten data
-- `data::LegendData`: data object
-- `partinfo::StructVector`: partition info
-- `tier::DataTierLike`: tier
-- `cat::DataCategoryLike`: category
-- `ch::ChannelIdLike`: channel
-- `data_keys::Tuple=()`: data keys, empty tuple selects all keys
-- `n_evts::Int=-1`: number of events, -1 selects all events
-- `select_random::Bool=false`: select events randomly
-# Return
-- `Table`: data table with flattened events
+
+Deprecated. Loads the data of a channel from a partition; use
+[`read_ldata`](@ref) instead.
+
+## Arguments
+* `open_func::Function`: Function to open a file.
+* `flatten_func::Function`: Function to flatten the data of the files.
+* `data::LegendData`: Data that holds the files.
+* `partinfo::Table`: Partition information with the columns `period` and `run`, as returned by [`partitioninfo`](@ref).
+* `part::DataPartition`: Partition to read; its partition information is taken from `partitioninfo(data, ch, part)`.
+* `tier::DataTierLike`: Tier to read.
+* `cat::DataCategoryLike`: Category to read.
+* `ch::ChannelIdLike`: Channel to read.
+
+## Keywords
+* `data_keys::Tuple = ()`: Names of the columns to read; an empty tuple selects all.
+* `n_evts::Int = -1`: Number of events to read per run; `-1` selects all.
+* `select_random::Bool = false`: Select the events randomly.
+
+Returns the table with the flattened events.
 """
 function load_partition_ch(open_func::Function, flatten_func::Function, data::LegendData, partinfo::Table, tier::DataTierLike, cat::DataCategoryLike, ch::ChannelIdLike; data_keys::Tuple=(), n_evts::Int=-1, select_random::Bool=false)
     Base.depwarn(
@@ -201,16 +221,24 @@ export load_partition_ch
 
 
 """
-    get_partitionfilekeys(data::LegendData, part::DataPartitionLike, tier::DataTierLike, category::DataCategoryLike; only_good::Bool=true)
-Get filekeys for a given partition.
-# Arguments
-- `data::LegendData`: data object
-- `part::DataPartitionLike`: partition to be searched in
-- `tier::DataTierLike`: tier
-- `category::DataCategoryLike`: category
-- `only_good::Bool=true`: only get good filekeys
-# Return
-- `Vector{FileKey}`: filekeys
+    get_partitionfilekeys(data::LegendData, part::DataPartitionLike, tier::DataTierLike; only_good::Bool = true)
+
+Returns the file keys of a partition that are found on disk, as a
+`Vector{FileKey}`.
+
+The file keys are searched in the directories of the runs of the partition
+(see [`search_disk`](@ref)).
+
+## Arguments
+* `data::LegendData`: Data that holds the files.
+* `part::DataPartitionLike`: Partition to search in.
+* `tier::DataTierLike`: Tier to search in.
+
+## Keywords
+* `only_good::Bool = true`: Leave out the file keys of [`bad_filekeys`](@ref).
+
+The method with an additional `category` argument after `tier` is deprecated;
+the category is that of the partition.
 """
 function get_partitionfilekeys(data::LegendData, part::DataPartitionLike, tier::DataTierLike; only_good::Bool=true)
     part = DataPartition(part)

@@ -1,12 +1,38 @@
 # This file is a part of LegendDataManagement.jl, licensed under the MIT License (MIT).
 
 """
-    @enum ProcessStatus
+    @enum ProcessStatus process_succeeded=1 process_failed=0 process_warning=-1
 
-May be `succeeded`, `warning`, or `failed`.
+Status of a processing step.
+
+The values are [`process_succeeded`](@ref), [`process_failed`](@ref) and
+[`process_warning`](@ref). They are shown as `Success`, `Failure` and
+`Warning`, with colors in Markdown and HTML output.
 """
 @enum ProcessStatus process_succeeded=1 process_failed=0 process_warning=-1
 export ProcessStatus, process_succeeded, process_failed, process_warning
+
+"""
+    process_succeeded::ProcessStatus
+
+Value of [`ProcessStatus`](@ref) for a processing step that succeeded.
+"""
+process_succeeded
+
+"""
+    process_failed::ProcessStatus
+
+Value of [`ProcessStatus`](@ref) for a processing step that failed.
+"""
+process_failed
+
+"""
+    process_warning::ProcessStatus
+
+Value of [`ProcessStatus`](@ref) for a processing step that finished with a
+warning.
+"""
+process_warning
 
 
 function Base.show(io::IO, ::MIME"text/plain", status::ProcessStatus)

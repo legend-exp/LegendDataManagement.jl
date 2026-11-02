@@ -1,54 +1,75 @@
 # LegendDataManagement.jl
 
-LegendDataManagement.jl provides a Julia implementation of the LEGEND data and metadata management.
+LegendDataManagement.jl (LDM) provides access to the data and metadata of the LEGEND experiment. It locates data files by setup, tier, period, run and detector, reads the metadata and parameter databases with their validity rules, and defines the identifiers (periods, runs, file keys, detector IDs) that the Julia packages of the LEGEND software stack share. The Juleana.jl data processing builds on it.
 
-The package provides a structured interface to locate, access, and query LEGEND data across data tiers, periods, runs, and channels, and integrates with the LEGEND metadata.
-
-
-## Configuration
-
-The package expects a configuration file (see the [example "config.yaml"](https://github.com/legend-exp/legend-testdata/blob/main/data/legend/dataflow-config.yaml) in the LEGEND test data repository) describing dataset names, file roots, and partitions. While the path to this configuration file can be specified explicitly, we recommend setting an environment variable named `$LEGEND_DATA_CONFIG` to the absolute path of your "config.json". This can be done in the bashrc or for VisualStudioCode in `terminal.integrated.env.linux"`.
-
-```bash
-export LEGEND_DATA_CONFIG="/path/to/legend_data_config.json"
+```@setup ldm
+include(joinpath(@__DIR__, "testdata_setup.jl"))
 ```
 
-LegendDataManagement provides a [SolidStateDetectors extension](@ref) that makes it possible to create `SolidStateDetector` objects from LEGEND metadata.
+## Installation
 
+LDM is registered in the LEGEND Julia registry. The registry is added once to the Julia installation, together with the General registry:
 
-Usage examples:
+```julia
+using Pkg
+pkg"registry add General https://github.com/legend-exp/LegendJuliaRegistry.git"
+pkg"add LegendDataManagement"
+```
+
+The command is also stored in the script `add_registries.jl` in the root of the repository. The packages `LegendHDF5IO`, `Plots` and `SolidStateDetectors` activate package extensions when they are loaded, see [Extensions](@ref). Helpers of the data processing are in the submodule `LegendDataManagement.LDMUtils`, see [Reports and Utilities](@ref).
+
+## Getting Started
+
+All data access starts from a [`LegendData`](@ref) object. It is built from a configuration file that maps the directories of a data production (tier files, metadata, parameters, logs, plots) to path prefixes. The environment variable `LEGEND_DATA_CONFIG` names this file, see [Configuration and LegendData](@ref).
 
 ```julia
 using LegendDataManagement
-using PropertyFunctions
 
 l200 = LegendData(:l200)
-
-filekey = FileKey("l200-p02-r006-cal-20221226T200846Z")
-
-raw_filename = l200.tier[:raw, "l200-p02-r006-cal-20221226T200846Z"]
-
-l200.metadata.hardware.detectors.germanium.diodes
-
-chinfo = channel_info(l200, filekey)
-filterby(@pf $processable && $usability)(chinfo)
 ```
 
+The examples in this documentation use an `l200` object that is built on the LEGEND test data. The metadata of the test data describes the run `p02-r006`:
 
-## Documentation structure
+```@example ldm
+filekey = start_filekey(l200, (:p02, :r006, :cal))
+```
 
-- **Manual** pages provide step-by-step workflows for data access and explain
-  the validity-based metadata model.
-- **API** contains the automatically generated reference documentation for
-  exported types and functions.
+```@example ldm
+channelinfo(l200, filekey).detector
+```
 
----
+The tier files of the test data belong to other runs; `fk` is a file key of the test data with tier files on disk (period 18, run 0, category `cal`) and `det` a detector ID with data in these files. The path of a tier file follows from the file key, here relative to the tier directory:
 
-## Get started
+```@example ldm
+relpath(l200.tier[:jldsp, fk], l200.tier[])
+```
 
-- Browse the *Manual* for an explanation of basic functions and practical examples.
-- Check *Extensions* for information about plotting with `LegendMakie` and the
-  package extensions for `LegendHDF5IO` and `SolidStateDetectors`.
-- Consult the *API* section for detailed information on selectors and helper
-  functions such as `LegendData`, `DataTier`, `DataPeriod`, `search_disk`, and
-  `read_ldata`.
+## Manual
+
+```@contents
+Pages = [
+    "man/legenddata.md",
+    "man/identifiers.md",
+    "man/tiers_files.md",
+    "man/metadata_validity.md",
+    "man/channel_run_info.md",
+    "man/exposure.md",
+    "man/parameters.md",
+    "man/read_data.md",
+    "man/propfuncs.md",
+    "man/reports_utils.md",
+    "man/extensions.md",
+    "man/juleana.md",
+]
+Depth = 2
+```
+
+## Tutorials
+
+```@contents
+Pages = [
+    "tutorials/energy.md",
+    "tutorials/aoe.md",
+]
+Depth = 1
+```
