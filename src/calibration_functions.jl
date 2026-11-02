@@ -35,6 +35,37 @@ _qc_key(data::LegendData, sel::AnyValiditySelection, detector::DetectorId) =
     (objectid(data), _validity_filelist(() -> dataprod_config(data).qc, data, sel, (:config, :qc)), _channelinfo_inputs(data, sel, false), detector)
 
 
+### DSP parameters
+const _cached_dsp_pars = LRU{_ValidityKey, PropDict}(maxsize = 10^2)
+
+"""
+    get_dsp_pars(data::LegendData, sel::AnyValiditySelection, detector::DetectorIdLike, pars_cat::Symbol)::PropDict
+
+Return the parameters `pars_cat` of `detector` that its DSP reads, e.g. `:pz` for the decay
+time, `:fltopt` and `:aoeopt` for the filter optimization or `:sipmopt` for the SiPM
+thresholds, or an empty `PropDict` if there are none for `detector`.
+
+The parameters are read from `dataprod_parameters(data)[pars_type][pars_cat]`, with
+`pars_type` (e.g. `"ppars"` or `"rpars"`) from the entry of `detector` in the DSP config
+`dataprod_config(data).dsp(sel)`, else from its `default`. The parameters of all detectors
+are cached per validity entry, so all selections of the same entry, such as the runs of a
+partition, load them once.
+
+Throws an `ArgumentError` if the DSP config has no `pars_type` for `detector` or the
+parameters `pars_cat` of its `pars_type` do not exist.
+"""
+function get_dsp_pars(data::LegendData, sel::AnyValiditySelection, detector::DetectorIdLike, pars_cat::Symbol)
+    detector = Symbol(DetectorId(detector))
+    dsp_config = _dataprod_config(data, sel, :dsp)
+    pars_type = get(get(dsp_config, detector, PropDict()), :pars_type, get(get(dsp_config, :default, PropDict()), :pars_type, nothing))
+    isnothing(pars_type) && throw(ArgumentError("No `pars_type` for detector $detector in the DSP config of $sel"))
+    pars_type = Symbol(pars_type)
+    pars = _validity_cached(get_values, _cached_dsp_pars, () -> dataprod_parameters(data)[pars_type][pars_cat], data, sel, (:pars, pars_type, pars_cat))
+    get(pars, detector, PropDict())
+end
+export get_dsp_pars
+
+
 ### HPGe calibration functions
 function _get_ecal_props(data::LegendData, sel::AnyValiditySelection; pars_type::Symbol=:rpars, pars_cat::Symbol=:ecal)
     _get_cal_values(data, sel, pars_type, pars_cat)
