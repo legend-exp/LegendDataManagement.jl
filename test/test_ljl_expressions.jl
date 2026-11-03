@@ -51,6 +51,9 @@ include("testing_utils.jl")
     multi_pf = ljl_propfunc(expr_map)
     @test multi_pf isa PropertyFunctions.PropertyFunction
     @test @inferred(broadcast(multi_pf, data)) == StructArray(e_cal = ref_numfunc.(data), e_flag = ref_boolfunc.(data))
+    # a plain column next to an expression
+    mixed_pf = ljl_propfunc(PropDict(:E_trap => "E_trap", :e_flag => bool_expr_string))
+    @test broadcast(mixed_pf, data) == StructArray(E_trap = data.E_trap, e_flag = ref_boolfunc.(data))
 
     @test @inferred(ljl_propfunc("a.+b")((a = [1,2,3], b = [5, 6, 7]))) == [6, 8, 10]
     @test @inferred(ljl_propfunc("log.(a)")((a = [1,2,3],))) ≈ [0.0, 0.6931471805599453, 1.0986122886681098]
