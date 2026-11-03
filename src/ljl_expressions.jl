@@ -311,7 +311,7 @@ function ljl_propfunc(@nospecialize(expr_map::AbstractDict{Symbol,<:LJlExprLike}
 end
 
 function ljl_propfunc(@nospecialize(expr_map::AbstractDict{Symbol,<:AbstractString}))
-    ljl_propfunc(Dict([(k, parse_ljlexpr(string(v))) for (k, v) in expr_map]))
+    ljl_propfunc(Dict{Symbol,LJlExprLike}(k => parse_ljlexpr(string(v)) for (k, v) in expr_map))
 end
 
 ljl_propfunc(@nospecialize(expr_map::PropDict)) = ljl_propfunc(Dict{Symbol,String}(expr_map))
