@@ -112,6 +112,7 @@ Properties of the result are named after the entries of the configuration. Their
 **Germanium detectors.**
 
 * [`get_ged_cal_propfunc`](@ref): energy calibration, with the functions from the parameter category `pars_cat` (`:ecal`) of `pars_type` (`:rpars` or `:ppars`). Energy types without a stored function evaluate to `NaN`.
+* [`get_ged_daqecal_propfunc`](@ref): calibration of the DAQ energy `daqenergy` to `daqenergy_cal`, with the function from the parameter category `pars_cat` (`:daqecal`) of `pars_type` (`:rpars`). Detectors without a stored function evaluate to `NaN`.
 * [`get_ged_qc_cuts_propfunc`](@ref), [`get_ged_qc_is_trig_propfunc`](@ref), [`get_ged_qc_is_single_pulse_propfunc`](@ref), [`get_ged_qc_is_empty_trace_propfunc`](@ref), [`get_ged_qc_is_crosstalk_propfunc`](@ref): quality cut definitions, taken from the `qc` configuration. The configuration is merged from its `default` section, the section of the usability of the detector and the section of the detector.
 * [`get_ged_psd_propfunc`](@ref), [`get_ged_psd_classifier_propfunc`](@ref): pulse-shape classifiers from the `psd` configuration and the parameter categories `aoe` and `lq`.
 * [`get_ged_aoe_cut_propfunc`](@ref), [`get_ged_lq_cut_propfunc`](@ref): cut conditions for the classifiers, built from the cut limits that [`dataprod_pars_aoe_window`](@ref) and [`LegendDataManagement.dataprod_pars_lq_window`](@ref) return as a `ClosedInterval`.

@@ -116,6 +116,29 @@ function get_ged_cal_propfunc(data::LegendData, sel::AnyValiditySelection, detec
 end
 export get_ged_cal_propfunc
 
+"""
+    get_ged_daqecal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol = :rpars, pars_cat::Symbol = :daqecal)
+
+Returns the HPGe DAQ energy calibration `PropertyFunction` for the given data,
+validity selection and detector.
+
+The function has one property `daqenergy_cal`, which evaluates the calibration
+function `func` of `detector` stored in the parameters `pars_cat` of `pars_type`
+on the DAQ energy `daqenergy`; without a stored function the result is `NaN`.
+
+## Keywords
+* `pars_type::Symbol = :rpars`: Parameter set to use.
+* `pars_cat::Symbol = :daqecal`: Parameter category that holds the calibration.
+
+The calibration data are cached internally; use a fresh `data` object if the
+data on disk may have changed.
+"""
+function get_ged_daqecal_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId; pars_type::Symbol=:rpars, pars_cat::Symbol=:daqecal)
+    daqecal_func::String = get(_get_ecal_props(data, sel, detector; pars_type=pars_type, pars_cat=pars_cat), :func, "daqenergy * NaN*keV")
+    ljl_propfunc(Dict{Symbol, String}(:daqenergy_cal => daqecal_func))
+end
+export get_ged_daqecal_propfunc
+
 
 
 ### HPGe PSD calibration functions
