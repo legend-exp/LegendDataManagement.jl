@@ -522,17 +522,27 @@ end
 
 function _get_larcal_dc_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol; kwargs...)
     dataprod_lar = _dataprod_lar_cal(data, sel, detector; kwargs...)
+    xt_tag = get(dataprod_lar, :xt_tag, PropDict())
     let Δt_pos_dc_tag = dataprod_lar.Δt_pos_dc_tag, dc_tag_interval = ClosedInterval(dataprod_lar.dc_tag_interval...)
-        @pf [any(  abs.($pos_dc .- p) .< Δt_pos_dc_tag  .&&  ($max_dc .>= dc_tag_interval.left) .&& ($max_dc .<= dc_tag_interval.right)) for p in $pos]
+        if haskey(xt_tag, :min_tot)
+            let Δt_pos = xt_tag.Δt_pos, min_tot = xt_tag.min_tot
+                @pf [any(  abs.($pos_dc .- p) .< Δt_pos_dc_tag  .&&  ($max_dc .>= dc_tag_interval.left) .&& ($max_dc .<= dc_tag_interval.right)) ||
+                    !any(  ($pos_tot .- Δt_pos .<= p)  .&&  (p .<= $pos_high_tot .+ Δt_pos)  .&&  ($tot .>= min_tot)) for p in $pos]
+            end
+        else
+            @pf [any(  abs.($pos_dc .- p) .< Δt_pos_dc_tag  .&&  ($max_dc .>= dc_tag_interval.left) .&& ($max_dc .<= dc_tag_interval.right)) for p in $pos]
+        end
     end
-    
 end
 
 function _get_larcal_dc_sel_propfunc(data::LegendData, sel::AnyValiditySelection, detector::DetectorId, e_filter::Symbol; kwargs...)
-    dataprod_lar_filter = _dataprod_lar_cal(data, sel, detector; kwargs...).energy_types[e_filter]
+    dataprod_lar = _dataprod_lar_cal(data, sel, detector; kwargs...)
+    dataprod_lar_filter = dataprod_lar.energy_types[e_filter]
+    xt_tag = get(dataprod_lar, :xt_tag, PropDict())
     PropSelFunction(
         Symbol(e_filter) => :max, Symbol(dataprod_lar_filter.pos) => :pos,
-        Symbol(dataprod_lar_filter.dc) => :max_dc, Symbol(dataprod_lar_filter.dc_pos) => :pos_dc
+        Symbol(dataprod_lar_filter.dc) => :max_dc, Symbol(dataprod_lar_filter.dc_pos) => :pos_dc,
+        (haskey(xt_tag, :min_tot) ? (Symbol(xt_tag.pos) => :pos_tot, Symbol(xt_tag.pos_high) => :pos_high_tot, Symbol(xt_tag.tot) => :tot) : ())...
     )
 end
 
@@ -594,8 +604,12 @@ data, validity selection and detector as a `NamedTuple` of
 
 The tuple has one entry `<energy_type>_is_dc` for each energy type of the LAr
 configuration. Each returns, for every pulse position, whether a DC pulse lies
-within the configured time difference and amplitude interval. The input
-properties are those selected by [`get_spm_dc_sel_propfunc`](@ref).
+within the configured time difference and amplitude interval. With
+`xt_tag.min_tot` in the LAr configuration of the detector, a pulse is tagged as
+well if no region with at least that time over threshold (properties
+`xt_tag.pos`, `xt_tag.pos_high`, `xt_tag.tot`) lies within `xt_tag.Δt_pos`
+of it. The input properties are those selected by
+[`get_spm_dc_sel_propfunc`](@ref).
 
 ## Keywords
 * `pars_type::Symbol = :ppars`: Configuration set to use, `:ppars` or `:rpars`.
