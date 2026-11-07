@@ -25,7 +25,7 @@ rinfo = runinfo(l200, :p02)
 rinfo.run
 ```
 
-Each category column is itself a table with the columns `startkey`, `endkey`, `livetime`, `is_analysis_run` and `keys`. A run without an entry for a category has `missing` keys, a livetime of `NaN` seconds and `is_analysis_run = false` there.
+Each category column is itself a table with the columns `startkey`, `endkey`, `livetime`, `is_analysis_run` and `keys`. A run without an entry for a category has `missing` `startkey` and `endkey`, an empty `keys` set, a livetime of `NaN` seconds and `is_analysis_run = false` there.
 
 ```@example ldm
 rinfo.phy.startkey[1:2]
@@ -54,6 +54,25 @@ rinfo_cal = runinfo(l200, :p02) |> filterby(@pf $cal.is_analysis_run)
 first(rinfo_cal).cal.startkey
 ```
 
+### Run Information of a Dataset
+
+For a dataset other than `:default` (see [Datasets](@ref)), `runinfo` has a column only for the categories that the run list of the dataset names. A run is a row if at least one of its categories is listed; for a category that the list does not name for the run, the entry is empty as described above. `:default` holds every run and category of the metadata `datasets/runinfo`. The test metadata has the run list `valid` with the categories `cal` and `phy`:
+
+```@example ldm
+valid = LegendData(:l200; dataset = :valid)
+(propertynames(runinfo(l200)), propertynames(runinfo(valid)))
+```
+
+```@example ldm
+(length(runinfo(l200)), length(runinfo(valid)))
+```
+
+Selecting a category that the dataset does not have throws an `ArgumentError`. This holds for `runinfo`, [`start_filekey`](@ref), [`is_lrun`](@ref) and [`is_analysis_run`](@ref).
+
+```@example ldm
+try runinfo(valid, (:p03, :r000, :fft)) catch err sprint(showerror, err) end
+```
+
 ### Start Keys, Livetime and Analysis Runs
 
 [`start_filekey`](@ref) gives the first file key of a run and category, or `missing` if the metadata has none. [`livetime`](@ref) gives the livetime in seconds as a `Unitful` quantity, `NaN` seconds if the metadata has none.
@@ -76,7 +95,7 @@ ustrip(u"s", livetime(l200, (:p02, :r006, :cal)))
 
 The exposure is calculated from the livetime (see [Exposure and Livetime](@ref)).
 
-[`is_lrun`](@ref) tells whether a run exists in the metadata with a start key, and [`is_analysis_run`](@ref) whether it is an analysis run of its category. [`analysis_runs`](@ref) lists all analysis runs of a category. The analysis runs are those listed in the metadata `datasets/runlists` for `data.dataset`, with the run list `valid` for the default dataset.
+[`is_lrun`](@ref) tells whether a run exists in the metadata with a start key, and [`is_analysis_run`](@ref) whether it is an analysis run of its category. [`analysis_runs`](@ref) lists all analysis runs of a category. The analysis runs of `cal` and `phy` are those listed in the metadata `datasets/runlists` for `data.dataset`, with the run list `valid` for the default dataset. A run entry that a dataset does not list for a category is not an analysis run.
 
 ```@example ldm
 is_lrun(l200, (:p02, :r006, :cal)), is_lrun(l200, (:p02, :r099, :cal))
@@ -92,6 +111,30 @@ is_analysis_run(l200, mfk)
 
 ```@example ldm
 analysis_runs(l200, :phy).run[1:3]
+```
+
+### Sets of File Keys
+
+[`DataSet`](@ref) is a vector of the file keys of DAQ cycles, sorted by time. `DataSet(data, runinfo(data, period))` and `DataSet(data, runinfo(data).phy)` give the keys of the runs of a table and of the entries of a category table. `filter(f, ds)` returns a `DataSet` of the same name with the keys for which `f` is `true`.
+
+```@example ldm
+ds = DataSet(l200, runinfo(l200).phy)
+```
+
+```@example ldm
+filter(!in(bad_filekeys(l200)), ds)
+```
+
+The `text/plain` display of a set that is built from `runinfo` adds two lines. `livetime` gives, per category, the sum of the `runinfo` livetimes of the runs that have keys in the set, in days; it is `NaN` if a run has no livetime in the metadata. `runtime` gives the time from the first to the last key of the set, in days.
+
+```@example ldm
+DataSet(l200, runinfo(l200, :p02))
+```
+
+[`find_filekey`](@ref) returns the key of the DAQ cycle that contains a timestamp. For a `LegendData` it searches the DAQ cycle keys of every run in the metadata, whatever `data.dataset` is. A `LegendData` broadcasts as a scalar, so `find_filekey.(data, timestamps)` finds the key of each timestamp.
+
+```@example ldm
+find_filekey.(l200, ["20220601T000000Z", "20220802T030000Z"])
 ```
 
 ### Ignored DAQ Cycles

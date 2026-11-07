@@ -41,7 +41,7 @@ ustrip(u"s", total)
 \sum_{\text{runs}} m_\text{det} \, t_\text{live}
 ```
 
-in `kg * yr`. The detector mass ``m_\text{det}`` is taken from the channel information at the start file key of each run (the column `mass` of [`channelinfo`](@ref) with `extended = true`), the livetime ``t_\text{live}`` from the run information. The mass is the total detector mass, not the active mass. `yr` is the Julian year of Unitful (365.25 days).
+in `kg * yr`. Runs without a start key of the category are skipped, and so are runs that are not analysis runs of the category unless `is_analysis_run = false`; for the default dataset these are the runs that the run list `valid` does not contain. The detector mass ``m_\text{det}`` is taken from the channel information at the start file key of each run (the column `mass` of [`channelinfo`](@ref) with `extended = true`), the livetime ``t_\text{live}`` from the run information. The mass is the total detector mass, not the active mass. `yr` is the Julian year of Unitful (365.25 days).
 
 The runs are selected by
 
@@ -101,9 +101,9 @@ get_exposure.(l200, [:V99000A, :B99000A], :p02)
 
 ### Keywords
 
-* `cat`: Data category of the runs, default `:phy`. For a partition, the category of the partition is used. `get_exposure` throws an `ArgumentError` if the category is not a column of the run information.
+* `cat`: Data category of the runs, default `:phy`. For a partition, the category of the partition is used. `get_exposure` throws an `ArgumentError` if the category is not a column of the run information, as for a category that the dataset of `data` does not list.
 * `check_pf`: A property function that is applied to the channel information row of the detector at the start key of each run. A run counts only if it returns `true`. The default is `@pf $detector == DetectorId(det)`, which is always true for the selected detector. Any property function of the columns of [`channelinfo`](@ref) works, see [Property Functions and Expressions](@ref).
-* `is_analysis_run`: Accepted for the method with a table of run information, but it does not change the result. The runs of the table are all counted; select them beforehand, e.g. with `filterby(@pf $phy.is_analysis_run)`.
+* `is_analysis_run`: Count only the runs that are analysis runs of the category (`is_analysis_run` in the run information). Default is `true`. `false` counts every run of the table that has a start key.
 
 The following counts only the runs in which the detector has the usability `:on`:
 

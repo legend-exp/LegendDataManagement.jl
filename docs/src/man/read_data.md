@@ -131,6 +131,13 @@ using Unitful
 dsp = read_ldata(l200, :jldsp, [1.6e9u"s", 1.7e9u"s"], det)
 ```
 
+A single `Unitful.Time` reads as a vector with that one timestamp. The tables of `l200_p02` (see below) have rows 1 s, 2 s and 3 s after the start of each DAQ cycle:
+
+```@example ldm
+t = Timestamp(start_filekey(l200_p02, (:p02, :r006, :cal))).unixtime * 1.0u"s" + 2.0u"s"
+read_ldata(:e_cusp, l200_p02, :jldsp, t, :V99000A)
+```
+
 ## Reading Runs, Periods and Partitions
 
 A category followed by a period and a run reads all DAQ cycles of the run and concatenates the rows in one table. The file keys are those that the metadata list for the run (`only(runinfo(l200, (period, run, category)).keys)`; see [Channel, Run and Partition Information](@ref)); a listed file that is not on disk is an error. These forms are available:
@@ -139,9 +146,11 @@ A category followed by a period and a run reads all DAQ cycles of the run and co
 * `(tier, category, period[, det])`: all runs of a period, from `runinfo(l200, period)`.
 * `(tier, category, partition, det)`: all runs of the partition of a detector, from `partitioninfo(l200, det, partition)`.
 * `(tier, category, runtable[, det])`: the runs listed in a table with the columns `period` and `run`, such as a row selection of `runinfo` or of a partition table.
-* `(tier, filekeys[, det])`: a vector of file keys.
+* `(tier, filekeys[, det])`: a vector of file keys, such as a [`DataSet`](@ref); all file keys of the set are read.
 
 If the file `l200.tier[tier, category, period, run, det]` exists, it holds the whole run of the detector and is read in place of the DAQ cycles. The keyword `ignore_keys` (default `:all`) drops the DAQ cycles that [`bad_filekeys`](@ref) lists for that key in the metadata, with `:none` keeping all of them. With `search_disk = true`, the file keys found on disk by [`search_disk`](@ref) are read instead of those from the metadata.
+
+A period, partition or run table reads only the runs whose entry of the category in `runinfo(l200)` lists DAQ cycle keys; a run whose category the dataset of `l200` does not list for it is skipped. This holds also with `search_disk = true`. An `ArgumentError` is thrown if no run is left, or if a run of the table is not in `runinfo(l200)`. A single run `(tier, category, period, run[, det])` is read as requested.
 
 The following examples use a second `LegendData` object, `l200_p02`, whose tier directory holds `jldsp` tables for all DAQ cycles of period 2, run 6, listed by `runinfo`.
 
@@ -164,10 +173,14 @@ runs = filter(r -> r.run == DataRun(6), runinfo(l200_p02, DataPeriod(2)))
 length(read_ldata(l200_p02, :jldsp, :cal, runs, :V99000A))
 ```
 
-A vector of file keys reads those DAQ cycles only.
+A vector of file keys reads those DAQ cycles only. A [`DataSet`](@ref) is a vector of file keys, so `run_keys` reads the whole run.
 
 ```@example ldm
 length(read_ldata(l200_p02, :jldsp, run_keys[1:2], :V99000A))
+```
+
+```@example ldm
+length(read_ldata(l200_p02, :jldsp, run_keys, :V99000A))
 ```
 
 The partition and period forms work in the same way, provided that all runs have files:
