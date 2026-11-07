@@ -35,8 +35,8 @@ const DetectorSel = Union{DetectorId, Nothing}
 const ChannelSel = Union{DetectorId, AbstractString, Nothing}
 # The rows of a table: every row, or only those whose time is among the given ones.
 const TimestampSel = Union{Nothing, AbstractVector{<:Unitful.Time}}
-# What an element of a selection may be: a selector, a filekey, a run table, or a vector.
-const RSelLike = Union{AbstractDataSelectorLike, FileKey, AbstractVector, Nothing}
+# What an element of a selection may be: a selector, a filekey, a time, a run table, or a vector.
+const RSelLike = Union{AbstractDataSelectorLike, FileKey, Unitful.Time, AbstractVector, Nothing}
 const PossibleDataSelectors = [DataTier, DataCategory, DataPeriod, DataRun, DataPartition, DetectorId]
 
 
@@ -400,7 +400,7 @@ The selectors, as a tuple or as separate arguments, can have the forms
 
 * `(tier, filekey)`, `(tier, filekey, det)`: one DAQ cycle, all channels or one detector.
 * `(tier, filekey, timestamps)`, `(tier, filekey, timestamps, det)`: the rows of one DAQ cycle with the given times.
-* `(tier, timestamps)`, `(tier, timestamps, det)`: the rows with the given times, each read from the DAQ cycle that contains it.
+* `(tier, timestamps)`, `(tier, timestamps, det)`: the rows with the given times, each read from the DAQ cycle that contains it; a single time `t` reads as `[t]`.
 * `(tier, filekeys)`, `(tier, filekeys, det)`: several DAQ cycles.
 * `(tier, category, period)`, `(tier, category, period, det)`, `(tier, category, period, run)`, `(tier, category, period, run, det)`: runs of a period or a run.
 * `(tier, category, partition, det)`: the runs of a partition of a detector.
@@ -473,6 +473,10 @@ function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rse
 end
 LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, AbstractVector{<:Unitful.Time}}; kwargs...) =
     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], nothing); kwargs...)
+LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, Unitful.Time, DetectorSel}; kwargs...) =
+    LegendDataManagement.read_ldata(f, data, (rsel[1], [rsel[2]], rsel[3]); kwargs...)
+LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, Unitful.Time}; kwargs...) =
+    LegendDataManagement.read_ldata(f, data, (rsel[1], [rsel[2]], nothing); kwargs...)
 
 
 LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, FileKey}; kwargs...) =

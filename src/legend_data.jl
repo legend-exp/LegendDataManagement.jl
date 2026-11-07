@@ -73,6 +73,8 @@ export LegendData
 get_setup_config(data::LegendData) = getfield(data, :_config)
 get_setup_name(data::LegendData) = getfield(data, :_name)
 
+Base.broadcastable(data::LegendData) = Ref(data)
+
 @inline function Base.getproperty(d::LegendData, s::Symbol)
     # Include internal fields:
     if s == :_config
@@ -99,7 +101,7 @@ function _ldata_propsdb(d::LegendData, dbsym::Symbol)
     base_path = data_path(d, dbname)
     override_base = joinpath(data_path(d, "metadata"), "jldataprod", "overrides", dbname)
     run_override = dbsym in (:par, :jlpar) ? _load_run_override(d) : nothing
-    AnyProps(base_path; override_base, run_override)
+    AnyProps(base_path; override_base, run_override, setup_data = d)
 end
 
 # `datasets/run_override.yaml` maps the time of runs whose calibration is not usable to the filekey whose calibration applies:
@@ -348,7 +350,8 @@ last key that starts at or before `ts`.
 `ds.keys` must be sorted by time. For `data` the cycle keys of every run in the
 metadata are searched, whatever `data.dataset` is: the `DataSet` of the
 `:default` dataset, built once and cached. Throws an `ArgumentError` if `ts`
-is before the first key.
+is before the first key. `find_filekey.(data, timestamps)` finds the key of
+each timestamp.
 
 ## Examples
 ```julia
@@ -356,6 +359,7 @@ using LegendDataManagement
 
 l200 = LegendData(:l200)
 find_filekey(l200, "20221226T200846Z")
+find_filekey.(l200, ["20221226T200846Z", "20221226T210846Z"])
 ```
 
 See also [`DataSet`](@ref), [`runinfo`](@ref).
@@ -390,9 +394,15 @@ every category of the given runs.
 
 For a [`LegendData`](@ref) the keys are sorted by time and the set is named
 after `data.dataset`. Without a selection the set holds the keys of every run
-of `runinfo(data)`, i.e. of the categories and runs of the dataset. The keys of
-a set are available as `ds.keys`. `ts in ds` tells whether the timestamp `ts`
-lies in the time the keys of `ds` cover.
+of `runinfo(data)`, i.e. of the categories and runs of the dataset. A run
+table, e.g. `runinfo(data, :p03)` or its category column `runinfo(data, :p03).phy`,
+gives the keys of its runs. The keys of a set are available as `ds.keys`.
+`ts in ds` tells whether the timestamp `ts` lies in the time the keys of `ds`
+cover. `filter(f, ds)` returns a `DataSet` of the same name.
+
+The display of a set built from `runinfo` shows, per category, the sum of the
+`runinfo` livetimes of the runs that have keys in the set, and the runtime from
+the first to the last key of the set.
 
 ## Fields
 * `keys::Vector{FileKey}`: The file keys of the set.
@@ -404,11 +414,21 @@ using LegendDataManagement
 l200 = LegendData(:l200)
 ds = DataSet(l200, :p03)
 ds = DataSet(l200, :p03, :r000)
+good = filter(!in(bad_filekeys(l200)), DataSet(l200, runinfo(l200).phy))
 ```
 
 See also [`search_disk`](@ref), [`find_filekey`](@ref).
 """
-DataSet(data::LegendData, rinfo::Table) = DataSet(sort(reduce(vcat, rinfo.keys; init = FileKey[]); by = Timestamp), data.dataset)
+function DataSet(data::LegendData, rinfo::Table)
+    keys = sort(reduce(vcat, rinfo.keys; init = FileKey[]); by = Timestamp)
+    # The category entries of the run information: the rows of a category column such as
+    # `runinfo(data).phy`, else the category columns of each row.
+    entries = hasproperty(rinfo, :livetime) ? rinfo :
+        (e for row in rinfo for e in values(row) if e isa NamedTuple && hasproperty(e, :livetime))
+    livetimes = Dict{_RunCategory,typeof(1.0u"s")}((k.period, k.run, k.category) => e.livetime
+                                                    for e in entries for k in Iterators.take(e.keys, 1))
+    DataSet(keys, data.dataset, livetimes)
+end
 DataSet(data::LegendData) = DataSet(data, runinfo(data))
 DataSet(data::LegendData, period::DataPeriodLike) = DataSet(data, runinfo(data, DataPeriod(period)))
 DataSet(data::LegendData, period::DataPeriodLike, run::DataRunLike) = DataSet(data, runinfo(data, (DataPeriod(period), DataRun(run))))

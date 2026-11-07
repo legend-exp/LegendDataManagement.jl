@@ -24,8 +24,9 @@ extension is described in the docstring of the method for
 A vector of `Unitful.Time` timestamps in place of a `FileKey` reads only the rows with those timestamps, in time order:
 each is looked up with [`find_filekey`](@ref) in the DAQ cycle that contains it, and only those rows of the cycle's file
 are read. The time of a row is its `timestamp` column, or `tstart` in an event tier. A table without one of the timestamps
-is an error, or is skipped with `ignore_missing`. With a `FileKey` and the timestamps, `(tier, filekey, timestamps, det)`,
-the cycle is given instead of looked up and the rows follow the timestamps.
+is an error, or is skipped with `ignore_missing`. A single timestamp `t` in place of the vector reads as `[t]`. With a
+`FileKey` and the timestamps, `(tier, filekey, timestamps, det)`, the cycle is given instead of looked up and the rows
+follow the timestamps.
 
 The `filterby` kwarg takes a `PropertyFunction` selecting rows of the tier being read. Given a `tier => PropertyFunction` pair instead,
 the function is evaluated on `tier` and the resulting row selection is applied to the tier being read. Both tiers must hold one row per

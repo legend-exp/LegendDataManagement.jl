@@ -451,6 +451,10 @@ using Distributed
                     @test_throws "No row with timestamp" read_ldata(l200_tmp, tier, [ts1[1] + 1u"ms"], det)
                     @test isnothing(read_ldata(l200_tmp, tier, [ts1[1] + 1u"ms"], det; ignore_missing = true))
                     @test_throws "No timestamps given" read_ldata(l200_tmp, tier, eltype(ts1)[], det)
+                    # a single timestamp is read as a vector of one
+                    @test read_ldata(l200_tmp, tier, ts2[3], det) == read_ldata(l200_tmp, tier, [ts2[3]], det)
+                    @test read_ldata(:timestamp, l200_tmp, :jldsp, ts2[3]; ignore_missing = true) ==
+                        read_ldata(:timestamp, l200_tmp, :jldsp, [ts2[3]]; ignore_missing = true)
                 end
             end
         end
