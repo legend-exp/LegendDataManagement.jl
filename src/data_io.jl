@@ -12,9 +12,10 @@ Reads `lh5` data from disk for a given set of `selectors`.
 After reading in, a `PropertyFunction` `f` can be applied to the data. If a
 tuple of `Symbol`s is given, the properties from the tuple are selected; a
 single `Symbol` selects one property. `det` is a `DetectorId`. The selectors
-are a tier followed by a file key, a vector of file keys or timestamps, or a
-data category with a period, a run, a partition or a run table, optionally
-followed by a detector or a vector of detectors.
+are a tier followed by a file key, a vector of file keys such as a
+[`DataSet`](@ref) (all its keys are read) or timestamps, or a data category
+with a period, a run, a partition or a run table, optionally followed by a
+detector or a vector of detectors.
 
 The methods that read data are provided by an extension that is loaded together
 with `LegendHDF5IO.jl`; without it the call throws an `ErrorException`. The

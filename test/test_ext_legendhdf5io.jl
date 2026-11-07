@@ -127,6 +127,10 @@ using Distributed
         rinfo = Table([(period = period, run = run)])
         @test read_ldata(l200, tier, cat, rinfo, det).timestamp == all_ts
 
+        # a DataSet reads all its file keys
+        @test read_ldata(l200, tier, DataSet(fks), det).timestamp == all_ts
+        @test read_ldata(:timestamp, l200, :jldsp, DataSet(fks)) == read_ldata(:timestamp, l200, :jldsp, fks)
+
         @testset "runs of a dataset" begin
             # `sel` lists cal only of r000; r001 has cal and phy, and only its phy is listed
             dir = mktempdir()

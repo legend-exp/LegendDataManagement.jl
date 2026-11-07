@@ -401,7 +401,7 @@ The selectors, as a tuple or as separate arguments, can have the forms
 * `(tier, filekey)`, `(tier, filekey, det)`: one DAQ cycle, all channels or one detector.
 * `(tier, filekey, timestamps)`, `(tier, filekey, timestamps, det)`: the rows of one DAQ cycle with the given times.
 * `(tier, timestamps)`, `(tier, timestamps, det)`: the rows with the given times, each read from the DAQ cycle that contains it; a single time `t` reads as `[t]`.
-* `(tier, filekeys)`, `(tier, filekeys, det)`: several DAQ cycles.
+* `(tier, filekeys)`, `(tier, filekeys, det)`: several DAQ cycles, e.g. all keys of a [`DataSet`](@ref).
 * `(tier, category, period)`, `(tier, category, period, det)`, `(tier, category, period, run)`, `(tier, category, period, run, det)`: runs of a period or a run.
 * `(tier, category, partition, det)`: the runs of a partition of a detector.
 * `(tier, category, runtable)`, `(tier, category, runtable, det)`: the runs listed in a table with the columns `period` and `run`.
