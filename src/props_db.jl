@@ -158,7 +158,10 @@ the presence of a `validity.yaml` file. In this case, use
 `myprops(sel::LegendDataManagement.ValiditySelection)`,
 `myprops(timestamp, category)` or `myprops(filekey::FileKey)` to select the
 desired time and category. The selection can be made at some point during
-traversal of properties or at the leaf `PropsDB` (see the examples below).
+traversal of properties or at the leaf `PropsDB` (see the examples below). For
+a `PropsDB` of a [`LegendData`](@ref), such as `l200.par`, `myprops(t)` with a
+time `t::Unitful.Time` selects the file key of the DAQ cycle that contains `t`
+(see [`find_filekey`](@ref)).
 
 Code that uses `PropsDB` should not instantiate it directly. Use
 [`LegendDataManagement.AnyProps(path::AbstractString)`](@ref) instead, which
@@ -199,16 +202,19 @@ struct PropsDB{VS<:Union{Nothing,ValiditySelection}} <: AbstractDict{Symbol,Abst
     _prop_names::Vector{Symbol}
     _needs_vsel::Bool
     _run_override::Union{Nothing,_ValidityDict}
+    # the setup whose DAQ cycle keys a selection by time looks up
+    _setup_data::Union{Nothing,AbstractSetupData}
 end
 
-PropsDB{VS}(base_path, override_base, rel_path, validity_sel, prop_names, needs_vsel) where {VS} =
-    PropsDB{VS}(base_path, override_base, rel_path, validity_sel, prop_names, needs_vsel, nothing)
-PropsDB(base_path, override_base, rel_path, validity_sel, prop_names, needs_vsel) =
-    PropsDB(base_path, override_base, rel_path, validity_sel, prop_names, needs_vsel, nothing)
+PropsDB{VS}(base_path, override_base, rel_path, validity_sel, prop_names, needs_vsel, run_override = nothing) where {VS} =
+    PropsDB{VS}(base_path, override_base, rel_path, validity_sel, prop_names, needs_vsel, run_override, nothing)
+PropsDB(base_path, override_base, rel_path, validity_sel, prop_names, needs_vsel, run_override = nothing) =
+    PropsDB(base_path, override_base, rel_path, validity_sel, prop_names, needs_vsel, run_override, nothing)
 
 function Base.:(==)(a::PropsDB, b::PropsDB)
     _base_path(a) == _base_path(b) && _override_base(a) == _override_base(b) && _rel_path(a) == _rel_path(b) && _validity_sel(a) == _validity_sel(b) &&
-        _prop_names(a) == _prop_names(b) && _needs_vsel(a) == _needs_vsel(b) && _run_override(a) == _run_override(b)
+        _prop_names(a) == _prop_names(b) && _needs_vsel(a) == _needs_vsel(b) && _run_override(a) == _run_override(b) &&
+        _setup_data(a) == _setup_data(b)
 end
 
 
@@ -273,15 +279,20 @@ for `par` and `jlpar`. While an entry with a non-empty `apply` is active at the
 selected time, `props(filekey)` and `props(sel::ValiditySelection)` select the
 time of the file key in `apply` instead and keep their own category. An entry
 with more than one file key is an error.
+
+`setup_data`, which [`LegendData`](@ref) sets to itself, enables the selection
+`props(t)` by a time `t::Unitful.Time`: it selects the file key of the DAQ
+cycle of `setup_data` that contains `t`.
 """
 const AnyProps = Union{PropsDB,PropDict}
 
-function AnyProps(base_path::AbstractString; override_base::AbstractString = "", run_override::Union{Nothing,_ValidityDict} = nothing)
-    return _any_props(String(base_path), String(override_base), String[], nothing, run_override)
+function AnyProps(base_path::AbstractString; override_base::AbstractString = "", run_override::Union{Nothing,_ValidityDict} = nothing,
+                  setup_data::Union{Nothing,AbstractSetupData} = nothing)
+    return _any_props(String(base_path), String(override_base), String[], nothing, run_override, setup_data)
 end
 
 function _any_props(base_path::String, override_base::String, rel_path::Vector{String}, validity_sel::Union{Nothing,ValiditySelection},
-                    run_override::Union{Nothing,_ValidityDict} = nothing)
+                    run_override::Union{Nothing,_ValidityDict} = nothing, setup_data::Union{Nothing,AbstractSetupData} = nothing)
     !isdir(base_path) && throw(ArgumentError("PropsDB base path \"$base_path\" is not a directory"))
     full_primary_path = String(joinpath(base_path, rel_path...))
     full_override_path = String(joinpath(override_base, rel_path...))
@@ -304,10 +315,10 @@ function _any_props(base_path::String, override_base::String, rel_path::Vector{S
         if !isnothing(validity_sel)
             _read_validity_sel_filelist(full_primary_path, full_override_path, validity_info, validity_sel)
         else
-            PropsDB(base_path, override_base, rel_path, validity_sel, prop_names, true, run_override)
+            PropsDB(base_path, override_base, rel_path, validity_sel, prop_names, true, run_override, setup_data)
         end
     else
-        PropsDB(base_path, override_base, rel_path, validity_sel, prop_names, false, run_override)
+        PropsDB(base_path, override_base, rel_path, validity_sel, prop_names, false, run_override, setup_data)
     end
 end
 
@@ -374,6 +385,7 @@ _validity_sel(@nospecialize(pd::PropsDB)) = getfield(pd, :_validity_sel)
 _prop_names(@nospecialize(pd::PropsDB)) = getfield(pd, :_prop_names)
 _needs_vsel(@nospecialize(pd::PropsDB)) = getfield(pd, :_needs_vsel)
 _run_override(@nospecialize(pd::PropsDB)) = getfield(pd, :_run_override)
+_setup_data(@nospecialize(pd::PropsDB)) = getfield(pd, :_setup_data)
 
 
 """
@@ -417,7 +429,13 @@ function _run_override_sel(run_override::_ValidityDict, sel::ValiditySelection)
 end
 
 function (@nospecialize(pd::PropsDB{Nothing}))(selection::ValiditySelection)
-    _any_props(_base_path(pd), _override_base(pd), _rel_path(pd), _run_override_sel(_run_override(pd), selection), _run_override(pd))
+    _any_props(_base_path(pd), _override_base(pd), _rel_path(pd), _run_override_sel(_run_override(pd), selection), _run_override(pd), _setup_data(pd))
+end
+
+function (@nospecialize(pd::PropsDB{Nothing}))(t::Unitful.Time)
+    data = _setup_data(pd)
+    isnothing(data) && throw(ArgumentError("A selection by time needs the PropsDB of a LegendData, such as `l200.par`"))
+    pd(find_filekey(data, t))
 end
 
 function(@nospecialize(pd::PropsDB{Nothing}))(timestamp::Union{DateTime,Timestamp,AbstractString}, category::Union{DataCategory,Symbol,AbstractString})
@@ -490,9 +508,9 @@ function _get_md_property(@nospecialize(pd::PropsDB), s::Symbol)
     yaml_primary_filename, yaml_override_filename = _propsdb_fullpaths(pd, "$s.yaml")
 
     if isdir(joinpath(_base_path(pd), new_relpath...))
-        _any_props(_base_path(pd), _override_base(pd), new_relpath, _validity_sel(pd), _run_override(pd))
+        _any_props(_base_path(pd), _override_base(pd), new_relpath, _validity_sel(pd), _run_override(pd), _setup_data(pd))
     elseif isdir(joinpath(_override_base(pd), new_relpath...))
-        _any_props(_override_base(pd), "", new_relpath, _validity_sel(pd), _run_override(pd))
+        _any_props(_override_base(pd), "", new_relpath, _validity_sel(pd), _run_override(pd), _setup_data(pd))
     elseif ispath(yaml_primary_filename)
         _check_propery_access(pd, yaml_primary_filename)
         if ispath(yaml_override_filename)

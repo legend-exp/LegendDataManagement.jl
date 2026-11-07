@@ -127,6 +127,43 @@ using Distributed
         rinfo = Table([(period = period, run = run)])
         @test read_ldata(l200, tier, cat, rinfo, det).timestamp == all_ts
 
+        # a DataSet reads all its file keys
+        @test read_ldata(l200, tier, DataSet(fks), det).timestamp == all_ts
+        @test read_ldata(:timestamp, l200, :jldsp, DataSet(fks)) == read_ldata(:timestamp, l200, :jldsp, fks)
+
+        @testset "runs of a dataset" begin
+            # `sel` lists cal only of r000; r001 has cal and phy, and only its phy is listed
+            dir = mktempdir()
+            datasets = joinpath(dir, "metadata", "datasets")
+            mkpath(joinpath(datasets, "filekeys", "p18"))
+            ts = [string(Timestamp(k)) for k in fks]
+            r001_cal, r001_phy = "20251108T000000Z", "20251108T010000Z"
+            YAML.write_file(joinpath(datasets, "runinfo.yaml"), Dict("p18" => Dict(
+                "r000" => Dict("cal" => Dict("start_key" => first(ts), "end_key" => last(ts))),
+                "r001" => Dict("cal" => Dict("start_key" => r001_cal, "end_key" => r001_cal),
+                               "phy" => Dict("start_key" => r001_phy, "end_key" => r001_phy)))))
+            YAML.write_file(joinpath(datasets, "runlists.yaml"),
+                Dict("sel" => Dict("cal" => Dict("p18" => "r000"), "phy" => Dict("p18" => "r001"))))
+            YAML.write_file(joinpath(datasets, "filekeys", "p18", "r000.yaml"), Dict("cal" => ts))
+            YAML.write_file(joinpath(datasets, "filekeys", "p18", "r001.yaml"), Dict("cal" => [r001_cal], "phy" => [r001_phy]))
+            YAML.write_file(joinpath(datasets, "ignored_daq_cycles.yaml"), Dict("removed" => String[]))
+            config = joinpath(dir, "config.yaml")
+            YAML.write_file(config, Dict("setups" => Dict("l200" => Dict("paths" => Dict(
+                "tier" => joinpath(lh5testdata_dir, "generated", "tier"), "metadata" => joinpath(dir, "metadata"))))))
+            sel = withenv(() -> LegendData(:l200; dataset = :sel), "LEGEND_DATA_CONFIG" => config)
+
+            # the cal of r001 is not in the dataset (and its cycle is not on disk)
+            both = Table(period = [period, period], run = [run, DataRun(1)])
+            @test read_ldata(:timestamp, sel, tier, cat, both, det).timestamp == all_ts
+            @test read_ldata(:timestamp, sel, tier, cat, both, det; search_disk = true).timestamp == all_ts
+            @test read_ldata(:timestamp, sel, tier, cat, period, det).timestamp == all_ts
+            @test_throws "No run of the run table has cal data in dataset sel" read_ldata(:timestamp, sel, tier, cat, both[2:2], det)
+            @test_throws "No run information found for period p18 run r002" read_ldata(:timestamp, sel, tier, cat,
+                Table(period = [period], run = [DataRun(2)]), det)
+            # a single run is read as requested
+            @test_throws "No filekeys found for cal p18 r001" read_ldata(:timestamp, sel, tier, cat, period, DataRun(1), det)
+        end
+
         @testset "filekeys of a run" begin
             # The metadata lists a cycle that is not on disk, ignored as unprocessable, and
             # the second cycle on disk, ignored as removed.
@@ -418,6 +455,10 @@ using Distributed
                     @test_throws "No row with timestamp" read_ldata(l200_tmp, tier, [ts1[1] + 1u"ms"], det)
                     @test isnothing(read_ldata(l200_tmp, tier, [ts1[1] + 1u"ms"], det; ignore_missing = true))
                     @test_throws "No timestamps given" read_ldata(l200_tmp, tier, eltype(ts1)[], det)
+                    # a single timestamp is read as a vector of one
+                    @test read_ldata(l200_tmp, tier, ts2[3], det) == read_ldata(l200_tmp, tier, [ts2[3]], det)
+                    @test read_ldata(:timestamp, l200_tmp, :jldsp, ts2[3]; ignore_missing = true) ==
+                        read_ldata(:timestamp, l200_tmp, :jldsp, [ts2[3]]; ignore_missing = true)
                 end
             end
         end

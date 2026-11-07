@@ -107,6 +107,28 @@ catch err
 end
 ```
 
+### Selection by Time
+
+A `PropsDB` of a [`LegendData`](@ref) (`l200.metadata`, `l200.par`, `l200.jlpar` and their sub-directories) also accepts a time `t::Unitful.Time`, in seconds since the Unix epoch, for example `Timestamp(filekey).unixtime * u"s"`. The call selects the file key of the DAQ cycle that contains `t` with [`find_filekey`](@ref) and then selects as with that file key: the category of that DAQ cycle is used, and the run overrides apply.
+
+```@example ldm
+using Unitful
+
+t = Timestamp(start_filekey(l200, (:p03, :r000, :cal))).unixtime * u"s" + 5u"s"
+find_filekey(l200, t)
+```
+
+```@example ldm
+channelmaps(t) == channelmaps(find_filekey(l200, t))
+```
+
+A `PropsDB` made by [`LegendDataManagement.AnyProps`](@ref) has no `LegendData` to look up the DAQ cycle and throws an `ArgumentError` for a time.
+
+```@example ldm
+anyprops = LegendDataManagement.AnyProps(data_path(l200.metadata))
+try anyprops.hardware.configuration.channelmaps(t) catch err sprint(showerror, err) end
+```
+
 ## The `validity.yaml` File
 
 A `validity.yaml` file is a list of entries. Each entry has the keys

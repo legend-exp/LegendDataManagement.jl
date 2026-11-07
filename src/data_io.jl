@@ -12,9 +12,10 @@ Reads `lh5` data from disk for a given set of `selectors`.
 After reading in, a `PropertyFunction` `f` can be applied to the data. If a
 tuple of `Symbol`s is given, the properties from the tuple are selected; a
 single `Symbol` selects one property. `det` is a `DetectorId`. The selectors
-are a tier followed by a file key, a vector of file keys or timestamps, or a
-data category with a period, a run, a partition or a run table, optionally
-followed by a detector or a vector of detectors.
+are a tier followed by a file key, a vector of file keys such as a
+[`DataSet`](@ref) (all its keys are read) or timestamps, or a data category
+with a period, a run, a partition or a run table, optionally followed by a
+detector or a vector of detectors.
 
 The methods that read data are provided by an extension that is loaded together
 with `LegendHDF5IO.jl`; without it the call throws an `ErrorException`. The
@@ -24,8 +25,9 @@ extension is described in the docstring of the method for
 A vector of `Unitful.Time` timestamps in place of a `FileKey` reads only the rows with those timestamps, in time order:
 each is looked up with [`find_filekey`](@ref) in the DAQ cycle that contains it, and only those rows of the cycle's file
 are read. The time of a row is its `timestamp` column, or `tstart` in an event tier. A table without one of the timestamps
-is an error, or is skipped with `ignore_missing`. With a `FileKey` and the timestamps, `(tier, filekey, timestamps, det)`,
-the cycle is given instead of looked up and the rows follow the timestamps.
+is an error, or is skipped with `ignore_missing`. A single timestamp `t` in place of the vector reads as `[t]`. With a
+`FileKey` and the timestamps, `(tier, filekey, timestamps, det)`, the cycle is given instead of looked up and the rows
+follow the timestamps.
 
 The `filterby` kwarg takes a `PropertyFunction` selecting rows of the tier being read. Given a `tier => PropertyFunction` pair instead,
 the function is evaluated on `tier` and the resulting row selection is applied to the tier being read. Both tiers must hold one row per
@@ -34,7 +36,10 @@ trigger of the same detector, so that their rows correspond by position; a row-c
 A run, given by category, period and run or through a period, partition or run table, is read from the file keys
 listed for it in the metadata, `only(runinfo(data, (period, run, category)).keys)`; a listed file key that is not
 on disk is an error. The keywords `search_disk` and `ignore_keys` control which file keys these are.
-A run with no file keys left is an error. A per-run file of the detector, `data.tier[tier, category, period, run, det]`,
+A run with no file keys left is an error. A period, partition or run table reads only its runs whose `category` entry
+in `runinfo(data)` lists file keys, e.g. not a run whose category the dataset of `data` does not list, also with
+`search_disk`; it is an error if no such run is left, or if a run is not in `runinfo(data)`.
+A per-run file of the detector, `data.tier[tier, category, period, run, det]`,
 holds the whole run and is read in place of the file keys whenever it exists.
 
 ## Keywords

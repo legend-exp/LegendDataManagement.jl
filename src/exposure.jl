@@ -13,11 +13,12 @@ table.
 
 The exposure is the sum over the runs of the product of the detector mass and
 the livetime of the runs (from `runinfo`), as a quantity in `kg * yr`. The mass
-is taken from the channel information at the start file key of each run. For a
-vector of detectors the exposures are summed. A `Symbol` or `String` as
-selector is interpreted as a [`DataPartition`](@ref) or a
-[`DataPeriod`](@ref). For a partition that does not exist for the detector the
-exposure is zero.
+is taken from the channel information at the start file key of each run. A run
+without a start key of the category, e.g. one whose category the dataset of
+`data` does not list, does not count. For a vector of detectors the exposures
+are summed. A `Symbol` or `String` as selector is interpreted as a
+[`DataPartition`](@ref) or a [`DataPeriod`](@ref). For a partition that does
+not exist for the detector the exposure is zero.
 
 ## Arguments
 * `data::LegendData`: Data with information on detector masses, `runinfo` and `partitioninfo`.
@@ -28,7 +29,7 @@ exposure is zero.
 * `rinfo::Table`: Run information as returned by [`runinfo`](@ref).
 
 ## Keywords
-* `is_analysis_run::Bool = true`: Accepted by the method for a run table; it does not change the result.
+* `is_analysis_run::Bool = true`: Count only the runs that are analysis runs of the category (`is_analysis_run` in the run information).
 * `cat::DataCategoryLike = :phy`: Data category for which the exposure is calculated. For a partition, the category of the partition.
 * `check_pf::PropertyFunction = @pf \$detector == DetectorId(det)`: Condition on the channel information of a run that has to be `true` for the run to count.
 
@@ -94,8 +95,9 @@ function get_exposure(data::LegendData, det::DetectorIdLike, rinfo::Table; is_an
     rinfo_cat = getproperty(rinfo, cat_label) 
     exposure = 0.0u"kg * yr" 
     for r in rinfo_cat
-        filekey = r.startkey
-        chinfo = channelinfo(data, filekey, det, extended = true, verbose = false)
+        ismissing(r.startkey) && continue
+        is_analysis_run && !r.is_analysis_run && continue
+        chinfo = channelinfo(data, r.startkey, det, extended = true, verbose = false)
         if check_pf(chinfo)
             exposure += uconvert(u"kg * yr", chinfo.mass * r.livetime)
         end

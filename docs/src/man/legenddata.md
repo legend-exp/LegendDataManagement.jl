@@ -151,7 +151,7 @@ The fields of the `LegendData` structure (`_config`, `_name`, `_dataset`) and th
 
 ### Datasets
 
-The keyword `dataset` names a run list in the metadata `datasets/runlists`. [`runinfo`](@ref) and [`analysis_runs`](@ref) read it and restrict the runs to those of the list. With the default `:default`, no run list is used and `runinfo` holds every run that the metadata describes.
+The keyword `dataset` names a run list in the metadata `datasets/runlists`. [`runinfo`](@ref) and [`analysis_runs`](@ref) read it and restrict the runs to those of the list. With the default `:default`, no run list is used and `runinfo` holds every run and category that the metadata describes. For any other dataset, `runinfo` has a column only for the categories that the run list names, and an entry of a category only for the runs that the list names for it (see [Run Information](@ref)).
 
 ```@example ldm
 keys(l200.metadata.datasets.runlists)

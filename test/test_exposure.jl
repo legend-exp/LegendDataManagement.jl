@@ -29,4 +29,25 @@ l200 = LegendData(:l200)
             end
         end
     end
+
+    @testset "Exposure of the runs of a dataset" begin
+        # phy of p02 r004 to r007 is no analysis run, and `partial` does not list it
+        config = config_with_runlists("""
+            valid:
+              cal: {p02: r000..r007, p03: r000..r005}
+              phy: {p02: r000..r003, p03: r000..r005}
+            partial:
+              cal: {p02: r000..r007}
+              phy: {p02: r000..r003}
+            """)
+        run_exposure(r) = get_exposure(l200, :V99000A, DataPeriod(2), DataRun(r))
+        withenv("LEGEND_DATA_CONFIG" => config) do
+            default = LegendData(:l200)
+            partial = LegendData(:l200; dataset = :partial)
+            @test get_exposure(default, :V99000A, DataPeriod(2)) ≈ sum(run_exposure, 0:3)
+            @test get_exposure(default, :V99000A, DataPeriod(2); is_analysis_run = false) ≈ sum(run_exposure, 0:7)
+            @test get_exposure(partial, :V99000A, DataPeriod(2)) ≈ sum(run_exposure, 0:3)
+            @test get_exposure(partial, :V99000A, DataPeriod(2); is_analysis_run = false) ≈ sum(run_exposure, 0:3)
+        end
+    end
 end
