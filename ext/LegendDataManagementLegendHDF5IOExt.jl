@@ -572,17 +572,21 @@ end
 const _partinfo_required_cols = NamedTuple{(:period, :run), Tuple{DataPeriod, DataRun}}
 
 function LegendDataManagement.read_ldata(f::Base.Callable, data::LegendData, rsel::Tuple{DataTier, DataCategory, Table{_partinfo_required_cols}, DetectorSel}; parallel::Bool=false, wpool::WorkerPool=default_worker_pool(), kwargs...)
-    p = Progress(length(rsel[3]), desc="Reading from $(length(rsel[3])) runs", showspeed=true)
+    # A run whose entry of the category in the runinfo has no DAQ cycle keys, e.g. one whose
+    # category the dataset does not list, has nothing to read; a run not in the runinfo throws.
+    runs = filter(r -> !isempty(only(runinfo(data, (r.period, r.run, rsel[2]))).keys), rsel[3])
+    isempty(runs) && throw(ArgumentError("No run of the run table has $(rsel[2]) data in dataset $(data.dataset)"))
+    p = Progress(length(runs), desc="Reading from $(length(runs)) runs", showspeed=true)
     lflatten(if parallel
                 # TODO: Check if wpool is connected via :master_worker if myid() != 1
-                @debug "Parallel read with $(length(workers())) workers from $(length(rsel[3])) runs"
+                @debug "Parallel read with $(length(workers())) workers from $(length(runs)) runs"
                 _init_workers(wpool)
-                progress_pmap(wpool, rsel[3]; progress=p) do r
+                progress_pmap(wpool, runs; progress=p) do r
                     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], r.period, r.run, rsel[4]); parallel, wpool, kwargs...)
                 end
             else
-                @debug "Sequential read from $(length(rsel[3])) runs"
-                progress_map(rsel[3]; progress=p) do r
+                @debug "Sequential read from $(length(runs)) runs"
+                progress_map(runs; progress=p) do r
                     LegendDataManagement.read_ldata(f, data, (rsel[1], rsel[2], r.period, r.run, rsel[4]); parallel=false, kwargs...)
                 end
             end)

@@ -73,6 +73,50 @@ include("testing_utils.jl")
         end
     end
 
+    @testset "runinfo of a dataset" begin
+        # `partial` lists cal of p03 and p16 r006, but phy only of p03 r000 to r002
+        config = config_with_runlists("""
+            valid:
+              cal: {p02: r000..r007, p03: r000..r005}
+              phy: {p02: r000..r007, p03: r000..r005}
+            partial:
+              cal: {p03: r000..r005, p16: r006}
+              phy: {p03: r000..r002}
+            """)
+        withenv("LEGEND_DATA_CONFIG" => config) do
+            partial = LegendData(:l200; dataset = :partial)
+            rinfo = runinfo(partial)
+            @test Set(zip(rinfo.period, rinfo.run)) == Set([[(DataPeriod(3), DataRun(r)) for r in 0:5]; (DataPeriod(16), DataRun(6))])
+            # a listed category keeps its entry (`isequal`: a cal livetime is `NaN`)
+            @test isequal(only(runinfo(partial, (:p03, :r002, :phy))), only(runinfo(l200, (:p03, :r002, :phy))))
+            @test isequal(only(runinfo(partial, (:p03, :r003, :cal))), only(runinfo(l200, (:p03, :r003, :cal))))
+            @test is_lrun(partial, (:p03, :r003, :cal)) && is_analysis_run(partial, (:p03, :r003, :cal))
+            # only the categories that the run lists name are columns
+            @test Set(propertynames(rinfo)) == Set([:period, :run, :keys, :cal, :phy])
+            @test hasproperty(runinfo(l200), :fft) && hasproperty(runinfo(l200), :pzc)
+            @test_throws "Dataset partial has no category fft" runinfo(partial, (:p16, :r006, :fft))
+            @test_throws "Dataset partial has no category pzc" is_analysis_run(partial, (:p16, :r006, :pzc))
+            @test_throws "Dataset partial has no category fft" start_filekey(partial, (:p16, :r006, :fft))
+            # a category the dataset does not list for a run has no entry there
+            for sel in ((:p03, :r003, :phy), (:p16, :r006, :phy))
+                @test !ismissing(only(runinfo(l200, sel)).startkey)
+                entry = only(runinfo(partial, sel))
+                @test ismissing(entry.startkey) && ismissing(entry.endkey)
+                @test isempty(entry.keys) && isnan(entry.livetime) && !entry.is_analysis_run
+                @test !is_lrun(partial, sel) && !is_analysis_run(partial, sel)
+                @test ismissing(start_filekey(partial, sel))
+            end
+            row = only(runinfo(partial, (:p03, :r003)))
+            @test row.keys == row.cal.keys
+            @test !any(k -> k.run == DataRun(3) && k.category == DataCategory(:phy), DataSet(partial, DataPeriod(3)))
+            @test isempty(DataSet(partial, DataPeriod(16), DataRun(6)).keys ∩ only(runinfo(l200, (:p16, :r006, :fft))).keys.keys)
+            # the cycle of a timestamp does not depend on the dataset
+            phy_keys = only(runinfo(l200, (:p03, :r003, :phy))).keys
+            @test find_filekey(partial, phy_keys[2].time) == phy_keys[2]
+            @test find_filekey(partial, last(phy_keys).time) == last(phy_keys)
+        end
+    end
+
     @testset "analysis_runs" begin
         analysisruns = analysis_runs(l200, :cal)
         @test analysisruns isa TypedTables.Table

@@ -34,7 +34,10 @@ trigger of the same detector, so that their rows correspond by position; a row-c
 A run, given by category, period and run or through a period, partition or run table, is read from the file keys
 listed for it in the metadata, `only(runinfo(data, (period, run, category)).keys)`; a listed file key that is not
 on disk is an error. The keywords `search_disk` and `ignore_keys` control which file keys these are.
-A run with no file keys left is an error. A per-run file of the detector, `data.tier[tier, category, period, run, det]`,
+A run with no file keys left is an error. A period, partition or run table reads only its runs whose `category` entry
+in `runinfo(data)` lists file keys, e.g. not a run whose category the dataset of `data` does not list, also with
+`search_disk`; it is an error if no such run is left, or if a run is not in `runinfo(data)`.
+A per-run file of the detector, `data.tier[tier, category, period, run, det]`,
 holds the whole run and is read in place of the file keys whenever it exists.
 
 ## Keywords

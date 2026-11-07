@@ -12,8 +12,10 @@ Provides access to LEGEND data and metadata.
 `LegendData(setup; dataset)` requires the `\$$_data_config_envvar_name` environment
 variable to be set (see [`LegendDataConfig`](@ref)) and uses the
 [`SetupConfig`](@ref) of `setup`. `dataset` names the run list in the metadata
-`datasets/runlists` that [`runinfo`](@ref) and [`analysis_runs`](@ref) read;
-`:default` selects no run list, so `runinfo` holds every run the metadata has.
+`datasets/runlists` that [`runinfo`](@ref) and [`analysis_runs`](@ref) read:
+`runinfo` then holds the categories and runs that the run list names.
+`:default` selects no run list, so `runinfo` holds every run and category the
+metadata has.
 
 `LegendData` has the (virtual) properties
 * `metadata`: The metadata database as a [`LegendDataManagement.PropsDB`](@ref).
@@ -343,9 +345,10 @@ end
 Finds the file key of the DAQ cycle that contains the timestamp `ts`, i.e. the
 last key that starts at or before `ts`.
 
-`ds.keys` must be sorted by time. For `data` the `DataSet` is built (and
-cached) from the cycle keys of `runinfo(data)`. Throws an `ArgumentError` if
-`ts` is before the first key.
+`ds.keys` must be sorted by time. For `data` the cycle keys of every run in the
+metadata are searched, whatever `data.dataset` is: the `DataSet` of the
+`:default` dataset, built once and cached. Throws an `ArgumentError` if `ts`
+is before the first key.
 
 ## Examples
 ```julia
@@ -369,7 +372,9 @@ end
 const _cached_runinfo_dataset = LRU{UInt, DataSet}(maxsize = 300)
 
 function find_filekey(data::LegendData, ts::TimestampLike)
-    find_filekey(get!(() -> DataSet(data), _cached_runinfo_dataset, objectid(data)), ts)
+    # Among the cycles of a dataset alone, a timestamp in a cycle it leaves out resolves to the cycle before.
+    all_runs = LegendData(getfield(data, :_config), getfield(data, :_name), :default)
+    find_filekey(get!(() -> DataSet(all_runs), _cached_runinfo_dataset, objectid(all_runs)), ts)
 end
 
 
@@ -385,8 +390,9 @@ every category of the given runs.
 
 For a [`LegendData`](@ref) the keys are sorted by time and the set is named
 after `data.dataset`. Without a selection the set holds the keys of every run
-of `runinfo(data)`. The keys of a set are available as `ds.keys`. `ts in ds`
-tells whether the timestamp `ts` lies in the time the keys of `ds` cover.
+of `runinfo(data)`, i.e. of the categories and runs of the dataset. The keys of
+a set are available as `ds.keys`. `ts in ds` tells whether the timestamp `ts`
+lies in the time the keys of `ds` cover.
 
 ## Fields
 * `keys::Vector{FileKey}`: The file keys of the set.

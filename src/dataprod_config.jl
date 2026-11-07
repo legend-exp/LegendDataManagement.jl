@@ -428,9 +428,11 @@ const _cached_runinfo = LRU{UInt, Table}(maxsize = 300)
 Returns the run information of `data`, optionally restricted to a period, a
 run, or the data of one category of a run.
 
-The table holds the runs that `data.dataset` lists in the metadata
-`datasets/runlists`, or every run the metadata has if the dataset is
-`:default`. The result is cached per `data` object.
+For the dataset `:default` the table holds every run and category of the
+metadata `datasets/runinfo`. Another dataset holds what its run lists in
+`datasets/runlists` name: the categories listed there, and of each category the
+runs listed for it. A run is a row if the dataset lists at least one of its
+categories. The result is cached per `data` object.
 
 `runinfo(data)` has one row per run with the columns `period`, `run`, `keys`
 and one column per category (e.g. `cal`, `phy`). `keys` is a
@@ -439,12 +441,14 @@ by time. Each category column is a `Table` with the columns `startkey`,
 `endkey`, `livetime`, `is_analysis_run` and `keys` (a `DataSet` of all DAQ
 cycle keys of that category, sorted by time, from `datasets/filekeys`).
 `startkey` and `endkey` are `missing` if `datasets/runinfo` records none. Every
-set is named after `data.dataset`. A run that has no entry for a category has
-`missing` `startkey` and `endkey`, an empty `keys` set, a livetime of `NaN`
-seconds and `is_analysis_run = false` there.
+set is named after `data.dataset`. A run that has no entry for a category, or
+whose category the dataset does not list for it, has `missing` `startkey` and
+`endkey`, an empty `keys` set, a livetime of `NaN` seconds and
+`is_analysis_run = false` there.
 
-Every category of a run in the metadata `datasets/runinfo` must have a
-non-empty list of DAQ cycle keys in `datasets/filekeys`.
+Every category entry of a run that the table holds must have a non-empty list
+of DAQ cycle keys in `datasets/filekeys`. Selecting a category that the
+dataset does not have throws an `ArgumentError`.
 
 The selections return the rows of the period or run, or, with a category or a
 `FileKey`, the one-row table of that category.
@@ -479,11 +483,23 @@ function runinfo(data::LegendData)
         end
         nttype = @NamedTuple{startkey::MaybeFileKey, endkey::MaybeFileKey, livetime::typeof(1.0u"s"), is_analysis_run::Bool, keys::DataSet}
 
+        # A dataset has the categories that its run lists in datasets/runlists name, and of each
+        # category the runs listed there; `:default` has every category and run of datasets/runinfo.
+        listed = if data.dataset == :default
+            nothing
+        else
+            runlists = data.metadata.datasets.runlists
+            haskey(runlists, data.dataset) || throw(ArgumentError("Dataset $(data.dataset) not found in metadata datasets/runlists"))
+            Dict(cat => Set((row.period, row.run) for row in analysis_runs(data, cat))
+                 for cat in categories if haskey(runlists[data.dataset], cat))
+        end
+        isnothing(listed) || (categories = filter(in(keys(listed)), categories))
+
         function make_row(p, r, ri)
             period, run = DataPeriod(p), DataRun(r)
             fkeys = fkdb[period, run]
             function get_cat_entry(cat)
-                if haskey(ri, cat)
+                if haskey(ri, cat) && (isnothing(listed) || (period, run) in listed[cat])
                     runkey(k) = haskey(ri[cat], k) ? FileKey(data.name, period, run, cat, Timestamp(ri[cat][k])) : missing
                     startkey, endkey = runkey(:start_key), runkey(:end_key)
                     livetime = get(ri[cat], :livetime_in_s, NaN) * u"s"
@@ -503,9 +519,8 @@ function runinfo(data::LegendData)
             (; period, run, keys = DataSet(sort(reduce(vcat, [c.keys for c in cats]); by = Timestamp), data.dataset), cats...)
         end
 
-        # The dataset of `data` picks the runs from datasets/runlists; `:default` picks every run.
-        selected = data.dataset == :default ? nothing :
-            Set((row.period, row.run) for cat in categories for row in analysis_runs(data, cat))
+        # The table holds the runs with at least one category in the dataset.
+        selected = isnothing(listed) ? nothing : union(Set{Tuple{DataPeriod,DataRun}}(), values(listed)...)
 
         # Build rows
         rows = [make_row(p, r, ri) for (p, rs) in rinfo for (r, ri) in rs
@@ -535,7 +550,9 @@ end
 function runinfo(data::LegendData, runsel::RunCategorySelLike)
     period, run, category = runsel
     period, run, category = DataPeriod(period), DataRun(run), DataCategory(category)
-    getproperty(runinfo(data, (period, run)), Symbol(category))
+    rinfo = runinfo(data, (period, run))
+    hasproperty(rinfo, Symbol(category)) || throw(ArgumentError("Dataset $(data.dataset) has no category $category"))
+    getproperty(rinfo, Symbol(category))
 end
 runinfo(data, fk::FileKey) = runinfo(data, (fk.period, fk.run, fk.category))
 runinfo(data, selectors...) = runinfo(data, selectors)
@@ -592,7 +609,11 @@ livetime(data, selectors...) = livetime(data, selectors)
     is_lrun(data::LegendData, filekey::FileKey)
 
 Returns `true` if `runsel` is a valid run `(period, run, category)` for `data`
-that appears in the metadata with a start file key.
+that appears in the metadata with a start file key and, for a dataset other than
+`:default`, whose category the run list of the dataset names for the run.
+
+Throws an `ArgumentError` for a run of `runinfo(data)` if the dataset has no
+such category.
 
 See also [`runinfo`](@ref), [`is_analysis_run`](@ref).
 """
@@ -648,16 +669,7 @@ See also [`analysis_runs`](@ref), [`runinfo`](@ref).
 function is_analysis_run end
 export is_analysis_run
 function is_analysis_run(data::LegendData, runsel::RunCategorySelLike)
-    # first check if it is a legend run at all
-    if !is_lrun(data, runsel)
-        return false
-    end
-    # unpack runsel
-    period, run, category = runsel
-    period, run, category = DataPeriod(period), DataRun(run), DataCategory(category)
-    if !(hasproperty(runinfo(data), Symbol(category)))
-        throw(ArgumentError("Invalid category $category for analysis run"))
-    end
+    is_lrun(data, runsel) || return false
     only(runinfo(data, runsel).is_analysis_run)
 end
 is_analysis_run(data::LegendData, fk::FileKey) = is_analysis_run(data, (fk.period, fk.run, fk.category))
