@@ -18,6 +18,9 @@ include("testing_utils.jl")
 
     @test getproperty(l200, :tier) isa LegendDataManagement.LegendTierData
     @test normalize_path(@inferred(l200.tier[:raw, filekey])) == "/some/other/storage/raw_lh5/cal/p02/r006/l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5"
+    other_filekey = FileKey("l200-p02-r006-cal-20221226T210000Z")
+    @test @inferred(l200.tier[:raw, [filekey, other_filekey]]) isa Vector{String}
+    @test l200.tier[:raw, [filekey, other_filekey]] == [l200.tier[:raw, filekey], l200.tier[:raw, other_filekey]]
     @test normalize_path(@inferred(l200.tier[:raw, "l200-p02-r006-cal-20221226T200846Z"])) == "/some/other/storage/raw_lh5/cal/p02/r006/l200-p02-r006-cal-20221226T200846Z-tier_raw.lh5"
     @test normalize_path(@inferred(l200.tier[:dsp, "l200-p02-r006-cal-20221226T200846Z"])) == normalize_path(joinpath(testdata_dir, "generated", "tier", "dsp", "cal", "p02", "r006", "l200-p02-r006-cal-20221226T200846Z-tier_dsp.lh5"))
 

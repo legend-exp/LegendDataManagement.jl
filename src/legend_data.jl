@@ -157,6 +157,7 @@ tier_data[tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike
 tier_data[tier::DataTierLike, category::DataCategoryLike, period::DataPeriodLike, run::DataRunLike, det::DetectorIdLike]
 
 tier_data[tier::DataTierLike, filekey::FileKeyLike]
+tier_data[tier::DataTierLike, filekeys::AbstractVector{<:FileKey}]
 tier_data[tier::DataTierLike, filekey::FileKey, ch::ChannelIdLike]
 tier_data[tier::DataTierLike, filekey::FileKey, det::DetectorIdLike]
 ```
@@ -251,6 +252,8 @@ function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, filekey::
         "$filekey-tier_$tier.lh5"
     )
 end
+
+_getindex_impl(tier_data::LegendTierData, tier::DataTierLike, filekeys::AbstractVector{<:FileKey}) = [tier_data[tier, filekey] for filekey in filekeys]
 
 # Disambiguation between DataCategory and FileKey:
 function _getindex_impl(tier_data::LegendTierData, tier::DataTierLike, s::AbstractString)
