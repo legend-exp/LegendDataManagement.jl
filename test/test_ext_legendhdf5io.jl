@@ -5,7 +5,10 @@ using Test
 
 using LegendHDF5IO
 using LegendTestData
+using ArraysOfArrays
 using PropertyFunctions
+using RadiationDetectorSignals
+using StructArrays
 using TypedTables
 using Unitful
 
@@ -524,6 +527,72 @@ using Distributed
             lh5open(str_filename, "r") do f
                 @test f["det_string"] === det
                 @test f["det_array_string"][:] == dets
+            end
+        end
+    end
+
+    @testset "_load_all_keys" begin
+        Ext = Base.get_extension(LegendDataManagement, :LegendDataManagementLegendHDF5IOExt)
+        mktempdir() do dir
+            fn = joinpath(dir, "load_all_keys.lh5")
+            n = 200
+            a = rand(Float32, n)
+            wf = VectorOfVectors([rand(Float32, 8) for _ in 1:n])
+            wfs = ArrayOfRDWaveforms((fill(range(0.0u"μs", 1.0u"μs"; length = 8), n), VectorOfSimilarVectors(rand(Float32, 8, n))))
+            lh5open(fn, "w") do h
+                h["tbl"] = StructArray((a = a, wf = wf))
+                h["nested"] = StructArray((t = a, sub = StructArray((a = a, wf = wf))))
+                h["tbl_rdwf"] = StructArray((a = a, wf = wfs))
+            end
+            lh5open(fn, "r") do h
+                tbl = h["tbl"]
+                @test tbl isa LegendHDF5IO.LH5LazyTable
+
+                # a lazily read table is loaded, not passed through as it is
+                full = Ext._load_all_keys(tbl)
+                @test full isa StructArray
+                @test full.a isa Vector{Float32}
+                @test full.a == a
+                @test full.wf == wf
+
+                rows = [3, 7, 7, 150, 2]
+                byrow = Ext._load_all_keys(tbl, rows)
+                @test byrow.a == a[rows]
+                @test byrow.wf == wf[rows]
+
+                # tables concatenated lazily load like the tables they are made of
+                twice = vcat(tbl, tbl)
+                @test Ext._load_all_keys(twice, [3, n + 7, 2]).a == a[[3, 7, 2]]
+                @test Ext._load_all_keys(twice).wf == vcat(wf, wf)
+
+                mask = a .> 0.5f0
+                bymask = Ext._load_all_keys(tbl, mask)
+                @test bymask.a == a[mask]
+                @test bymask.wf == wf[mask]
+
+                col = Ext._load_all_keys(tbl.a, rows)
+                @test col isa Vector{Float32}
+                @test col == a[rows]
+
+                # rows of a table with waveform columns are usable as rows
+                tbl_rdwf = h["tbl_rdwf"]
+                rows_wf = Ext._load_all_keys(tbl_rdwf, rows)
+                @test rows_wf.a == a[rows]
+                @test rows_wf[1].wf == wfs[rows[1]]
+                @test Ext._load_all_keys(tbl_rdwf)[1].wf == wfs[1]
+                @test Ext._load_all_keys(tbl_rdwf, mask)[1].wf == wfs[findfirst(mask)]
+
+                # a table nested in a table is loaded along with it
+                nested = Ext._load_all_keys(h["nested"])
+                @test nested.sub.a isa Vector{Float32}
+                @test nested.sub.wf == wf
+
+                nt = Ext._load_all_keys((x = tbl.a, y = tbl.wf))
+                @test nt.x == a
+                @test nt.y == wf
+                @test Ext._load_all_keys((x = tbl.a,)) == a
+
+                @test Ext._load_all_keys("not an array") == "not an array"
             end
         end
     end

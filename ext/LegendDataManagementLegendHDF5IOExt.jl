@@ -40,17 +40,6 @@ const RSelLike = Union{AbstractDataSelectorLike, FileKey, Unitful.Time, Abstract
 const PossibleDataSelectors = [DataTier, DataCategory, DataPeriod, DataRun, DataPartition, DetectorId]
 
 
-const dataselector_bytypes = Dict{Type, String}()
-
-LegendHDF5IO.datatype_to_string(::Type{<:T}) where {T <: LegendDataManagement.DataSelector} = 
-    dataselector_bytypes[T]
-
-function LegendHDF5IO._array_type(::Type{Array{T, N}}
-    ) where {T <: LegendDataManagement.DataSelector, N}
-    
-    AbstractArray{T, N}
-end
-
 # write LegendDataManagement.DataSelector
 function LegendHDF5IO.create_entry(parent::LHDataStore, name::AbstractString, 
     data::T; kwargs...) where {T <:LegendDataManagement.DataSelector}
@@ -146,23 +135,14 @@ function _init_workers(wpool::WorkerPool)
 end
 
 function __init__()
-    function extend_datatype_dict(::Type{T}, key::String
-        ) where {T <: LegendDataManagement.DataSelector}
-
-        LegendHDF5IO._datatype_dict[key] = T
-        dataselector_bytypes[T] = key
+    for (name, T) in (
+        "expsetup" => ExpSetup, "datatier" => DataTier, "datarun" => DataRun,
+        "dataperiod" => DataPeriod, "datacategory" => DataCategory, "timestamp" => Timestamp,
+        "filekey" => FileKey, "channelid" => ChannelId, "detectorid" => DetectorId,
+        "datapartition" => DataPartition,
+    )
+        LegendHDF5IO.register_datatype!(name, T)
     end
-
-    (@isdefined ExpSetup) && extend_datatype_dict(ExpSetup, "expsetup")
-    (@isdefined DataTier) && extend_datatype_dict(DataTier, "datatier")
-    (@isdefined DataRun) && extend_datatype_dict(DataRun, "datarun")
-    (@isdefined DataPeriod) && extend_datatype_dict(DataPeriod, "dataperiod")
-    (@isdefined DataCategory) && extend_datatype_dict(DataCategory, "datacategory")
-    (@isdefined Timestamp) && extend_datatype_dict(Timestamp, "timestamp")
-    (@isdefined FileKey) && extend_datatype_dict(FileKey, "filekey")
-    (@isdefined ChannelId) && extend_datatype_dict(ChannelId, "channelid")
-    (@isdefined DetectorId) && extend_datatype_dict(DetectorId, "detectorid")
-    (@isdefined DataPartition) && extend_datatype_dict(DataPartition, "datapartition")
 end
 
 # Paths are resolved and stat'ed one at a time: file metadata lookups are expensive on
@@ -221,29 +201,12 @@ function _nest(paths, vals)
     end)
 end
 
-# Every column of a group keeps the rows `sel` selects; a single column is unwrapped.
-# TODO: pass a mask to the read once `LH5Array` supports `AbstractVector{Bool}` indices.
+# Every column of a group keeps the rows `sel` selects; a single column is unwrapped. Rows
+# named by index are read as LegendHDF5IO reads index vectors: in one bounding read, a single
+# selection or one read per run of rows, whichever costs least for their spacing.
 _load_all_keys(nt::NamedTuple, sel=(:)) = length(nt) == 1 ? _load_all_keys(nt[first(keys(nt))], sel) :
     NamedTuple{keys(nt)}(map(k -> _load_all_keys(nt[k], sel), keys(nt)))
-_load_all_keys(x::Union{AbstractArray, Table}, sel=(:)) = sel === (:) ? x[:] : x[:][sel]
-# Rows named by index are read range by range, as an `LH5Array` reads ranges. Every read of a
-# column costs tens of microseconds however few rows it takes, so rows of scalars are read
-# along with gaps of up to `_bridged_rows` between them rather than one range per row; rows
-# holding arrays -- waveforms -- cost their bytes and are read in ranges of adjacent rows.
-const _bridged_rows = 256
-function _load_all_keys(x::Union{AbstractArray, Table}, sel::AbstractVector{Int})
-    isempty(sel) && return x[1:0]
-    maxgap = isbitstype(eltype(x)) ? _bridged_rows : 0
-    rows = sort(unique(sel))
-    ranges = [rows[1]:rows[1]]
-    for r in rows[2:end]
-        r - last(ranges[end]) - 1 <= maxgap ? (ranges[end] = first(ranges[end]):r) : push!(ranges, r:r)
-    end
-    read = fast_flatten([x[rg] for rg in ranges])
-    offsets = cumsum(length.(ranges)) .- length.(ranges)
-    pos = map(i -> (k = searchsortedlast(first.(ranges), i); offsets[k] + i - first(ranges[k]) + 1), sel)
-    pos == 1:length(read) ? read : read[pos]
-end
+_load_all_keys(x::Union{AbstractArray, Table}, sel=(:)) = x[sel]
 _load_all_keys(x, sel=(:)) = x
 
 _nrows(nt::NamedTuple) = _nrows(first(nt))

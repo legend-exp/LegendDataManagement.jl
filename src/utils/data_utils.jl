@@ -199,10 +199,10 @@ function load_partition_ch(open_func::Function, flatten_func::Function, data::Le
     
     function get_key_evt_tbl(ds, period, run, k)
         if select_random
-            t = Table(ds[ch, tier, k])[:]
+            t = ds[ch, tier, k][:]
             t[evt_range[(period, run)][k]]
         else
-            Table(ds[ch, tier, k])[evt_range[(period, run)][k]]
+            ds[ch, tier, k][evt_range[(period, run)][k]]
         end
     end
     # load data with given range
